@@ -6,14 +6,17 @@ FastAPI Application with Scheduling, Excel Export, and Background Tasks
 import os
 import io
 import asyncio
+import secrets
+import hashlib
 from datetime import datetime, time, timedelta
 from typing import Optional, List
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response
+from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, or_, delete
@@ -22,6 +25,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
+import jwt
 
 from database import (
     init_db, async_session,
@@ -35,6 +39,93 @@ from database import (
 from telegram_bot import bot_manager, handle_telegram_webhook
 from whatsapp_bot import whatsapp_bot_manager, verify_webhook as verify_whatsapp_webhook
 from roi_engine import generate_roi_pdf
+
+
+# ==================== AUTH CONFIG ====================
+
+JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32))
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+security = HTTPBearer(auto_error=False)
+
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify password against hash."""
+    return hash_password(plain_password) == hashed_password
+
+
+def create_jwt_token(tenant_id: int, email: str) -> str:
+    """Create JWT token for tenant."""
+    payload = {
+        "tenant_id": tenant_id,
+        "email": email,
+        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_jwt_token(token: str) -> dict:
+    """Decode and verify JWT token."""
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+async def get_current_tenant(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(lambda: None)
+) -> Optional[Tenant]:
+    """Get current tenant from JWT token."""
+    if not credentials:
+        return None
+    
+    payload = decode_jwt_token(credentials.credentials)
+    tenant_id = payload.get("tenant_id")
+    
+    async with async_session() as session:
+        result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        return result.scalar_one_or_none()
+
+
+# ==================== AUTH MODELS ====================
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+
+
+class RegisterRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    company_name: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    tenant_id: int
+    name: str
+    email: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=6)
 
 
 # ==================== PYDANTIC MODELS ====================
@@ -382,6 +473,133 @@ async def get_db() -> AsyncSession:
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+
+# ==================== AUTHENTICATION ENDPOINTS ====================
+
+@app.post("/api/auth/register", response_model=LoginResponse)
+async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    """Register a new tenant/agent."""
+    # Check if email already exists
+    result = await db.execute(select(Tenant).where(Tenant.email == data.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create new tenant
+    tenant = Tenant(
+        name=data.name,
+        email=data.email,
+        password_hash=hash_password(data.password),
+        company_name=data.company_name,
+        phone=data.phone,
+        trial_ends_at=datetime.utcnow() + timedelta(days=14)  # 14-day trial
+    )
+    db.add(tenant)
+    await db.commit()
+    await db.refresh(tenant)
+    
+    # Generate JWT token
+    token = create_jwt_token(tenant.id, tenant.email)
+    
+    return LoginResponse(
+        access_token=token,
+        tenant_id=tenant.id,
+        name=tenant.name,
+        email=tenant.email
+    )
+
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Login with email and password."""
+    result = await db.execute(select(Tenant).where(Tenant.email == data.email))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant or not tenant.password_hash:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if not verify_password(data.password, tenant.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if not tenant.is_active:
+        raise HTTPException(status_code=403, detail="Account is disabled")
+    
+    # Generate JWT token
+    token = create_jwt_token(tenant.id, tenant.email)
+    
+    return LoginResponse(
+        access_token=token,
+        tenant_id=tenant.id,
+        name=tenant.name,
+        email=tenant.email
+    )
+
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(data: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+    """Request password reset token."""
+    result = await db.execute(select(Tenant).where(Tenant.email == data.email))
+    tenant = result.scalar_one_or_none()
+    
+    # Always return success to prevent email enumeration
+    if not tenant:
+        return {"message": "If the email exists, a reset link has been sent"}
+    
+    # Generate reset token
+    reset_token = secrets.token_urlsafe(32)
+    tenant.reset_token = reset_token
+    tenant.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+    await db.commit()
+    
+    # In production, send email with reset link
+    # For now, just return success
+    # TODO: Integrate email service (SendGrid, SES, etc.)
+    
+    return {"message": "If the email exists, a reset link has been sent", "token": reset_token}
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(data: PasswordResetConfirm, db: AsyncSession = Depends(get_db)):
+    """Reset password using token."""
+    result = await db.execute(
+        select(Tenant).where(
+            Tenant.reset_token == data.token,
+            Tenant.reset_token_expires > datetime.utcnow()
+        )
+    )
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    # Update password
+    tenant.password_hash = hash_password(data.new_password)
+    tenant.reset_token = None
+    tenant.reset_token_expires = None
+    await db.commit()
+    
+    return {"message": "Password reset successful"}
+
+
+@app.get("/api/auth/me", response_model=TenantResponse)
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get current authenticated tenant."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    payload = decode_jwt_token(credentials.credentials)
+    tenant_id = payload.get("tenant_id")
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    return tenant
 
 
 # ==================== TENANT ENDPOINTS ====================

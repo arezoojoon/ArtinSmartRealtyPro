@@ -314,12 +314,20 @@ AGENT INFORMATION:
         # Available Properties
         properties = self.tenant_context.get("properties", [])
         if properties:
-            props_text = "\n".join([
-                f"  • {p['name']} - {p['type']} in {p['location']}, {p['bedrooms']}BR, AED {p['price']:,.0f}"
-                f" (ROI: {p['roi']}%, Rental Yield: {p['rental_yield']}%)"
-                f"{' ⭐ Golden Visa Eligible' if p['golden_visa'] else ''}"
-                for p in properties[:5]  # Limit to 5 for context
-            ])
+            props_lines = []
+            for p in properties[:5]:  # Limit to 5 for context
+                price_str = f"AED {p['price']:,.0f}" if p.get('price') else "Price TBA"
+                bedrooms_str = f"{p['bedrooms']}BR" if p.get('bedrooms') else ""
+                roi_str = f"ROI: {p['roi']}%" if p.get('roi') else ""
+                yield_str = f"Rental Yield: {p['rental_yield']}%" if p.get('rental_yield') else ""
+                golden_str = " ⭐ Golden Visa Eligible" if p.get('golden_visa') else ""
+                
+                props_lines.append(
+                    f"  • {p.get('name', 'Property')} - {p.get('type', 'N/A')} in {p.get('location', 'N/A')}, "
+                    f"{bedrooms_str} {price_str} ({roi_str}, {yield_str}){golden_str}"
+                )
+            
+            props_text = "\n".join(props_lines)
             context_parts.append(f"""
 AVAILABLE PROPERTIES (Agent's Inventory):
 {props_text}
@@ -328,14 +336,20 @@ AVAILABLE PROPERTIES (Agent's Inventory):
         # Off-Plan Projects
         projects = self.tenant_context.get("projects", [])
         if projects:
-            projs_text = "\n".join([
-                f"  • {proj['name']} by {proj['developer']} in {proj['location']}"
-                f"\n    Starting AED {proj['starting_price']:,.0f} | Payment: {proj['payment_plan']}"
-                f"\n    Handover: {proj['handover']} | Projected ROI: {proj['roi']}%"
-                f"{' ⭐ Golden Visa Eligible' if proj['golden_visa'] else ''}"
-                f"\n    Selling Points: {', '.join(proj['selling_points'][:3]) if proj['selling_points'] else 'N/A'}"
-                for proj in projects[:3]  # Limit to 3 for context
-            ])
+            projs_lines = []
+            for proj in projects[:3]:  # Limit to 3 for context
+                price_str = f"Starting AED {proj['starting_price']:,.0f}" if proj.get('starting_price') else "Price TBA"
+                golden_str = " ⭐ Golden Visa Eligible" if proj.get('golden_visa') else ""
+                selling_pts = ", ".join(proj['selling_points'][:3]) if proj.get('selling_points') else "N/A"
+                
+                projs_lines.append(
+                    f"  • {proj.get('name', 'Project')} by {proj.get('developer', 'N/A')} in {proj.get('location', 'N/A')}"
+                    f"\n    {price_str} | Payment: {proj.get('payment_plan', 'Flexible')}"
+                    f"\n    Handover: {proj.get('handover', 'TBA')} | Projected ROI: {proj.get('roi', 'N/A')}%{golden_str}"
+                    f"\n    Selling Points: {selling_pts}"
+                )
+            
+            projs_text = "\n".join(projs_lines)
             context_parts.append(f"""
 OFF-PLAN PROJECTS (Current Launches):
 {projs_text}

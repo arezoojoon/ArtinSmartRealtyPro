@@ -6,7 +6,7 @@ Multi-Tenant Real Estate SaaS with Strict Data Isolation
 import os
 from datetime import datetime, time
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Time, Boolean, 
     ForeignKey, Enum as SQLEnum, JSON, Float, create_engine
@@ -150,7 +150,12 @@ class Tenant(Base):
     phone = Column(String(50), nullable=True)
     company_name = Column(String(255), nullable=True)
     telegram_bot_token = Column(String(255), nullable=True, unique=True)
-    email = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True, unique=True)
+    
+    # Authentication
+    password_hash = Column(String(255), nullable=True)  # For login
+    reset_token = Column(String(255), nullable=True)  # For password reset
+    reset_token_expires = Column(DateTime, nullable=True)
     
     # WhatsApp Business API Settings
     whatsapp_phone_number_id = Column(String(100), nullable=True, unique=True)
