@@ -45,6 +45,7 @@ class TenantCreate(BaseModel):
     email: Optional[str] = Field(None, max_length=255)
     telegram_bot_token: Optional[str] = Field(None, max_length=255)
     logo_url: Optional[str] = Field(None, max_length=512)
+    primary_color: Optional[str] = Field("#D4AF37", max_length=20)
     # WhatsApp Business API fields
     whatsapp_phone_number_id: Optional[str] = Field(None, max_length=100)
     whatsapp_access_token: Optional[str] = Field(None, max_length=512)
@@ -60,6 +61,9 @@ class TenantResponse(BaseModel):
     email: Optional[str]
     telegram_bot_token: Optional[str]
     logo_url: Optional[str]
+    primary_color: Optional[str]
+    subscription_status: Optional[str]
+    trial_ends_at: Optional[datetime]
     whatsapp_phone_number_id: Optional[str]
     whatsapp_business_account_id: Optional[str]
     is_active: bool
@@ -74,6 +78,7 @@ class LeadResponse(BaseModel):
     tenant_id: int
     name: Optional[str]
     phone: Optional[str]
+    email: Optional[str]
     telegram_username: Optional[str]
     language: Optional[Language]
     status: Optional[LeadStatus]
@@ -84,8 +89,12 @@ class LeadResponse(BaseModel):
     budget_currency: str
     payment_method: Optional[PaymentMethod]
     purpose: Optional[Purpose]
+    bedrooms_min: Optional[int]
+    bedrooms_max: Optional[int]
+    preferred_location: Optional[str]
     taste_tags: List[str]
     voice_transcript: Optional[str]
+    voice_entities: Optional[dict]
     conversation_state: Optional[ConversationState]
     source: str
     last_interaction: Optional[datetime]

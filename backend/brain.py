@@ -479,22 +479,39 @@ class Brain:
         else:
             lead_updates["transaction_type"] = TransactionType.RENT
         
+        # Expanded property type options
+        property_buttons = [
+            {"text": "🏢 " + ("آپارتمان" if lang == Language.FA else "Apartment"), "callback_data": "prop_apartment"},
+            {"text": "🏠 " + ("ویلا" if lang == Language.FA else "Villa"), "callback_data": "prop_villa"},
+            {"text": "🏰 " + ("پنت‌هاوس" if lang == Language.FA else "Penthouse"), "callback_data": "prop_penthouse"},
+            {"text": "🏘️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse"), "callback_data": "prop_townhouse"},
+            {"text": "🏪 " + ("تجاری" if lang == Language.FA else "Commercial"), "callback_data": "prop_commercial"},
+            {"text": "🏞️ " + ("زمین" if lang == Language.FA else "Land"), "callback_data": "prop_land"},
+        ]
+        
         return BrainResponse(
             message=self.get_text("property_type", lang),
             next_state=ConversationState.PROPERTY_TYPE,
             lead_updates=lead_updates,
-            buttons=[
-                {"text": self.get_text("btn_residential", lang), "callback_data": "prop_res"},
-                {"text": self.get_text("btn_commercial", lang), "callback_data": "prop_comm"}
-            ]
+            buttons=property_buttons
         )
     
     def _handle_property_type(self, lang: Language, callback_data: Optional[str], lead_updates: Dict) -> BrainResponse:
-        """Handle Residential/Commercial selection."""
-        if callback_data == "prop_res":
-            lead_updates["property_type"] = PropertyType.RESIDENTIAL
-        else:
-            lead_updates["property_type"] = PropertyType.COMMERCIAL
+        """Handle property type selection."""
+        property_mapping = {
+            "prop_apartment": PropertyType.APARTMENT,
+            "prop_villa": PropertyType.VILLA,
+            "prop_penthouse": PropertyType.PENTHOUSE,
+            "prop_townhouse": PropertyType.TOWNHOUSE,
+            "prop_commercial": PropertyType.COMMERCIAL,
+            "prop_land": PropertyType.LAND,
+            # Legacy support
+            "prop_res": PropertyType.APARTMENT,
+            "prop_comm": PropertyType.COMMERCIAL,
+        }
+        
+        if callback_data in property_mapping:
+            lead_updates["property_type"] = property_mapping[callback_data]
         
         # Build budget buttons
         budget_options = self.get_budget_options(lang)
@@ -646,7 +663,16 @@ async def process_voice_message(
             lead_updates["budget_max"] = entities["budget_max"]
         if "property_type" in entities:
             pt = entities["property_type"].lower()
-            lead_updates["property_type"] = PropertyType.RESIDENTIAL if pt == "residential" else PropertyType.COMMERCIAL
+            property_type_map = {
+                "apartment": PropertyType.APARTMENT,
+                "villa": PropertyType.VILLA,
+                "penthouse": PropertyType.PENTHOUSE,
+                "townhouse": PropertyType.TOWNHOUSE,
+                "commercial": PropertyType.COMMERCIAL,
+                "land": PropertyType.LAND,
+                "residential": PropertyType.APARTMENT,  # Default to apartment
+            }
+            lead_updates["property_type"] = property_type_map.get(pt, PropertyType.APARTMENT)
         if "transaction_type" in entities:
             tt = entities["transaction_type"].lower()
             lead_updates["transaction_type"] = TransactionType.BUY if tt == "buy" else TransactionType.RENT
@@ -660,6 +686,14 @@ async def process_voice_message(
                 lead_updates["purpose"] = Purpose.RESIDENCY
         if "preferences" in entities:
             lead_updates["taste_tags"] = entities["preferences"]
+        if "location" in entities:
+            lead_updates["preferred_location"] = entities["location"]
+        if "bedrooms" in entities:
+            lead_updates["bedrooms_min"] = entities.get("bedrooms_min", entities.get("bedrooms"))
+            lead_updates["bedrooms_max"] = entities.get("bedrooms_max", entities.get("bedrooms"))
+        
+        # Store all extracted entities
+        lead_updates["voice_entities"] = entities
         
         if lead_updates:
             await update_lead(lead.id, **lead_updates)

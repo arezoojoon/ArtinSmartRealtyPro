@@ -65,8 +65,12 @@ class TransactionType(str, Enum):
 
 
 class PropertyType(str, Enum):
-    RESIDENTIAL = "residential"
+    APARTMENT = "apartment"
+    VILLA = "villa"
+    PENTHOUSE = "penthouse"
+    TOWNHOUSE = "townhouse"
     COMMERCIAL = "commercial"
+    LAND = "land"
 
 
 class PaymentMethod(str, Enum):
@@ -95,6 +99,13 @@ class DayOfWeek(str, Enum):
     FRIDAY = "friday"
     SATURDAY = "saturday"
     SUNDAY = "sunday"
+
+
+class SubscriptionStatus(str, Enum):
+    TRIAL = "trial"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    CANCELLED = "cancelled"
 
 
 class ConversationState(str, Enum):
@@ -135,6 +146,13 @@ class Tenant(Base):
     whatsapp_business_account_id = Column(String(100), nullable=True)
     whatsapp_verify_token = Column(String(255), nullable=True)  # For webhook verification
     
+    # Branding
+    primary_color = Column(String(20), default="#D4AF37")  # Gold by default
+    
+    # Subscription
+    subscription_status = Column(SQLEnum(SubscriptionStatus), default=SubscriptionStatus.TRIAL)
+    trial_ends_at = Column(DateTime, nullable=True)
+    
     # Settings
     default_language = Column(SQLEnum(Language), default=Language.EN)
     timezone = Column(String(50), default="Asia/Dubai")
@@ -162,7 +180,8 @@ class Lead(Base):
     # Basic Info
     name = Column(String(255), nullable=True)
     phone = Column(String(50), nullable=True)
-    telegram_chat_id = Column(String(100), nullable=True, index=True)
+    email = Column(String(255), nullable=True)
+    telegram_chat_id = Column(String(100), nullable=True, index=True)  # Also used as telegram_user_id
     telegram_username = Column(String(100), nullable=True)
     whatsapp_phone = Column(String(50), nullable=True, index=True)  # WhatsApp phone number
     language = Column(SQLEnum(Language), default=Language.EN)
@@ -179,14 +198,18 @@ class Lead(Base):
     payment_method = Column(SQLEnum(PaymentMethod), nullable=True)
     purpose = Column(SQLEnum(Purpose), nullable=True)
     
-    # Tags and Preferences
+    # Property Preferences
+    bedrooms_min = Column(Integer, nullable=True)
+    bedrooms_max = Column(Integer, nullable=True)
+    preferred_location = Column(String(255), nullable=True)  # Primary location
+    preferred_locations = Column(JSON, default=list)  # Multiple locations
     taste_tags = Column(JSON, default=list)  # e.g., ["Sea View", "High Floor", "Golf View"]
-    preferred_locations = Column(JSON, default=list)
     notes = Column(Text, nullable=True)
     
     # Voice Data
     voice_transcript = Column(Text, nullable=True)
     voice_file_url = Column(String(512), nullable=True)
+    voice_entities = Column(JSON, default=dict)  # Extracted entities from voice: {budget, location, etc.}
     
     # Conversation State (for state machine)
     conversation_state = Column(SQLEnum(ConversationState), default=ConversationState.START)
