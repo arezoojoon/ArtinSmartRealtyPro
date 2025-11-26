@@ -94,8 +94,6 @@ const Settings = ({ tenantId, token }) => {
                 }
             });
             
-            // Note: We would need a PUT endpoint for updating tenant settings
-            // For now, this is a placeholder
             const response = await fetch(`${API_BASE_URL}/api/tenants/${tenantId}`, {
                 method: 'PUT',
                 headers: {

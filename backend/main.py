@@ -698,8 +698,14 @@ async def create_tenant(tenant_data: TenantCreate, db: AsyncSession = Depends(ge
 
 
 @app.get("/api/tenants/{tenant_id}", response_model=TenantResponse)
-async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
-    """Get tenant by ID."""
+async def get_tenant(
+    tenant_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get tenant by ID. Requires authentication."""
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
     tenant = result.scalar_one_or_none()
     
@@ -712,10 +718,13 @@ async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
 @app.put("/api/tenants/{tenant_id}", response_model=TenantResponse)
 async def update_tenant(
     tenant_id: int, 
-    tenant_data: TenantCreate, 
+    tenant_data: TenantCreate,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update tenant settings including bot tokens."""
+    """Update tenant settings including bot tokens. Requires authentication."""
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
     tenant = result.scalar_one_or_none()
     
@@ -751,9 +760,20 @@ async def update_tenant(
 async def list_tenants(
     skip: int = 0,
     limit: int = 100,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """List all tenants."""
+    """List all tenants. Requires Super Admin authentication."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    payload = decode_jwt_token(credentials.credentials)
+    auth_tenant_id = payload.get("tenant_id")
+    
+    # Only Super Admin (tenant_id=0) can list all tenants
+    if auth_tenant_id != 0:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
     result = await db.execute(
         select(Tenant).offset(skip).limit(limit)
     )
@@ -844,9 +864,12 @@ async def update_lead_endpoint(
 async def create_schedule_slot(
     tenant_id: int,
     slot_data: ScheduleSlotCreate,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new availability slot for an agent."""
+    """Create a new availability slot for an agent. Requires authentication."""
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     # Parse times
     try:
         start = datetime.strptime(slot_data.start_time, "%H:%M").time()
@@ -931,9 +954,12 @@ async def list_schedule_slots(
 async def delete_schedule_slot(
     tenant_id: int,
     slot_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a schedule slot."""
+    """Delete a schedule slot. Requires authentication."""
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     result = await db.execute(
         select(AgentAvailability).where(
             AgentAvailability.tenant_id == tenant_id,
@@ -962,9 +988,12 @@ async def delete_schedule_slot(
 async def create_appointment_endpoint(
     tenant_id: int,
     appointment_data: AppointmentCreate,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create an appointment."""
+    """Create an appointment. Requires authentication."""
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     # Verify lead belongs to tenant
     result = await db.execute(
         select(Lead).where(

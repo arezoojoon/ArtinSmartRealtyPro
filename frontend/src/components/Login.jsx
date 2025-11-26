@@ -46,6 +46,7 @@ const Login = ({ onLogin }) => {
             localStorage.setItem('tenantId', data.tenant_id);
             localStorage.setItem('userName', data.name);
             localStorage.setItem('userEmail', data.email);
+            localStorage.setItem('isSuperAdmin', data.is_super_admin ? 'true' : 'false');
             
             onLogin(data);
         } catch (err) {
@@ -85,6 +86,7 @@ const Login = ({ onLogin }) => {
             localStorage.setItem('tenantId', data.tenant_id);
             localStorage.setItem('userName', data.name);
             localStorage.setItem('userEmail', data.email);
+            localStorage.setItem('isSuperAdmin', data.is_super_admin ? 'true' : 'false');
             
             onLogin(data);
         } catch (err) {
