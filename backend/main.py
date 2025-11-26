@@ -118,6 +118,7 @@ class LoginResponse(BaseModel):
     tenant_id: int
     name: str
     email: str
+    is_super_admin: bool = False
 
 
 class PasswordResetRequest(BaseModel):
@@ -127,6 +128,12 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str = Field(..., min_length=6)
+
+
+# ==================== SUPER ADMIN CONFIG ====================
+# Platform owner credentials (set these in .env for production)
+SUPER_ADMIN_EMAIL = os.getenv("SUPER_ADMIN_EMAIL", "admin@artinsmartrealty.com")
+SUPER_ADMIN_PASSWORD = os.getenv("SUPER_ADMIN_PASSWORD", "SuperAdmin123!")
 
 
 # ==================== PYDANTIC MODELS ====================
@@ -512,7 +519,21 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 @app.post("/api/auth/login", response_model=LoginResponse)
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Login with email and password."""
+    """Login with email and password. Supports both tenants and super admin."""
+    
+    # Check for Super Admin login first
+    if data.email == SUPER_ADMIN_EMAIL and data.password == SUPER_ADMIN_PASSWORD:
+        # Super admin uses tenant_id 0 to indicate admin status
+        token = create_jwt_token(0, SUPER_ADMIN_EMAIL)
+        return LoginResponse(
+            access_token=token,
+            tenant_id=0,
+            name="Super Admin",
+            email=SUPER_ADMIN_EMAIL,
+            is_super_admin=True
+        )
+    
+    # Normal tenant login
     result = await db.execute(select(Tenant).where(Tenant.email == data.email))
     tenant = result.scalar_one_or_none()
     
@@ -532,7 +553,8 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
         access_token=token,
         tenant_id=tenant.id,
         name=tenant.name,
-        email=tenant.email
+        email=tenant.email,
+        is_super_admin=False
     )
 
 
@@ -635,6 +657,40 @@ async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
     
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    return tenant
+
+
+@app.put("/api/tenants/{tenant_id}", response_model=TenantResponse)
+async def update_tenant(
+    tenant_id: int, 
+    tenant_data: TenantCreate, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Update tenant settings including bot tokens."""
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Update fields
+    update_data = tenant_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        if value is not None and hasattr(tenant, key):
+            setattr(tenant, key, value)
+    
+    tenant.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(tenant)
+    
+    # Restart bot if token changed
+    if tenant_data.telegram_bot_token and tenant_data.telegram_bot_token != tenant.telegram_bot_token:
+        try:
+            await bot_manager.stop_bot_for_tenant(tenant_id)
+            await bot_manager.start_bot_for_tenant(tenant)
+        except Exception as e:
+            print(f"Failed to restart bot: {e}")
     
     return tenant
 

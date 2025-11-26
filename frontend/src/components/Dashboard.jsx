@@ -24,8 +24,10 @@ import {
     TrendingDown,
     Home,
     X,
-    Download
+    Download,
+    LogOut
 } from 'lucide-react';
+import SettingsPage from './Settings';
 
 // ==================== CONSTANTS ====================
 
@@ -357,9 +359,10 @@ const LeadTable = ({ leads, onExport }) => (
 
 // ==================== MAIN DASHBOARD COMPONENT ====================
 
-const Dashboard = () => {
+const Dashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('dashboard');
-    const [tenantId] = useState(1);
+    const tenantId = user?.tenant_id || 1;
+    const token = user?.token || localStorage.getItem('token');
     const [stats, setStats] = useState(null);
     const [leads, setLeads] = useState([]);
     const [slots, setSlots] = useState([]);
@@ -470,17 +473,28 @@ const Dashboard = () => {
                 </nav>
 
                 {/* User Profile */}
-                <div className="pt-4 border-t border-white/10 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-500 to-gold-600 flex items-center justify-center text-navy-900 font-bold">
-                        A
+                <div className="pt-4 border-t border-white/10">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-500 to-gold-600 flex items-center justify-center text-navy-900 font-bold">
+                            {user?.name?.charAt(0).toUpperCase() || 'A'}
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-white text-sm font-medium truncate">{user?.name || 'Agent'}</p>
+                            <p className="text-green-400 text-xs flex items-center gap-1">
+                                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                                Online
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-white text-sm font-medium">Agent</p>
-                        <p className="text-green-400 text-xs flex items-center gap-1">
-                            <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                            Online
-                        </p>
-                    </div>
+                    {onLogout && (
+                        <button
+                            onClick={onLogout}
+                            className="w-full flex items-center justify-center gap-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 py-2 rounded-lg transition-colors text-sm"
+                        >
+                            <LogOut size={16} />
+                            Logout
+                        </button>
+                    )}
                 </div>
             </aside>
 
@@ -607,8 +621,13 @@ const Dashboard = () => {
                         />
                     )}
 
+                    {/* Settings Tab */}
+                    {activeTab === 'settings' && (
+                        <SettingsPage tenantId={tenantId} token={token} />
+                    )}
+
                     {/* Placeholder for other tabs */}
-                    {['properties', 'analytics', 'settings'].includes(activeTab) && (
+                    {['properties', 'analytics'].includes(activeTab) && (
                         <div className="glass-card rounded-xl h-96 flex items-center justify-center">
                             <div className="text-center">
                                 <div className="text-5xl mb-4">🚧</div>
