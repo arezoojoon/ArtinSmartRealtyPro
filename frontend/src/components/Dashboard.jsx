@@ -54,26 +54,58 @@ const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 // ==================== API HELPERS ====================
 
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const api = {
   async get(endpoint) {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`);
-    if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Token expired, redirect to login
+        localStorage.clear();
+        window.location.reload();
+      }
+      throw new Error(`API Error: ${response.statusText}`);
+    }
     return response.json();
   },
   
   async post(endpoint, data) {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.clear();
+        window.location.reload();
+      }
+      throw new Error(`API Error: ${response.statusText}`);
+    }
     return response.json();
   },
   
   async delete(endpoint) {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, { 
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.clear();
+        window.location.reload();
+      }
+      throw new Error(`API Error: ${response.statusText}`);
+    }
     return response.json();
   },
 };

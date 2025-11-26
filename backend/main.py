@@ -97,6 +97,42 @@ async def get_current_tenant(
         return result.scalar_one_or_none()
 
 
+async def verify_tenant_access(
+    credentials: HTTPAuthorizationCredentials,
+    tenant_id: int,
+    db: AsyncSession
+) -> Tenant:
+    """
+    Verify that the authenticated user has access to the given tenant.
+    Super Admin (tenant_id=0) can access any tenant.
+    Regular tenants can only access their own data.
+    """
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    payload = decode_jwt_token(credentials.credentials)
+    auth_tenant_id = payload.get("tenant_id")
+    
+    # Super Admin can access any tenant
+    if auth_tenant_id == 0:
+        result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        return tenant
+    
+    # Regular tenant can only access their own data
+    if auth_tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    return tenant
+
+
 # ==================== AUTH MODELS ====================
 
 class LoginRequest(BaseModel):
@@ -608,17 +644,29 @@ async def reset_password(data: PasswordResetConfirm, db: AsyncSession = Depends(
     return {"message": "Password reset successful"}
 
 
-@app.get("/api/auth/me", response_model=TenantResponse)
+@app.get("/api/auth/me")
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get current authenticated tenant."""
+    """Get current authenticated tenant or super admin info."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     payload = decode_jwt_token(credentials.credentials)
     tenant_id = payload.get("tenant_id")
+    
+    # Super Admin case
+    if tenant_id == 0:
+        return {
+            "id": 0,
+            "name": "Super Admin",
+            "email": SUPER_ADMIN_EMAIL,
+            "is_super_admin": True,
+            "is_active": True,
+            "subscription_status": "active",
+            "created_at": datetime.utcnow()
+        }
     
     result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
     tenant = result.scalar_one_or_none()
@@ -674,6 +722,9 @@ async def update_tenant(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     
+    # Store old bot token before update to detect changes
+    old_bot_token = tenant.telegram_bot_token
+    
     # Update fields
     update_data = tenant_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -685,7 +736,8 @@ async def update_tenant(
     await db.refresh(tenant)
     
     # Restart bot if token changed
-    if tenant_data.telegram_bot_token and tenant_data.telegram_bot_token != tenant.telegram_bot_token:
+    new_bot_token = tenant.telegram_bot_token
+    if new_bot_token and new_bot_token != old_bot_token:
         try:
             await bot_manager.stop_bot_for_tenant(tenant_id)
             await bot_manager.start_bot_for_tenant(tenant)
@@ -717,9 +769,13 @@ async def list_leads(
     purpose: Optional[Purpose] = None,
     skip: int = 0,
     limit: int = 100,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """List leads for a tenant with optional filtering."""
+    """List leads for a tenant with optional filtering. Requires authentication."""
+    # Verify access
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     query = select(Lead).where(Lead.tenant_id == tenant_id)
     
     if status:
@@ -843,9 +899,12 @@ async def list_schedule_slots(
     tenant_id: int,
     day_of_week: Optional[DayOfWeek] = None,
     available_only: bool = False,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """List schedule slots for a tenant."""
+    """List schedule slots for a tenant. Requires authentication."""
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     query = select(AgentAvailability).where(AgentAvailability.tenant_id == tenant_id)
     
     if day_of_week:
@@ -1066,8 +1125,15 @@ async def export_leads_excel(
 # ==================== DASHBOARD STATS ====================
 
 @app.get("/api/tenants/{tenant_id}/dashboard/stats", response_model=DashboardStats)
-async def get_dashboard_stats(tenant_id: int, db: AsyncSession = Depends(get_db)):
-    """Get dashboard statistics for a tenant."""
+async def get_dashboard_stats(
+    tenant_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get dashboard statistics for a tenant. Requires authentication."""
+    # Verify access (authentication check)
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     # Get all leads
     result = await db.execute(
         select(Lead).where(Lead.tenant_id == tenant_id)
