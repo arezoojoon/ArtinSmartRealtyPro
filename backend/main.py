@@ -51,8 +51,9 @@ security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password using PBKDF2 with SHA-256 (more secure than plain SHA-256)."""
+    salt = os.getenv("PASSWORD_SALT", "artinsmartrealty_salt_v2")
+    return hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -62,10 +63,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_jwt_token(tenant_id: int, email: str) -> str:
     """Create JWT token for tenant."""
+    from datetime import timezone
     payload = {
         "tenant_id": tenant_id,
         "email": email,
-        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -81,8 +83,7 @@ def decode_jwt_token(token: str) -> dict:
 
 
 async def get_current_tenant(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(lambda: None)
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> Optional[Tenant]:
     """Get current tenant from JWT token."""
     if not credentials:
@@ -552,10 +553,14 @@ async def forgot_password(data: PasswordResetRequest, db: AsyncSession = Depends
     await db.commit()
     
     # In production, send email with reset link
-    # For now, just return success
     # TODO: Integrate email service (SendGrid, SES, etc.)
+    # Example: send_email(tenant.email, "Password Reset", f"Reset link: {FRONTEND_URL}/reset?token={reset_token}")
     
-    return {"message": "If the email exists, a reset link has been sent", "token": reset_token}
+    # For development only - in production, NEVER return the token
+    if os.getenv("DEBUG", "false").lower() == "true":
+        return {"message": "If the email exists, a reset link has been sent", "_debug_token": reset_token}
+    
+    return {"message": "If the email exists, a reset link has been sent"}
 
 
 @app.post("/api/auth/reset-password")
@@ -1240,7 +1245,7 @@ async def delete_property(
     if not property_obj:
         raise HTTPException(status_code=404, detail="Property not found")
     
-    await db.delete(property_obj)
+    db.delete(property_obj)
     await db.commit()
     
     return {"status": "deleted", "id": property_id}
@@ -1339,7 +1344,7 @@ async def delete_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    await db.delete(project)
+    db.delete(project)
     await db.commit()
     
     return {"status": "deleted", "id": project_id}
@@ -1444,7 +1449,7 @@ async def delete_knowledge(
     if not knowledge:
         raise HTTPException(status_code=404, detail="Knowledge entry not found")
     
-    await db.delete(knowledge)
+    db.delete(knowledge)
     await db.commit()
     
     return {"status": "deleted", "id": knowledge_id}
