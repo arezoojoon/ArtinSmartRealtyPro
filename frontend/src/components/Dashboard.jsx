@@ -783,6 +783,12 @@ const Dashboard = () => {
     window.open(`${API_BASE_URL}/api/tenants/${tenantId}/leads/export`, '_blank');
   };
 
+  // Handle lead click - show details in console and switch to leads tab
+  const handleLeadClick = (lead) => {
+    console.log('Lead clicked:', lead);
+    setActiveTab('leads');
+  };
+
   // Group leads by status for Kanban view
   const leadsByStatus = {
     new: leads.filter(l => l.status === 'new' || !l.status),
@@ -900,25 +906,25 @@ const Dashboard = () => {
                   title="New Leads"
                   leads={leadsByStatus.new}
                   color={STATUS_COLORS.new}
-                  onLeadClick={() => {}}
+                  onLeadClick={handleLeadClick}
                 />
                 <PipelineColumn
                   title="Qualified"
                   leads={leadsByStatus.qualified}
                   color={STATUS_COLORS.qualified}
-                  onLeadClick={() => {}}
+                  onLeadClick={handleLeadClick}
                 />
                 <PipelineColumn
                   title="Viewing Scheduled"
                   leads={leadsByStatus.viewing_scheduled}
                   color={STATUS_COLORS.viewing_scheduled}
-                  onLeadClick={() => {}}
+                  onLeadClick={handleLeadClick}
                 />
                 <PipelineColumn
                   title="Closed"
                   leads={leadsByStatus.closed}
                   color={COLORS.gray}
-                  onLeadClick={() => {}}
+                  onLeadClick={handleLeadClick}
                 />
               </div>
 

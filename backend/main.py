@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, delete
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import openpyxl
@@ -24,7 +24,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 from database import (
-    init_db, get_session, async_session,
+    init_db, async_session,
     Tenant, Lead, AgentAvailability, Appointment,
     LeadStatus, TransactionType, PropertyType, PaymentMethod, Purpose,
     AppointmentType, DayOfWeek, Language, ConversationState,
@@ -475,7 +475,9 @@ async def delete_schedule_slot(
     if slot.is_booked:
         raise HTTPException(status_code=400, detail="Cannot delete a booked slot")
     
-    await db.delete(slot)
+    await db.execute(
+        delete(AgentAvailability).where(AgentAvailability.id == slot_id)
+    )
     await db.commit()
     
     return {"status": "deleted", "slot_id": slot_id}
