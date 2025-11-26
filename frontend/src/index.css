@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Glassmorphism Class */
+.glass-card {
+    /* پسزمینه نیمهشفاف سرمهای */
+    background: rgba(26, 34, 54, 0.6);
+    /* افکت ماتکننده پسزمینه */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    /* بوردر نازک و شفاف برای عمق دادن */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* سایه ملایم */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
