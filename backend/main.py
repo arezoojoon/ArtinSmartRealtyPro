@@ -32,6 +32,7 @@ from database import (
     get_available_slots, book_slot, create_appointment, update_lead
 )
 from telegram_bot import bot_manager, handle_telegram_webhook
+from whatsapp_bot import whatsapp_bot_manager, verify_webhook as verify_whatsapp_webhook
 from roi_engine import generate_roi_pdf
 
 
@@ -44,6 +45,11 @@ class TenantCreate(BaseModel):
     email: Optional[str] = Field(None, max_length=255)
     telegram_bot_token: Optional[str] = Field(None, max_length=255)
     logo_url: Optional[str] = Field(None, max_length=512)
+    # WhatsApp Business API fields
+    whatsapp_phone_number_id: Optional[str] = Field(None, max_length=100)
+    whatsapp_access_token: Optional[str] = Field(None, max_length=512)
+    whatsapp_business_account_id: Optional[str] = Field(None, max_length=100)
+    whatsapp_verify_token: Optional[str] = Field(None, max_length=255)
 
 
 class TenantResponse(BaseModel):
@@ -54,6 +60,8 @@ class TenantResponse(BaseModel):
     email: Optional[str]
     telegram_bot_token: Optional[str]
     logo_url: Optional[str]
+    whatsapp_phone_number_id: Optional[str]
+    whatsapp_business_account_id: Optional[str]
     is_active: bool
     created_at: datetime
 
@@ -754,6 +762,53 @@ async def generate_roi_pdf_endpoint(
 async def telegram_webhook(bot_token: str, update: dict, background_tasks: BackgroundTasks):
     """Handle incoming Telegram webhook updates."""
     background_tasks.add_task(handle_telegram_webhook, bot_token, update)
+    return {"status": "ok"}
+
+
+# ==================== WHATSAPP WEBHOOK ====================
+
+@app.get("/webhook/whatsapp")
+async def whatsapp_webhook_verify(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_token: str = Query(None, alias="hub.verify_token"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    WhatsApp webhook verification endpoint.
+    Called by Meta when registering the webhook.
+    Verifies against any tenant's verify_token in the database.
+    """
+    if hub_mode != "subscribe":
+        raise HTTPException(status_code=403, detail="Invalid mode")
+    
+    # Check if any tenant has this verify token
+    result = await db.execute(
+        select(Tenant).where(Tenant.whatsapp_verify_token == hub_token)
+    )
+    tenant = result.scalar_one_or_none()
+    
+    if tenant:
+        return Response(content=hub_challenge, media_type="text/plain")
+    
+    # Fallback to environment variable for initial setup
+    env_token = os.getenv("WHATSAPP_VERIFY_TOKEN")
+    if env_token and hub_token == env_token:
+        return Response(content=hub_challenge, media_type="text/plain")
+    
+    raise HTTPException(status_code=403, detail="Verification failed")
+
+
+@app.post("/webhook/whatsapp")
+async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
+    """
+    Handle incoming WhatsApp webhook updates.
+    Routes to appropriate tenant handler based on phone_number_id.
+    """
+    async def process_webhook():
+        await whatsapp_bot_manager.handle_webhook(payload)
+    
+    background_tasks.add_task(process_webhook)
     return {"status": "ok"}
 
 

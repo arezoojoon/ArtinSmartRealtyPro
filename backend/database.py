@@ -129,6 +129,12 @@ class Tenant(Base):
     telegram_bot_token = Column(String(255), nullable=True, unique=True)
     email = Column(String(255), nullable=True)
     
+    # WhatsApp Business API Settings
+    whatsapp_phone_number_id = Column(String(100), nullable=True, unique=True)
+    whatsapp_access_token = Column(String(512), nullable=True)
+    whatsapp_business_account_id = Column(String(100), nullable=True)
+    whatsapp_verify_token = Column(String(255), nullable=True)  # For webhook verification
+    
     # Settings
     default_language = Column(SQLEnum(Language), default=Language.EN)
     timezone = Column(String(50), default="Asia/Dubai")
@@ -145,7 +151,7 @@ class Tenant(Base):
 
 class Lead(Base):
     """
-    Lead represents a potential client captured through Telegram or other channels.
+    Lead represents a potential client captured through Telegram, WhatsApp or other channels.
     Contains qualification data and voice transcripts.
     """
     __tablename__ = "leads"
@@ -158,6 +164,7 @@ class Lead(Base):
     phone = Column(String(50), nullable=True)
     telegram_chat_id = Column(String(100), nullable=True, index=True)
     telegram_username = Column(String(100), nullable=True)
+    whatsapp_phone = Column(String(50), nullable=True, index=True)  # WhatsApp phone number
     language = Column(SQLEnum(Language), default=Language.EN)
     
     # Lead Status
@@ -186,7 +193,7 @@ class Lead(Base):
     conversation_data = Column(JSON, default=dict)  # Temporary data during qualification
     
     # Tracking
-    source = Column(String(100), default="telegram")
+    source = Column(String(100), default="telegram")  # "telegram" or "whatsapp"
     last_interaction = Column(DateTime, default=datetime.utcnow)
     ghost_reminder_sent = Column(Boolean, default=False)
     
@@ -285,20 +292,42 @@ async def get_tenant_by_bot_token(token: str) -> Optional[Tenant]:
         return result.scalar_one_or_none()
 
 
+async def get_tenant_by_whatsapp_phone_id(phone_number_id: str) -> Optional[Tenant]:
+    """Get tenant by WhatsApp phone number ID."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Tenant).where(Tenant.whatsapp_phone_number_id == phone_number_id)
+        )
+        return result.scalar_one_or_none()
+
+
 async def get_or_create_lead(
     tenant_id: int, 
-    telegram_chat_id: str,
-    telegram_username: Optional[str] = None
+    telegram_chat_id: str = None,
+    telegram_username: Optional[str] = None,
+    whatsapp_phone: str = None,
+    source: str = "telegram"
 ) -> Lead:
-    """Get existing lead or create new one."""
+    """Get existing lead or create new one (supports Telegram and WhatsApp)."""
     async with async_session() as session:
         # Try to find existing lead
-        result = await session.execute(
-            select(Lead).where(
-                Lead.tenant_id == tenant_id,
-                Lead.telegram_chat_id == telegram_chat_id
+        if telegram_chat_id:
+            result = await session.execute(
+                select(Lead).where(
+                    Lead.tenant_id == tenant_id,
+                    Lead.telegram_chat_id == telegram_chat_id
+                )
             )
-        )
+        elif whatsapp_phone:
+            result = await session.execute(
+                select(Lead).where(
+                    Lead.tenant_id == tenant_id,
+                    Lead.whatsapp_phone == whatsapp_phone
+                )
+            )
+        else:
+            raise ValueError("Either telegram_chat_id or whatsapp_phone is required")
+        
         lead = result.scalar_one_or_none()
         
         if not lead:
@@ -307,6 +336,8 @@ async def get_or_create_lead(
                 tenant_id=tenant_id,
                 telegram_chat_id=telegram_chat_id,
                 telegram_username=telegram_username,
+                whatsapp_phone=whatsapp_phone,
+                source=source,
                 conversation_state=ConversationState.START
             )
             session.add(lead)
