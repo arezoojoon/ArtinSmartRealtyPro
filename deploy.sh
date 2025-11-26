@@ -14,6 +14,26 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Determine docker compose command (v2 vs legacy)
+if command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo -e "${RED}Error: Docker Compose not found!${NC}"
+    echo ""
+    echo "Please install Docker and Docker Compose:"
+    echo ""
+    echo "# Install Docker"
+    echo "curl -fsSL https://get.docker.com | sh"
+    echo ""
+    echo "# Docker Compose is included with Docker Engine 20.10+"
+    echo "# Verify with: docker compose version"
+    exit 1
+fi
+
+echo -e "${BLUE}Using: $DOCKER_COMPOSE${NC}"
+
 echo -e "${GREEN}"
 echo "╔══════════════════════════════════════════╗"
 echo "║     ArtinSmartRealty V2 Deployment       ║"
@@ -122,7 +142,7 @@ wait_for_service() {
     
     echo -n "  Waiting for $service"
     while [ $attempt -le $max_attempts ]; do
-        if docker-compose ps $service 2>/dev/null | grep -q "healthy\|Up"; then
+        if $DOCKER_COMPOSE ps $service 2>/dev/null | grep -q "healthy\|Up"; then
             echo -e " ${GREEN}✓${NC}"
             return 0
         fi
@@ -141,7 +161,7 @@ deploy_dev() {
     echo ""
     
     # Start only database
-    docker-compose up -d db
+    $DOCKER_COMPOSE up -d db
     
     wait_for_service "db"
     
@@ -167,11 +187,11 @@ deploy_prod() {
     
     # Build and start all services
     echo "Building containers..."
-    docker-compose build --no-cache
+    $DOCKER_COMPOSE build --no-cache
     
     echo ""
     echo "Starting services..."
-    docker-compose up -d
+    $DOCKER_COMPOSE up -d
     
     echo ""
     echo "Waiting for services to be ready..."
@@ -201,19 +221,19 @@ deploy_prod() {
 # Stop services
 stop_services() {
     echo -e "${YELLOW}Stopping all services...${NC}"
-    docker-compose down
+    $DOCKER_COMPOSE down
     echo -e "${GREEN}✅ All services stopped.${NC}"
 }
 
 # Show logs
 show_logs() {
-    docker-compose logs -f
+    $DOCKER_COMPOSE logs -f
 }
 
 # Show status
 show_status() {
     echo -e "${BLUE}Service Status:${NC}"
-    docker-compose ps
+    $DOCKER_COMPOSE ps
 }
 
 # Main logic
