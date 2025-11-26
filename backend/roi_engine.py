@@ -44,6 +44,9 @@ DEFAULT_ASSUMPTIONS = {
     "agency_fee": 0.02,  # 2% agency commission
     "mortgage_rate": 0.045,  # 4.5% mortgage rate
     "mortgage_ltv": 0.75,  # 75% Loan-to-Value
+    # FOMO/Price Shock parameters
+    "price_growth_6m": 0.05,  # 5% expected growth in 6 months
+    "limited_units_threshold": 20,  # "Limited units" messaging threshold
 }
 
 # Translations for the PDF
@@ -143,6 +146,25 @@ PDF_TRANSLATIONS = {
         Language.FA: "توجه: این تحلیل صرفاً جنبه اطلاعاتی دارد. بازده واقعی ممکن است بر اساس شرایط بازار متفاوت باشد.",
         Language.AR: "إخلاء المسؤولية: هذا التحليل لأغراض إعلامية فقط. قد تختلف العوائد الفعلية بناءً على ظروف السوق.",
         Language.RU: "Отказ от ответственности: Этот анализ носит исключительно информационный характер. Фактическая доходность может варьироваться."
+    },
+    # FOMO/Price Shock section
+    "price_alert": {
+        Language.EN: "⚠️ PRICE ALERT",
+        Language.FA: "⚠️ هشدار قیمت",
+        Language.AR: "⚠️ تنبيه السعر",
+        Language.RU: "⚠️ ПРЕДУПРЕЖДЕНИЕ О ЦЕНЕ"
+    },
+    "price_growth_text": {
+        Language.EN: "Based on current market trends, this property type is expected to appreciate ~5% in the next 6 months.\n\nBuying NOW could save you: AED {savings:,.0f}",
+        Language.FA: "بر اساس روند فعلی بازار، انتظار می‌رود این نوع ملک ~۵٪ در ۶ ماه آینده رشد کند.\n\nخرید الان می‌تواند {savings:,.0f} درهم صرفه‌جویی کند!",
+        Language.AR: "بناءً على اتجاهات السوق الحالية، من المتوقع أن يرتفع هذا النوع من العقارات ~5% في الأشهر الستة القادمة.\n\nالشراء الآن قد يوفر لك: {savings:,.0f} درهم",
+        Language.RU: "Исходя из текущих рыночных тенденций, этот тип недвижимости ожидаемо вырастет ~5% за 6 месяцев.\n\nПокупка СЕЙЧАС сэкономит вам: {savings:,.0f} AED"
+    },
+    "act_now": {
+        Language.EN: "⏰ Don't wait - secure your investment today!",
+        Language.FA: "⏰ صبر نکنید - سرمایه‌گذاری خود را امروز تضمین کنید!",
+        Language.AR: "⏰ لا تنتظر - أمّن استثمارك اليوم!",
+        Language.RU: "⏰ Не ждите - обеспечьте свои инвестиции сегодня!"
     }
 }
 
@@ -492,6 +514,40 @@ class ROIEngine:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
             ]))
             story.append(gv_table)
+        
+        # PRICE SHOCK / FOMO Section - Show expected price growth
+        story.append(Spacer(1, 20))
+        
+        # Calculate potential savings if buying now
+        price_growth = DEFAULT_ASSUMPTIONS["price_growth_6m"]
+        potential_savings = property_value * price_growth
+        
+        price_alert_text = self._get_text("price_growth_text").format(savings=potential_savings)
+        
+        price_data = [
+            [self._get_text("price_alert")],
+            [price_alert_text],
+            [self._get_text("act_now")]
+        ]
+        price_table = Table(price_data, colWidths=[5.5*inch])
+        price_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fff3e0')),  # Orange tint for urgency
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#e65100')),  # Orange for alert
+            ('TEXTCOLOR', (0, 1), (-1, 1), DARK_GRAY),
+            ('TEXTCOLOR', (0, 2), (-1, 2), colors.HexColor('#e65100')),  # Orange for CTA
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica'),
+            ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 14),
+            ('FONTSIZE', (0, 1), (-1, 1), 10),
+            ('FONTSIZE', (0, 2), (-1, 2), 12),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('BOX', (0, 0), (-1, -1), 2, colors.HexColor('#e65100')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        story.append(price_table)
         
         # Disclaimer
         story.append(Spacer(1, 40))

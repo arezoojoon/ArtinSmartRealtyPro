@@ -108,17 +108,29 @@ class SubscriptionStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class PainPoint(str, Enum):
+    """Pain points for Pain & Solution technique"""
+    INFLATION_RISK = "inflation_risk"  # Currency devaluation fear
+    VISA_INSECURITY = "visa_insecurity"  # Residency instability
+    ASSET_PROTECTION = "asset_protection"  # Want to protect wealth
+    RENTAL_INCOME = "rental_income"  # Want passive income
+    FAMILY_FUTURE = "family_future"  # Children's education/future
+    TAX_OPTIMIZATION = "tax_optimization"  # Tax-free benefits
+
+
 class ConversationState(str, Enum):
     """State machine for Turbo Qualification Flow"""
     START = "start"
     WELCOME = "welcome"
     HOOK = "hook"  # ROI Offer
     PHONE_GATE = "phone_gate"  # Hard Gate
+    PAIN_DISCOVERY = "pain_discovery"  # NEW: Identify pain points
     TRANSACTION_TYPE = "transaction_type"  # Buy/Rent
     PROPERTY_TYPE = "property_type"  # Residential/Commercial
     BUDGET = "budget"
     PAYMENT_METHOD = "payment_method"  # Cash/Credit
     PURPOSE = "purpose"  # Residency/Investment/Living
+    SOLUTION_BRIDGE = "solution_bridge"  # NEW: Connect pain to solution
     SCHEDULE = "schedule"
     COMPLETED = "completed"
 
@@ -210,6 +222,12 @@ class Lead(Base):
     voice_transcript = Column(Text, nullable=True)
     voice_file_url = Column(String(512), nullable=True)
     voice_entities = Column(JSON, default=dict)  # Extracted entities from voice: {budget, location, etc.}
+    
+    # Sales Psychology - Pain Points (Pain & Solution technique)
+    pain_point = Column(String(50), nullable=True)  # Primary pain point
+    pain_points = Column(JSON, default=list)  # Multiple pain points
+    urgency_score = Column(Integer, default=0)  # 0-10 scale for FOMO tracking
+    fomo_messages_sent = Column(Integer, default=0)  # Track FOMO messages sent
     
     # Conversation State (for state machine)
     conversation_state = Column(SQLEnum(ConversationState), default=ConversationState.START)

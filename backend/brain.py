@@ -16,7 +16,8 @@ import google.generativeai as genai
 from database import (
     Lead, Tenant, ConversationState, Language,
     TransactionType, PropertyType, PaymentMethod, Purpose,
-    LeadStatus, update_lead, get_available_slots, DayOfWeek
+    LeadStatus, update_lead, get_available_slots, DayOfWeek,
+    PainPoint
 )
 
 
@@ -102,6 +103,71 @@ TRANSLATIONS = {
         Language.FA: "👋 سلام! متوجه شدم که گفتگوی ما تمام نشد.\n\nآیا سوالی درباره اقامت دبی یا سرمایه‌گذاری در املاک دارید؟",
         Language.AR: "👋 مرحبًا! لاحظت أننا لم ننهِ محادثتنا.\n\nهل لديك أي أسئلة حول الإقامة في دبي أو الاستثمار العقاري؟",
         Language.RU: "👋 Привет! Я заметил, что мы не закончили наш разговор.\n\nЕсть вопросы о резидентстве в Дубае или инвестициях в недвижимость?"
+    },
+    # FOMO Ghost Protocol - Lost Opportunity Messages
+    "ghost_fomo": {
+        Language.EN: "⚠️ Limited Time Opportunity!\n\nNew penthouses in The Palm with exclusive payment plans are selling fast. Only 3 units left at pre-launch prices!\n\nWould you like to see the ROI analysis before they're gone?",
+        Language.FA: "⚠️ فرصت محدود!\n\nپنت‌هاوس‌های جدید در پالم با طرح پرداخت اختصاصی به سرعت فروخته می‌شوند. فقط ۳ واحد با قیمت پیش‌فروش باقی مانده!\n\nآیا می‌خواهید تحلیل ROI را قبل از اتمام ببینید؟",
+        Language.AR: "⚠️ فرصة محدودة الوقت!\n\nشقق البنتهاوس الجديدة في النخلة بخطط سداد حصرية تُباع بسرعة. بقي فقط 3 وحدات بأسعار ما قبل الإطلاق!\n\nهل تريد الاطلاع على تحليل العائد قبل نفادها؟",
+        Language.RU: "⚠️ Ограниченное предложение!\n\nНовые пентхаусы на Пальме с эксклюзивными платёжными планами быстро продаются. Осталось только 3 юнита по предстартовым ценам!\n\nХотите увидеть анализ ROI, пока они есть?"
+    },
+    # Pain Discovery Questions
+    "pain_discovery": {
+        Language.EN: "🎯 What's driving your interest in Dubai Real Estate?\n\n• Protect wealth from inflation/currency risk\n• Secure residency for family\n• Generate passive rental income\n• Tax-free investment benefits",
+        Language.FA: "🎯 چه چیزی شما را به املاک دبی علاقه‌مند کرده؟\n\n• محافظت دارایی از تورم/ریسک ارزی\n• تأمین اقامت برای خانواده\n• درآمد غیرفعال از اجاره\n• مزایای سرمایه‌گذاری بدون مالیات",
+        Language.AR: "🎯 ما الذي يدفع اهتمامك بعقارات دبي؟\n\n• حماية الثروة من التضخم/مخاطر العملة\n• تأمين الإقامة للعائلة\n• توليد دخل إيجاري سلبي\n• مزايا الاستثمار المعفى من الضرائب",
+        Language.RU: "🎯 Что привлекает вас в недвижимости Дубая?\n\n• Защита капитала от инфляции/валютных рисков\n• Обеспечение резидентства для семьи\n• Пассивный доход от аренды\n• Безналоговые инвестиции"
+    },
+    # Solution Bridge - Pain to Solution connection
+    "solution_inflation": {
+        Language.EN: "✅ Smart choice! Dubai's AED is pegged to USD, offering currency stability. Your investment here is protected from home currency devaluation.\n\nPlus, properties appreciate 5-8% annually while generating 7%+ rental yield!",
+        Language.FA: "✅ انتخاب هوشمندانه! درهم امارات به دلار آمریکا متصل است و ثبات ارزی ارائه می‌دهد. سرمایه‌گذاری شما در اینجا از کاهش ارزش پول کشورتان محافظت می‌شود.\n\nعلاوه بر این، ملک‌ها سالانه ۵-۸٪ رشد می‌کنند و بازده اجاره +۷٪ دارند!",
+        Language.AR: "✅ اختيار ذكي! الدرهم الإماراتي مرتبط بالدولار مما يوفر استقراراً نقدياً. استثمارك هنا محمي من انخفاض قيمة عملة بلدك.\n\nإضافة لذلك، العقارات ترتفع 5-8% سنوياً مع عائد إيجاري +7%!",
+        Language.RU: "✅ Умный выбор! Дирхам ОАЭ привязан к доллару, обеспечивая валютную стабильность. Ваши инвестиции защищены от девальвации домашней валюты.\n\nК тому же, недвижимость растёт на 5-8% в год и приносит 7%+ арендного дохода!"
+    },
+    "solution_residency": {
+        Language.EN: "🛂 Golden Visa Opportunity!\n\nWith a 2M AED investment, you AND your family get 10-year UAE residency!\n\n• No sponsor required\n• 100% property ownership\n• World-class education & healthcare\n• Gateway to global opportunities\n\nSecure your family's future today!",
+        Language.FA: "🛂 فرصت ویزای طلایی!\n\nبا سرمایه‌گذاری ۲ میلیون درهم، شما و خانواده‌تان اقامت ۱۰ ساله امارات می‌گیرید!\n\n• بدون نیاز به اسپانسر\n• مالکیت ۱۰۰٪ ملک\n• آموزش و بهداشت در سطح جهانی\n• دروازه فرصت‌های جهانی\n\nآینده خانواده‌تان را امروز تضمین کنید!",
+        Language.AR: "🛂 فرصة التأشيرة الذهبية!\n\nباستثمار 2 مليون درهم، تحصل أنت وعائلتك على إقامة 10 سنوات في الإمارات!\n\n• لا حاجة لكفيل\n• ملكية عقارية 100%\n• تعليم ورعاية صحية عالمية\n• بوابة للفرص العالمية\n\nأمّن مستقبل عائلتك اليوم!",
+        Language.RU: "🛂 Возможность Золотой Визы!\n\nПри инвестиции в 2М AED вы И ваша семья получаете 10-летнее резидентство ОАЭ!\n\n• Без спонсора\n• 100% владение недвижимостью\n• Образование и здравоохранение мирового уровня\n• Доступ к глобальным возможностям\n\nОбеспечьте будущее семьи сегодня!"
+    },
+    "solution_income": {
+        Language.EN: "💰 Excellent ROI Potential!\n\nDubai offers 7-10% rental yields - one of the highest globally!\n\n• Tax-free rental income\n• Strong tenant demand year-round\n• Property management available\n• Appreciation + rental = dual income\n\nLet me show you the numbers!",
+        Language.FA: "💰 پتانسیل عالی بازگشت سرمایه!\n\nدبی ۷-۱۰٪ بازده اجاره ارائه می‌دهد - یکی از بالاترین‌ها در جهان!\n\n• درآمد اجاره بدون مالیات\n• تقاضای قوی مستاجر در تمام سال\n• مدیریت ملک موجود\n• رشد ارزش + اجاره = درآمد دوگانه\n\nاجازه دهید اعداد را نشان دهم!",
+        Language.AR: "💰 إمكانية عائد ممتازة!\n\nدبي تقدم عوائد إيجارية 7-10% - من أعلى المعدلات عالمياً!\n\n• دخل إيجاري معفى من الضرائب\n• طلب قوي من المستأجرين على مدار السنة\n• خدمات إدارة العقارات متوفرة\n• نمو القيمة + الإيجار = دخل مزدوج\n\nدعني أريك الأرقام!",
+        Language.RU: "💰 Отличный потенциал ROI!\n\nДубай предлагает 7-10% арендной доходности - одна из самых высоких в мире!\n\n• Безналоговый арендный доход\n• Стабильный спрос арендаторов круглый год\n• Управление недвижимостью доступно\n• Рост + аренда = двойной доход\n\nПозвольте показать цифры!"
+    },
+    # Scarcity in Schedule
+    "schedule_scarcity": {
+        Language.EN: "📅 Our agent {agent_name} has limited availability this week!\n\n🔥 Only {slot_count} slots remaining:\n\n{slots}\n\n⏰ Book now before they fill up!",
+        Language.FA: "📅 مشاور ما {agent_name} این هفته زمان محدودی دارد!\n\n🔥 فقط {slot_count} زمان باقی مانده:\n\n{slots}\n\n⏰ قبل از پر شدن رزرو کنید!",
+        Language.AR: "📅 وكيلنا {agent_name} لديه مواعيد محدودة هذا الأسبوع!\n\n🔥 بقي فقط {slot_count} مواعيد:\n\n{slots}\n\n⏰ احجز الآن قبل امتلائها!",
+        Language.RU: "📅 У нашего агента {agent_name} ограниченное время на этой неделе!\n\n🔥 Осталось только {slot_count} слотов:\n\n{slots}\n\n⏰ Забронируйте сейчас, пока не заняли!"
+    },
+    # Pain point buttons
+    "btn_inflation": {
+        Language.EN: "💱 Currency Protection",
+        Language.FA: "💱 حفاظت از ارزش پول",
+        Language.AR: "💱 حماية العملة",
+        Language.RU: "💱 Защита от инфляции"
+    },
+    "btn_visa": {
+        Language.EN: "🛂 Family Residency",
+        Language.FA: "🛂 اقامت خانواده",
+        Language.AR: "🛂 إقامة العائلة",
+        Language.RU: "🛂 Резидентство семьи"
+    },
+    "btn_income": {
+        Language.EN: "💰 Passive Income",
+        Language.FA: "💰 درآمد غیرفعال",
+        Language.AR: "💰 دخل سلبي",
+        Language.RU: "💰 Пассивный доход"
+    },
+    "btn_tax": {
+        Language.EN: "📊 Tax-Free Benefits",
+        Language.FA: "📊 مزایای بدون مالیات",
+        Language.AR: "📊 مزايا معفاة من الضرائب",
+        Language.RU: "📊 Безналоговые выгоды"
     },
     "btn_yes": {
         Language.EN: "✅ Yes",
@@ -382,6 +448,9 @@ class Brain:
         elif current_state == ConversationState.PHONE_GATE:
             return await self._handle_phone_gate(lang, message, lead_updates)
         
+        elif current_state == ConversationState.PAIN_DISCOVERY:
+            return self._handle_pain_discovery(lang, callback_data, lead_updates)
+        
         elif current_state == ConversationState.TRANSACTION_TYPE:
             return self._handle_transaction_type(lang, callback_data, lead_updates)
         
@@ -396,6 +465,9 @@ class Brain:
         
         elif current_state == ConversationState.PURPOSE:
             return self._handle_purpose(lang, callback_data, lead_updates)
+        
+        elif current_state == ConversationState.SOLUTION_BRIDGE:
+            return self._handle_solution_bridge(lang, callback_data, lead, lead_updates)
         
         elif current_state == ConversationState.SCHEDULE:
             return await self._handle_schedule(lang, callback_data, lead)
@@ -456,13 +528,16 @@ class Brain:
             lead_updates["phone"] = phone
             lead_updates["status"] = LeadStatus.CONTACTED
             
+            # NEW: Go to Pain Discovery first (Psychology technique)
             return BrainResponse(
-                message=self.get_text("transaction_type", lang),
-                next_state=ConversationState.TRANSACTION_TYPE,
+                message=self.get_text("pain_discovery", lang),
+                next_state=ConversationState.PAIN_DISCOVERY,
                 lead_updates=lead_updates,
                 buttons=[
-                    {"text": self.get_text("btn_buy", lang), "callback_data": "tx_buy"},
-                    {"text": self.get_text("btn_rent", lang), "callback_data": "tx_rent"}
+                    {"text": self.get_text("btn_inflation", lang), "callback_data": "pain_inflation"},
+                    {"text": self.get_text("btn_visa", lang), "callback_data": "pain_visa"},
+                    {"text": self.get_text("btn_income", lang), "callback_data": "pain_income"},
+                    {"text": self.get_text("btn_tax", lang), "callback_data": "pain_tax"}
                 ]
             )
         else:
@@ -471,6 +546,28 @@ class Brain:
                 message=self.get_text("phone_request", lang),
                 next_state=ConversationState.PHONE_GATE
             )
+    
+    def _handle_pain_discovery(self, lang: Language, callback_data: Optional[str], lead_updates: Dict) -> BrainResponse:
+        """Handle pain point discovery - Psychology technique."""
+        pain_mapping = {
+            "pain_inflation": "inflation_risk",
+            "pain_visa": "visa_insecurity", 
+            "pain_income": "rental_income",
+            "pain_tax": "tax_optimization"
+        }
+        
+        if callback_data in pain_mapping:
+            lead_updates["pain_point"] = pain_mapping[callback_data]
+        
+        return BrainResponse(
+            message=self.get_text("transaction_type", lang),
+            next_state=ConversationState.TRANSACTION_TYPE,
+            lead_updates=lead_updates,
+            buttons=[
+                {"text": self.get_text("btn_buy", lang), "callback_data": "tx_buy"},
+                {"text": self.get_text("btn_rent", lang), "callback_data": "tx_rent"}
+            ]
+        )
     
     def _handle_transaction_type(self, lang: Language, callback_data: Optional[str], lead_updates: Dict) -> BrainResponse:
         """Handle Buy/Rent selection."""
@@ -571,16 +668,42 @@ class Brain:
         
         lead_updates["status"] = LeadStatus.QUALIFIED
         
+        # NEW: Go to Solution Bridge to connect pain to solution (Psychology technique)
         return BrainResponse(
-            message=self.get_text("schedule", lang),
+            message="",  # Will be set in solution bridge based on pain point
+            next_state=ConversationState.SOLUTION_BRIDGE,
+            lead_updates=lead_updates
+        )
+    
+    def _handle_solution_bridge(self, lang: Language, callback_data: Optional[str], lead: Lead, lead_updates: Dict) -> BrainResponse:
+        """Present personalized solution based on pain point - Psychology technique."""
+        pain_point = lead.pain_point if hasattr(lead, 'pain_point') else None
+        
+        # Select appropriate solution message based on pain point
+        if pain_point == "inflation_risk":
+            solution_msg = self.get_text("solution_inflation", lang)
+        elif pain_point == "visa_insecurity":
+            solution_msg = self.get_text("solution_residency", lang)
+        elif pain_point == "rental_income":
+            solution_msg = self.get_text("solution_income", lang)
+        else:
+            # Default: show Golden Visa for high-value prospects
+            if lead.budget_max and lead.budget_max >= 2000000:
+                solution_msg = self.get_text("solution_residency", lang)
+            else:
+                solution_msg = self.get_text("solution_income", lang)
+        
+        return BrainResponse(
+            message=solution_msg,
             next_state=ConversationState.SCHEDULE,
             lead_updates=lead_updates,
-            # Slots will be populated by the caller
-            schedule_slots=[]
+            buttons=[
+                {"text": self.get_text("btn_yes", lang), "callback_data": "solution_yes"}
+            ]
         )
     
     async def _handle_schedule(self, lang: Language, callback_data: Optional[str], lead: Lead) -> BrainResponse:
-        """Handle scheduling selection."""
+        """Handle scheduling selection with SCARCITY technique."""
         if callback_data and callback_data.startswith("slot_"):
             # User selected a slot
             return BrainResponse(
@@ -592,18 +715,31 @@ class Brain:
         # Fetch available slots
         slots = await get_available_slots(lead.tenant_id)
         if slots:
+            # SCARCITY: Limit to only 3-4 slots to create urgency
+            limited_slots = slots[:4]
+            slot_count = len(limited_slots)
+            
             # Format slots for display
             slot_buttons = []
-            for slot in slots[:5]:  # Max 5 options
+            slot_texts = []
+            for slot in limited_slots:
                 day = slot.day_of_week.value.capitalize()
                 time_str = slot.start_time.strftime("%H:%M")
                 slot_buttons.append({
-                    "text": f"{day} {time_str}",
+                    "text": f"🔥 {day} {time_str}",
                     "callback_data": f"slot_{slot.id}"
                 })
+                slot_texts.append(f"• {day} at {time_str}")
+            
+            # Use scarcity message instead of plain schedule
+            scarcity_msg = self.get_text("schedule_scarcity", lang).format(
+                agent_name=self.agent_name,
+                slot_count=slot_count,
+                slots="\n".join(slot_texts)
+            )
             
             return BrainResponse(
-                message=self.get_text("schedule", lang),
+                message=scarcity_msg,
                 next_state=ConversationState.SCHEDULE,
                 buttons=slot_buttons
             )
@@ -615,15 +751,23 @@ class Brain:
                 lead_updates={"status": LeadStatus.QUALIFIED}
             )
     
-    def get_ghost_reminder(self, lead: Lead) -> BrainResponse:
-        """Get ghost protocol reminder message."""
+    def get_ghost_reminder(self, lead: Lead, use_fomo: bool = True) -> BrainResponse:
+        """Get ghost protocol reminder message with FOMO technique."""
         lang = lead.language or Language.EN
+        
+        # Use FOMO message for better conversion
+        if use_fomo:
+            message = self.get_text("ghost_fomo", lang)
+        else:
+            message = self.get_text("ghost_reminder", lang)
+        
         return BrainResponse(
-            message=self.get_text("ghost_reminder", lang),
+            message=message,
             buttons=[
                 {"text": self.get_text("btn_yes", lang), "callback_data": "ghost_yes"},
                 {"text": self.get_text("btn_no", lang), "callback_data": "ghost_no"}
-            ]
+            ],
+            lead_updates={"fomo_messages_sent": (lead.fomo_messages_sent or 0) + 1}
         )
 
 
