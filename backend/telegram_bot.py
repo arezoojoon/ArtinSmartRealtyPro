@@ -7,7 +7,7 @@ import os
 import asyncio
 import logging
 from typing import Optional, Dict, List
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from telegram import (
     Update, 
@@ -24,9 +24,10 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+from sqlalchemy.future import select
 
 from database import (
-    Tenant, Lead, get_tenant_by_bot_token, get_or_create_lead,
+    Tenant, Lead, AgentAvailability, get_tenant_by_bot_token, get_or_create_lead,
     update_lead, ConversationState, book_slot, create_appointment,
     AppointmentType, async_session
 )
@@ -203,12 +204,41 @@ class TelegramBotHandler:
             success = await book_slot(slot_id, lead.id)
             
             if success:
-                # Create appointment
-                await create_appointment(
-                    lead_id=lead.id,
-                    appointment_type=AppointmentType.OFFICE,
-                    scheduled_date=datetime.utcnow()  # Would be actual scheduled time
-                )
+                # Get slot details to calculate actual appointment time
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(AgentAvailability).where(AgentAvailability.id == slot_id)
+                    )
+                    slot = result.scalar_one_or_none()
+                    
+                    if slot:
+                        # Calculate next occurrence of this day
+                        now = datetime.utcnow()
+                        today = now.date()
+                        days_ahead = {
+                            'monday': 0, 'tuesday': 1, 'wednesday': 2,
+                            'thursday': 3, 'friday': 4, 'saturday': 5, 'sunday': 6
+                        }
+                        target_day = days_ahead.get(slot.day_of_week.value, 0)
+                        current_day = today.weekday()
+                        days_until = (target_day - current_day + 7) % 7
+                        
+                        # If same day, check if time has passed
+                        if days_until == 0:
+                            if now.time() >= slot.start_time:
+                                days_until = 7  # Schedule for next week
+                        
+                        appointment_date = datetime.combine(
+                            today + timedelta(days=days_until),
+                            slot.start_time
+                        )
+                        
+                        # Create appointment with calculated date
+                        await create_appointment(
+                            lead_id=lead.id,
+                            appointment_type=AppointmentType.OFFICE,
+                            scheduled_date=appointment_date
+                        )
         
         # Process through Brain
         response = await self.brain.process_message(lead, "", callback_data)

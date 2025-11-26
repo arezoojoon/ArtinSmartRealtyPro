@@ -87,6 +87,21 @@ class LeadResponse(BaseModel):
         from_attributes = True
 
 
+class LeadUpdate(BaseModel):
+    """Validated lead update model - only allow specific fields to be updated."""
+    name: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    status: Optional[LeadStatus] = None
+    transaction_type: Optional[TransactionType] = None
+    property_type: Optional[PropertyType] = None
+    budget_min: Optional[float] = Field(None, ge=0)
+    budget_max: Optional[float] = Field(None, ge=0)
+    payment_method: Optional[PaymentMethod] = None
+    purpose: Optional[Purpose] = None
+    taste_tags: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
 class ScheduleSlotCreate(BaseModel):
     day_of_week: DayOfWeek
     start_time: str = Field(..., description="Time in HH:MM format")
@@ -224,10 +239,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Middleware
+# CORS Middleware - Use environment variable for allowed origins in production
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly in production
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -341,10 +357,10 @@ async def get_lead(tenant_id: int, lead_id: int, db: AsyncSession = Depends(get_
 async def update_lead_endpoint(
     tenant_id: int,
     lead_id: int,
-    updates: dict,
+    updates: LeadUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Update a lead."""
+    """Update a lead with validated fields only."""
     result = await db.execute(
         select(Lead).where(
             Lead.tenant_id == tenant_id,
@@ -356,9 +372,10 @@ async def update_lead_endpoint(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
-    # Apply updates
-    for key, value in updates.items():
-        if hasattr(lead, key) and key not in ['id', 'tenant_id', 'created_at']:
+    # Apply only non-None updates from validated model
+    update_data = updates.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        if value is not None and hasattr(lead, key):
             setattr(lead, key, value)
     
     lead.updated_at = datetime.utcnow()
