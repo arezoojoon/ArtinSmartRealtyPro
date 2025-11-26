@@ -26,6 +26,7 @@ from openpyxl.utils import get_column_letter
 from database import (
     init_db, async_session,
     Tenant, Lead, AgentAvailability, Appointment,
+    TenantProperty, TenantProject, TenantKnowledge,
     LeadStatus, TransactionType, PropertyType, PaymentMethod, Purpose,
     AppointmentType, DayOfWeek, Language, ConversationState,
     get_leads_needing_reminder, get_appointments_needing_reminder,
@@ -171,6 +172,106 @@ class DashboardStats(BaseModel):
     conversion_rate: float
     leads_by_status: dict
     leads_by_purpose: dict
+
+
+# ==================== TENANT DATA MODELS ====================
+
+class TenantPropertyCreate(BaseModel):
+    """Model for creating/updating tenant properties."""
+    name: str = Field(..., min_length=1, max_length=255)
+    property_type: PropertyType
+    transaction_type: Optional[TransactionType] = None
+    location: str = Field(..., min_length=1, max_length=255)
+    address: Optional[str] = None
+    price: Optional[float] = Field(None, ge=0)
+    price_per_sqft: Optional[float] = Field(None, ge=0)
+    currency: str = Field("AED", max_length=10)
+    bedrooms: Optional[int] = Field(None, ge=0)
+    bathrooms: Optional[int] = Field(None, ge=0)
+    area_sqft: Optional[float] = Field(None, ge=0)
+    features: Optional[List[str]] = []
+    description: Optional[str] = None
+    expected_roi: Optional[float] = Field(None, ge=0, le=100)
+    rental_yield: Optional[float] = Field(None, ge=0, le=100)
+    golden_visa_eligible: bool = False
+    images: Optional[List[str]] = []
+    is_featured: bool = False
+
+
+class TenantPropertyResponse(BaseModel):
+    id: int
+    name: str
+    property_type: PropertyType
+    location: str
+    price: Optional[float]
+    bedrooms: Optional[int]
+    features: Optional[List[str]]
+    golden_visa_eligible: bool
+    is_available: bool
+    is_featured: bool
+
+    class Config:
+        from_attributes = True
+
+
+class TenantProjectCreate(BaseModel):
+    """Model for creating/updating tenant off-plan projects."""
+    name: str = Field(..., min_length=1, max_length=255)
+    developer: Optional[str] = Field(None, max_length=255)
+    location: str = Field(..., min_length=1, max_length=255)
+    starting_price: Optional[float] = Field(None, ge=0)
+    price_per_sqft: Optional[float] = Field(None, ge=0)
+    currency: str = Field("AED", max_length=10)
+    payment_plan: Optional[str] = Field(None, max_length=255)
+    down_payment_percent: Optional[float] = Field(None, ge=0, le=100)
+    handover_date: Optional[datetime] = None
+    completion_percent: Optional[float] = Field(None, ge=0, le=100)
+    projected_roi: Optional[float] = Field(None, ge=0, le=100)
+    projected_rental_yield: Optional[float] = Field(None, ge=0, le=100)
+    golden_visa_eligible: bool = False
+    amenities: Optional[List[str]] = []
+    unit_types: Optional[List[str]] = []
+    description: Optional[str] = None
+    selling_points: Optional[List[str]] = []
+    is_featured: bool = False
+
+
+class TenantProjectResponse(BaseModel):
+    id: int
+    name: str
+    developer: Optional[str]
+    location: str
+    starting_price: Optional[float]
+    payment_plan: Optional[str]
+    golden_visa_eligible: bool
+    is_active: bool
+    is_featured: bool
+
+    class Config:
+        from_attributes = True
+
+
+class TenantKnowledgeCreate(BaseModel):
+    """Model for creating/updating tenant knowledge base entries."""
+    category: str = Field(..., min_length=1, max_length=100)  # "faq", "policy", "service"
+    title: str = Field(..., min_length=1, max_length=255)
+    content: str = Field(..., min_length=1)
+    language: Language = Language.EN
+    keywords: Optional[List[str]] = []
+    priority: int = Field(0, ge=0, le=100)
+
+
+class TenantKnowledgeResponse(BaseModel):
+    id: int
+    category: str
+    title: str
+    content: str
+    language: Language
+    priority: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
 
 
 # ==================== SCHEDULER ====================
@@ -819,6 +920,316 @@ async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
     
     background_tasks.add_task(process_webhook)
     return {"status": "ok"}
+
+
+# ==================== TENANT DATA MANAGEMENT ====================
+# These endpoints allow agents to manage their properties, projects, and knowledge base
+# The AI uses this data to provide personalized responses to leads
+
+# --- Properties ---
+
+@app.get("/api/tenants/{tenant_id}/properties", response_model=List[TenantPropertyResponse])
+async def list_properties(
+    tenant_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    property_type: Optional[PropertyType] = None,
+    is_available: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """List all properties for a tenant. AI uses these for recommendations."""
+    query = select(TenantProperty).where(TenantProperty.tenant_id == tenant_id)
+    
+    if property_type:
+        query = query.where(TenantProperty.property_type == property_type)
+    if is_available is not None:
+        query = query.where(TenantProperty.is_available == is_available)
+    
+    query = query.order_by(TenantProperty.is_featured.desc(), TenantProperty.created_at.desc())
+    query = query.offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@app.post("/api/tenants/{tenant_id}/properties", response_model=TenantPropertyResponse)
+async def create_property(
+    tenant_id: int,
+    property_data: TenantPropertyCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Add a new property to tenant's inventory. AI will use this for recommendations."""
+    # Verify tenant exists
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    property_obj = TenantProperty(
+        tenant_id=tenant_id,
+        **property_data.model_dump()
+    )
+    db.add(property_obj)
+    await db.commit()
+    await db.refresh(property_obj)
+    
+    return property_obj
+
+
+@app.put("/api/tenants/{tenant_id}/properties/{property_id}", response_model=TenantPropertyResponse)
+async def update_property(
+    tenant_id: int,
+    property_id: int,
+    property_data: TenantPropertyCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a property in tenant's inventory."""
+    result = await db.execute(
+        select(TenantProperty).where(
+            TenantProperty.tenant_id == tenant_id,
+            TenantProperty.id == property_id
+        )
+    )
+    property_obj = result.scalar_one_or_none()
+    
+    if not property_obj:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    for key, value in property_data.model_dump().items():
+        setattr(property_obj, key, value)
+    
+    property_obj.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(property_obj)
+    
+    return property_obj
+
+
+@app.delete("/api/tenants/{tenant_id}/properties/{property_id}")
+async def delete_property(
+    tenant_id: int,
+    property_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a property from tenant's inventory."""
+    result = await db.execute(
+        select(TenantProperty).where(
+            TenantProperty.tenant_id == tenant_id,
+            TenantProperty.id == property_id
+        )
+    )
+    property_obj = result.scalar_one_or_none()
+    
+    if not property_obj:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    await db.delete(property_obj)
+    await db.commit()
+    
+    return {"status": "deleted", "id": property_id}
+
+
+# --- Projects ---
+
+@app.get("/api/tenants/{tenant_id}/projects", response_model=List[TenantProjectResponse])
+async def list_projects(
+    tenant_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    is_active: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """List all off-plan projects for a tenant. AI uses these for recommendations."""
+    query = select(TenantProject).where(TenantProject.tenant_id == tenant_id)
+    
+    if is_active is not None:
+        query = query.where(TenantProject.is_active == is_active)
+    
+    query = query.order_by(TenantProject.is_featured.desc(), TenantProject.created_at.desc())
+    query = query.offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@app.post("/api/tenants/{tenant_id}/projects", response_model=TenantProjectResponse)
+async def create_project(
+    tenant_id: int,
+    project_data: TenantProjectCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Add a new off-plan project. AI will use this for investment recommendations."""
+    # Verify tenant exists
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    project = TenantProject(
+        tenant_id=tenant_id,
+        **project_data.model_dump()
+    )
+    db.add(project)
+    await db.commit()
+    await db.refresh(project)
+    
+    return project
+
+
+@app.put("/api/tenants/{tenant_id}/projects/{project_id}", response_model=TenantProjectResponse)
+async def update_project(
+    tenant_id: int,
+    project_id: int,
+    project_data: TenantProjectCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an off-plan project."""
+    result = await db.execute(
+        select(TenantProject).where(
+            TenantProject.tenant_id == tenant_id,
+            TenantProject.id == project_id
+        )
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    for key, value in project_data.model_dump().items():
+        setattr(project, key, value)
+    
+    project.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(project)
+    
+    return project
+
+
+@app.delete("/api/tenants/{tenant_id}/projects/{project_id}")
+async def delete_project(
+    tenant_id: int,
+    project_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete an off-plan project."""
+    result = await db.execute(
+        select(TenantProject).where(
+            TenantProject.tenant_id == tenant_id,
+            TenantProject.id == project_id
+        )
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    await db.delete(project)
+    await db.commit()
+    
+    return {"status": "deleted", "id": project_id}
+
+
+# --- Knowledge Base ---
+
+@app.get("/api/tenants/{tenant_id}/knowledge", response_model=List[TenantKnowledgeResponse])
+async def list_knowledge(
+    tenant_id: int,
+    category: Optional[str] = None,
+    language: Optional[Language] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """List knowledge base entries. AI uses these for FAQ answers."""
+    query = select(TenantKnowledge).where(
+        TenantKnowledge.tenant_id == tenant_id,
+        TenantKnowledge.is_active == True
+    )
+    
+    if category:
+        query = query.where(TenantKnowledge.category == category)
+    if language:
+        query = query.where(TenantKnowledge.language == language)
+    
+    query = query.order_by(TenantKnowledge.priority.desc())
+    query = query.offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@app.post("/api/tenants/{tenant_id}/knowledge", response_model=TenantKnowledgeResponse)
+async def create_knowledge(
+    tenant_id: int,
+    knowledge_data: TenantKnowledgeCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Add a knowledge base entry. AI will use this for answering questions."""
+    # Verify tenant exists
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    knowledge = TenantKnowledge(
+        tenant_id=tenant_id,
+        **knowledge_data.model_dump()
+    )
+    db.add(knowledge)
+    await db.commit()
+    await db.refresh(knowledge)
+    
+    return knowledge
+
+
+@app.put("/api/tenants/{tenant_id}/knowledge/{knowledge_id}", response_model=TenantKnowledgeResponse)
+async def update_knowledge(
+    tenant_id: int,
+    knowledge_id: int,
+    knowledge_data: TenantKnowledgeCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a knowledge base entry."""
+    result = await db.execute(
+        select(TenantKnowledge).where(
+            TenantKnowledge.tenant_id == tenant_id,
+            TenantKnowledge.id == knowledge_id
+        )
+    )
+    knowledge = result.scalar_one_or_none()
+    
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+    
+    for key, value in knowledge_data.model_dump().items():
+        setattr(knowledge, key, value)
+    
+    knowledge.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(knowledge)
+    
+    return knowledge
+
+
+@app.delete("/api/tenants/{tenant_id}/knowledge/{knowledge_id}")
+async def delete_knowledge(
+    tenant_id: int,
+    knowledge_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a knowledge base entry."""
+    result = await db.execute(
+        select(TenantKnowledge).where(
+            TenantKnowledge.tenant_id == tenant_id,
+            TenantKnowledge.id == knowledge_id
+        )
+    )
+    knowledge = result.scalar_one_or_none()
+    
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+    
+    await db.delete(knowledge)
+    await db.commit()
+    
+    return {"status": "deleted", "id": knowledge_id}
 
 
 # ==================== MAIN ====================

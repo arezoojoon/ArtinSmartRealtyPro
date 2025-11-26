@@ -17,7 +17,7 @@ from database import (
     Lead, Tenant, ConversationState, Language,
     TransactionType, PropertyType, PaymentMethod, Purpose,
     LeadStatus, update_lead, get_available_slots, DayOfWeek,
-    PainPoint
+    PainPoint, get_tenant_context_for_ai
 )
 
 
@@ -274,17 +274,86 @@ class Brain:
     The Super Brain - AI Core for ArtinSmartRealty
     Handles all conversation logic, language detection, voice processing,
     and state machine for Turbo Qualification Flow.
+    
+    NEW: Uses tenant-specific data (properties, projects, knowledge) for personalized responses.
     """
     
     def __init__(self, tenant: Tenant):
         self.tenant = tenant
         self.agent_name = tenant.name or "ArtinSmartRealty"
+        self.tenant_context = None  # Will be loaded on demand
         
         # Initialize Gemini model
         if GEMINI_API_KEY:
             self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
         else:
             self.model = None
+    
+    async def load_tenant_context(self, lead: Optional[Lead] = None):
+        """Load tenant-specific data for AI context."""
+        self.tenant_context = await get_tenant_context_for_ai(self.tenant.id, lead)
+        return self.tenant_context
+    
+    def _build_tenant_context_prompt(self) -> str:
+        """Build a prompt section with tenant's data for AI to use."""
+        if not self.tenant_context:
+            return ""
+        
+        context_parts = []
+        
+        # Agent/Company Info
+        tenant_info = self.tenant_context.get("tenant", {})
+        if tenant_info:
+            context_parts.append(f"""
+AGENT INFORMATION:
+- Name: {tenant_info.get('name', self.agent_name)}
+- Company: {tenant_info.get('company', 'N/A')}
+- Contact: {tenant_info.get('phone', 'N/A')} | {tenant_info.get('email', 'N/A')}
+""")
+        
+        # Available Properties
+        properties = self.tenant_context.get("properties", [])
+        if properties:
+            props_text = "\n".join([
+                f"  • {p['name']} - {p['type']} in {p['location']}, {p['bedrooms']}BR, AED {p['price']:,.0f}"
+                f" (ROI: {p['roi']}%, Rental Yield: {p['rental_yield']}%)"
+                f"{' ⭐ Golden Visa Eligible' if p['golden_visa'] else ''}"
+                for p in properties[:5]  # Limit to 5 for context
+            ])
+            context_parts.append(f"""
+AVAILABLE PROPERTIES (Agent's Inventory):
+{props_text}
+""")
+        
+        # Off-Plan Projects
+        projects = self.tenant_context.get("projects", [])
+        if projects:
+            projs_text = "\n".join([
+                f"  • {proj['name']} by {proj['developer']} in {proj['location']}"
+                f"\n    Starting AED {proj['starting_price']:,.0f} | Payment: {proj['payment_plan']}"
+                f"\n    Handover: {proj['handover']} | Projected ROI: {proj['roi']}%"
+                f"{' ⭐ Golden Visa Eligible' if proj['golden_visa'] else ''}"
+                f"\n    Selling Points: {', '.join(proj['selling_points'][:3]) if proj['selling_points'] else 'N/A'}"
+                for proj in projects[:3]  # Limit to 3 for context
+            ])
+            context_parts.append(f"""
+OFF-PLAN PROJECTS (Current Launches):
+{projs_text}
+""")
+        
+        # Knowledge Base
+        knowledge = self.tenant_context.get("knowledge", [])
+        if knowledge:
+            kb_text = "\n".join([
+                f"  Q: {k['title']}\n  A: {k['content'][:200]}..."
+                for k in knowledge[:5]  # Limit to 5 FAQs
+            ])
+            context_parts.append(f"""
+AGENT'S FAQ & POLICIES:
+{kb_text}
+""")
+        
+        return "\n".join(context_parts)
     
     def detect_language(self, text: str) -> Language:
         """Auto-detect language from text."""
@@ -385,29 +454,46 @@ class Brain:
     async def generate_ai_response(self, user_message: str, lead: Lead, context: str = "") -> str:
         """
         Generate a contextual AI response using Gemini.
-        Used for free-form questions outside the qualification flow.
+        Uses tenant-specific data (properties, projects, knowledge) for personalized responses.
         """
         if not self.model:
             return self.get_text("welcome", lead.language or Language.EN)
         
         try:
+            # Load tenant context if not already loaded
+            if not self.tenant_context:
+                await self.load_tenant_context(lead)
+            
+            # Build tenant data context
+            tenant_data_prompt = self._build_tenant_context_prompt()
+            
             system_prompt = f"""
             You are {self.agent_name}'s professional AI assistant for Dubai Real Estate.
             
             CRITICAL RULES:
             1. ALWAYS respond in {lead.language.value.upper()} language
             2. Be helpful, professional, and knowledgeable about Dubai real estate
-            3. Mention Golden Visa opportunities when relevant (minimum 2M AED investment)
-            4. Keep responses concise and actionable
-            5. If asked about specific properties, mention that the agent can provide listings
+            3. **IMPORTANT: Use ONLY the agent's actual properties and projects listed below when making recommendations**
+            4. Do NOT make up property names or prices - use only what's in the agent's inventory
+            5. If asked about properties not in the list, say "{self.agent_name} can provide more options matching your needs"
+            6. Mention Golden Visa opportunities when relevant (minimum 2M AED investment)
+            7. Keep responses concise and actionable
+            8. When recommending properties, mention specific ones from the agent's inventory
             
-            Agent: {self.agent_name}
-            Current lead status: {lead.status.value if lead.status else 'new'}
-            Budget interest: {lead.budget_min}-{lead.budget_max} {lead.budget_currency or 'AED'}
-            Purpose: {lead.purpose.value if lead.purpose else 'not specified'}
+            ==== AGENT'S DATA (USE THIS!) ====
+            {tenant_data_prompt}
+            ==================================
             
-            Context: {context}
-            """
+            CURRENT LEAD PROFILE:
+            - Status: {lead.status.value if lead.status else 'new'}
+            - Budget: {lead.budget_min:,.0f if lead.budget_min else 'Not set'} - {lead.budget_max:,.0f if lead.budget_max else 'Not set'} {lead.budget_currency or 'AED'}
+            - Purpose: {lead.purpose.value if lead.purpose else 'not specified'}
+            - Property Type: {lead.property_type.value if lead.property_type else 'not specified'}
+            - Location Interest: {lead.preferred_location or 'not specified'}
+            - Pain Point: {lead.pain_point or 'not identified'}
+            
+            Additional Context: {context}
+            """.strip()
             
             response = await asyncio.to_thread(
                 self.model.generate_content,
@@ -418,6 +504,77 @@ class Brain:
         except Exception as e:
             print(f"AI response error: {e}")
             return self.get_text("welcome", lead.language or Language.EN)
+    
+    async def get_property_recommendations(self, lead: Lead) -> str:
+        """
+        Generate property recommendations from tenant's inventory based on lead preferences.
+        This is called after qualification to show matching properties.
+        """
+        if not self.tenant_context:
+            await self.load_tenant_context(lead)
+        
+        lang = lead.language or Language.EN
+        properties = self.tenant_context.get("properties", [])
+        projects = self.tenant_context.get("projects", [])
+        
+        if not properties and not projects:
+            # No inventory - generic message
+            messages = {
+                Language.EN: f"📋 Based on your requirements, {self.agent_name} will prepare a personalized selection of properties for you!",
+                Language.FA: f"📋 بر اساس نیازهای شما، {self.agent_name} یک لیست شخصی‌سازی شده از ملک‌ها برای شما آماده خواهد کرد!",
+                Language.AR: f"📋 بناءً على متطلباتك، سيقوم {self.agent_name} بإعداد مجموعة مخصصة من العقارات لك!",
+                Language.RU: f"📋 На основе ваших требований {self.agent_name} подготовит персональную подборку объектов для вас!"
+            }
+            return messages.get(lang, messages[Language.EN])
+        
+        # Build recommendations message
+        rec_parts = []
+        
+        # Recommend matching properties
+        if properties:
+            if lang == Language.FA:
+                rec_parts.append("🏠 **ملک‌های پیشنهادی برای شما:**\n")
+            elif lang == Language.AR:
+                rec_parts.append("🏠 **العقارات المقترحة لك:**\n")
+            elif lang == Language.RU:
+                rec_parts.append("🏠 **Рекомендуемые объекты для вас:**\n")
+            else:
+                rec_parts.append("🏠 **Recommended Properties for You:**\n")
+            
+            for i, p in enumerate(properties[:3], 1):
+                price_str = f"AED {p['price']:,.0f}" if p['price'] else "Price on request"
+                features_str = ", ".join(p['features'][:3]) if p['features'] else ""
+                golden_str = " 🛂 Golden Visa" if p['golden_visa'] else ""
+                
+                rec_parts.append(
+                    f"{i}. **{p['name']}** - {p['location']}\n"
+                    f"   {p['bedrooms']}BR {p['type']} | {price_str}{golden_str}\n"
+                    f"   ✨ {features_str}\n"
+                )
+        
+        # Recommend off-plan projects for investors
+        if projects and lead.purpose in [Purpose.INVESTMENT, Purpose.RESIDENCY]:
+            if lang == Language.FA:
+                rec_parts.append("\n📊 **پروژه‌های پیش‌فروش با طرح پرداخت:**\n")
+            elif lang == Language.AR:
+                rec_parts.append("\n📊 **مشاريع قيد الإنشاء مع خطط سداد:**\n")
+            elif lang == Language.RU:
+                rec_parts.append("\n📊 **Строящиеся проекты с рассрочкой:**\n")
+            else:
+                rec_parts.append("\n📊 **Off-Plan Projects with Payment Plans:**\n")
+            
+            for proj in projects[:2]:
+                price_str = f"From AED {proj['starting_price']:,.0f}" if proj['starting_price'] else "Price TBA"
+                golden_str = " 🛂 Golden Visa" if proj['golden_visa'] else ""
+                
+                rec_parts.append(
+                    f"🏗️ **{proj['name']}** by {proj['developer']}\n"
+                    f"   {proj['location']} | {price_str}{golden_str}\n"
+                    f"   💳 Payment Plan: {proj['payment_plan'] or 'Flexible'}\n"
+                    f"   📈 Projected ROI: {proj['roi']}%\n"
+                )
+        
+        return "\n".join(rec_parts)
     
     async def process_message(
         self, 
@@ -467,7 +624,7 @@ class Brain:
             return self._handle_purpose(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.SOLUTION_BRIDGE:
-            return self._handle_solution_bridge(lang, callback_data, lead, lead_updates)
+            return await self._handle_solution_bridge(lang, callback_data, lead, lead_updates)
         
         elif current_state == ConversationState.SCHEDULE:
             return await self._handle_schedule(lang, callback_data, lead)
@@ -675,8 +832,8 @@ class Brain:
             lead_updates=lead_updates
         )
     
-    def _handle_solution_bridge(self, lang: Language, callback_data: Optional[str], lead: Lead, lead_updates: Dict) -> BrainResponse:
-        """Present personalized solution based on pain point - Psychology technique."""
+    async def _handle_solution_bridge(self, lang: Language, callback_data: Optional[str], lead: Lead, lead_updates: Dict) -> BrainResponse:
+        """Present personalized solution based on pain point + property recommendations."""
         pain_point = lead.pain_point if hasattr(lead, 'pain_point') else None
         
         # Select appropriate solution message based on pain point
@@ -692,6 +849,11 @@ class Brain:
                 solution_msg = self.get_text("solution_residency", lang)
             else:
                 solution_msg = self.get_text("solution_income", lang)
+        
+        # NEW: Add property recommendations from tenant's inventory
+        property_recs = await self.get_property_recommendations(lead)
+        if property_recs:
+            solution_msg = f"{solution_msg}\n\n{property_recs}"
         
         return BrainResponse(
             message=solution_msg,

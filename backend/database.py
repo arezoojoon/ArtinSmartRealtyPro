@@ -272,6 +272,151 @@ class AgentAvailability(Base):
     tenant = relationship("Tenant", back_populates="availabilities")
 
 
+class TenantProperty(Base):
+    """
+    Properties listed by tenant (agent's inventory).
+    AI uses this data to provide personalized recommendations.
+    """
+    __tablename__ = "tenant_properties"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Property Details
+    name = Column(String(255), nullable=False)  # e.g., "Marina Heights Tower"
+    property_type = Column(SQLEnum(PropertyType), nullable=False)
+    transaction_type = Column(SQLEnum(TransactionType), nullable=True)  # Buy/Rent/Both
+    
+    # Location
+    location = Column(String(255), nullable=False)  # e.g., "Dubai Marina"
+    address = Column(Text, nullable=True)
+    
+    # Pricing
+    price = Column(Float, nullable=True)
+    price_per_sqft = Column(Float, nullable=True)
+    currency = Column(String(10), default="AED")
+    
+    # Details
+    bedrooms = Column(Integer, nullable=True)
+    bathrooms = Column(Integer, nullable=True)
+    area_sqft = Column(Float, nullable=True)
+    
+    # Features (for AI matching)
+    features = Column(JSON, default=list)  # ["Sea View", "High Floor", "Gym", "Pool"]
+    description = Column(Text, nullable=True)
+    
+    # ROI Data
+    expected_roi = Column(Float, nullable=True)  # Annual ROI %
+    rental_yield = Column(Float, nullable=True)  # Annual rental yield %
+    
+    # Golden Visa Eligible
+    golden_visa_eligible = Column(Boolean, default=False)
+    
+    # Media
+    images = Column(JSON, default=list)  # List of image URLs
+    
+    # Status
+    is_available = Column(Boolean, default=True)
+    is_featured = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    tenant = relationship("Tenant", backref="properties")
+
+
+class TenantProject(Base):
+    """
+    Off-plan projects that the tenant is selling.
+    Contains project-specific payment plans and ROI data for AI to use.
+    """
+    __tablename__ = "tenant_projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Project Details
+    name = Column(String(255), nullable=False)  # e.g., "The Royal Atlantis"
+    developer = Column(String(255), nullable=True)  # e.g., "Emaar"
+    location = Column(String(255), nullable=False)
+    
+    # Pricing
+    starting_price = Column(Float, nullable=True)
+    price_per_sqft = Column(Float, nullable=True)
+    currency = Column(String(10), default="AED")
+    
+    # Payment Plan (for AI to mention)
+    payment_plan = Column(String(255), nullable=True)  # e.g., "60/40", "1% monthly"
+    down_payment_percent = Column(Float, nullable=True)
+    
+    # Handover
+    handover_date = Column(DateTime, nullable=True)
+    completion_percent = Column(Float, nullable=True)
+    
+    # ROI Projection (Agent's data for AI)
+    projected_roi = Column(Float, nullable=True)  # Expected annual appreciation %
+    projected_rental_yield = Column(Float, nullable=True)
+    
+    # Golden Visa
+    golden_visa_eligible = Column(Boolean, default=False)
+    
+    # Features
+    amenities = Column(JSON, default=list)  # ["Beach Access", "Private Pool", "Concierge"]
+    unit_types = Column(JSON, default=list)  # ["1BR", "2BR", "3BR", "Penthouse"]
+    
+    # Description for AI context
+    description = Column(Text, nullable=True)
+    selling_points = Column(JSON, default=list)  # Key points for AI to highlight
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    is_featured = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    tenant = relationship("Tenant", backref="projects")
+
+
+class TenantKnowledge(Base):
+    """
+    Custom knowledge base entries for the AI.
+    Tenant can add FAQs, policies, and custom responses.
+    """
+    __tablename__ = "tenant_knowledge"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Knowledge Entry
+    category = Column(String(100), nullable=False)  # "faq", "policy", "service", "location_info"
+    title = Column(String(255), nullable=False)  # Question or topic
+    content = Column(Text, nullable=False)  # Answer or information
+    
+    # Language
+    language = Column(SQLEnum(Language), default=Language.EN)
+    
+    # Keywords for matching
+    keywords = Column(JSON, default=list)  # For AI context matching
+    
+    # Priority (higher = more important)
+    priority = Column(Integer, default=0)
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    tenant = relationship("Tenant", backref="knowledge_base")
+
+
 class Appointment(Base):
     """
     Scheduled appointments between agents and leads.
@@ -495,3 +640,193 @@ async def get_appointments_needing_reminder(hours_before: int = 24) -> List[Appo
             )
         )
         return result.scalars().all()
+
+
+# ==================== TENANT DATA FUNCTIONS ====================
+
+async def get_tenant_properties(
+    tenant_id: int, 
+    property_type: Optional[PropertyType] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    location: Optional[str] = None,
+    bedrooms: Optional[int] = None,
+    golden_visa_only: bool = False,
+    limit: int = 10
+) -> List["TenantProperty"]:
+    """Get tenant's properties matching criteria for AI recommendations."""
+    async with async_session() as session:
+        query = select(TenantProperty).where(
+            TenantProperty.tenant_id == tenant_id,
+            TenantProperty.is_available == True
+        )
+        
+        if property_type:
+            query = query.where(TenantProperty.property_type == property_type)
+        if min_price:
+            query = query.where(TenantProperty.price >= min_price)
+        if max_price:
+            query = query.where(TenantProperty.price <= max_price)
+        if location:
+            query = query.where(TenantProperty.location.ilike(f"%{location}%"))
+        if bedrooms:
+            query = query.where(TenantProperty.bedrooms == bedrooms)
+        if golden_visa_only:
+            query = query.where(TenantProperty.golden_visa_eligible == True)
+        
+        # Prioritize featured properties
+        query = query.order_by(TenantProperty.is_featured.desc(), TenantProperty.created_at.desc())
+        query = query.limit(limit)
+        
+        result = await session.execute(query)
+        return result.scalars().all()
+
+
+async def get_tenant_projects(
+    tenant_id: int,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    location: Optional[str] = None,
+    golden_visa_only: bool = False,
+    limit: int = 5
+) -> List["TenantProject"]:
+    """Get tenant's off-plan projects for AI recommendations."""
+    async with async_session() as session:
+        query = select(TenantProject).where(
+            TenantProject.tenant_id == tenant_id,
+            TenantProject.is_active == True
+        )
+        
+        if min_price:
+            query = query.where(TenantProject.starting_price >= min_price)
+        if max_price:
+            query = query.where(TenantProject.starting_price <= max_price)
+        if location:
+            query = query.where(TenantProject.location.ilike(f"%{location}%"))
+        if golden_visa_only:
+            query = query.where(TenantProject.golden_visa_eligible == True)
+        
+        query = query.order_by(TenantProject.is_featured.desc(), TenantProject.created_at.desc())
+        query = query.limit(limit)
+        
+        result = await session.execute(query)
+        return result.scalars().all()
+
+
+async def get_tenant_knowledge(
+    tenant_id: int,
+    category: Optional[str] = None,
+    language: Optional[Language] = None,
+    keywords: Optional[List[str]] = None
+) -> List["TenantKnowledge"]:
+    """Get tenant's knowledge base entries for AI context."""
+    async with async_session() as session:
+        query = select(TenantKnowledge).where(
+            TenantKnowledge.tenant_id == tenant_id,
+            TenantKnowledge.is_active == True
+        )
+        
+        if category:
+            query = query.where(TenantKnowledge.category == category)
+        if language:
+            query = query.where(TenantKnowledge.language == language)
+        
+        query = query.order_by(TenantKnowledge.priority.desc())
+        
+        result = await session.execute(query)
+        return result.scalars().all()
+
+
+async def get_tenant_context_for_ai(tenant_id: int, lead: Optional["Lead"] = None) -> Dict[str, Any]:
+    """
+    Build a complete context object with all tenant data for AI.
+    This is the main function that Brain uses to get tenant-specific info.
+    """
+    async with async_session() as session:
+        # Get tenant info
+        result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        
+        if not tenant:
+            return {}
+        
+        # Build filters based on lead preferences
+        property_filters = {}
+        if lead:
+            if lead.budget_min:
+                property_filters["min_price"] = lead.budget_min
+            if lead.budget_max:
+                property_filters["max_price"] = lead.budget_max
+            if lead.property_type:
+                property_filters["property_type"] = lead.property_type
+            if lead.preferred_location:
+                property_filters["location"] = lead.preferred_location
+            if lead.bedrooms_min:
+                property_filters["bedrooms"] = lead.bedrooms_min
+            if lead.purpose and lead.purpose == Purpose.RESIDENCY:
+                property_filters["golden_visa_only"] = True
+        
+        # Fetch matching properties
+        properties = await get_tenant_properties(tenant_id, **property_filters)
+        
+        # Fetch matching projects
+        project_filters = {k: v for k, v in property_filters.items() 
+                         if k in ["min_price", "max_price", "location", "golden_visa_only"]}
+        projects = await get_tenant_projects(tenant_id, **project_filters)
+        
+        # Fetch knowledge base
+        knowledge = await get_tenant_knowledge(
+            tenant_id, 
+            language=lead.language if lead else None
+        )
+        
+        # Build context dictionary
+        context = {
+            "tenant": {
+                "name": tenant.name,
+                "company": tenant.company_name,
+                "phone": tenant.phone,
+                "email": tenant.email,
+            },
+            "properties": [
+                {
+                    "name": p.name,
+                    "type": p.property_type.value if p.property_type else None,
+                    "location": p.location,
+                    "price": p.price,
+                    "bedrooms": p.bedrooms,
+                    "features": p.features,
+                    "roi": p.expected_roi,
+                    "rental_yield": p.rental_yield,
+                    "golden_visa": p.golden_visa_eligible,
+                    "description": p.description,
+                }
+                for p in properties
+            ],
+            "projects": [
+                {
+                    "name": proj.name,
+                    "developer": proj.developer,
+                    "location": proj.location,
+                    "starting_price": proj.starting_price,
+                    "payment_plan": proj.payment_plan,
+                    "handover": proj.handover_date.strftime("%Y-%m") if proj.handover_date else None,
+                    "roi": proj.projected_roi,
+                    "rental_yield": proj.projected_rental_yield,
+                    "golden_visa": proj.golden_visa_eligible,
+                    "amenities": proj.amenities,
+                    "selling_points": proj.selling_points,
+                }
+                for proj in projects
+            ],
+            "knowledge": [
+                {
+                    "category": k.category,
+                    "title": k.title,
+                    "content": k.content,
+                }
+                for k in knowledge
+            ]
+        }
+        
+        return context
