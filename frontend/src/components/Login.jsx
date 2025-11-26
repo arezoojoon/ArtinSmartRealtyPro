@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Building2, Eye, EyeOff, ArrowRight, UserPlus, LogIn } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const Login = ({ onLogin }) => {
     const [mode, setMode] = useState('login'); // 'login' | 'register' | 'forgot'
