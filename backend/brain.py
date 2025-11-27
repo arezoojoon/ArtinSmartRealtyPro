@@ -759,31 +759,57 @@ AGENT'S FAQ & POLICIES:
             tenant_data_prompt = self._build_tenant_context_prompt()
             
             system_prompt = f"""
-            You are {self.agent_name}'s professional AI assistant for Dubai Real Estate.
+            You are an expert AI real estate consultant representing {self.agent_name} from Dubai real estate market.
             
-            CRITICAL RULES:
+            YOUR NAME: Use ONLY "{self.agent_name}" - NEVER variations like "حامد رضا" if name is "حمیدرضا"
+            
+            CRITICAL ENGAGEMENT RULES:
             1. ALWAYS respond in {lead.language.value.upper()} language
-            2. Be helpful, professional, and knowledgeable about Dubai real estate
-            3. **IMPORTANT: Use ONLY the agent's actual properties and projects listed below when making recommendations**
-            4. Do NOT make up property names or prices - use only what's in the agent's inventory
-            5. If asked about properties not in the list, say "{self.agent_name} can provide more options matching your needs"
-            6. Mention Golden Visa opportunities when relevant (minimum 2M AED investment)
-            7. Keep responses concise and actionable
-            8. When recommending properties, mention specific ones from the agent's inventory
+            2. **NEVER rush to end conversation** - Your goal is to engage, qualify, and nurture the lead
+            3. **Ask qualifying questions** to understand their TRUE needs and pain points
+            4. **Listen actively** - if they express concerns about budget, NEVER push expensive options
+            5. **Adapt your approach** based on their responses:
+               - If they say "no money" → Explore payment plans, rent-to-own, or smaller units
+               - If they want residency but low budget → Explain minimum investment for Golden Visa (2M AED) and alternative visa options
+               - If they're hesitant → Build trust, share success stories, offer free consultation
+            6. **Only schedule call when:**
+               - Lead is genuinely interested and engaged
+               - You've identified their budget, purpose, and location preferences
+               - They explicitly ask to speak with agent or need detailed property tour
             
-            ==== AGENT'S DATA (USE THIS!) ====
+            PROPERTY RECOMMENDATIONS:
+            7. **Use ONLY actual properties from agent's inventory below**
+            8. **Match recommendations to budget** - NEVER suggest 2M AED property to 500K budget lead
+            9. If no matching properties in budget:
+               - Acknowledge honestly: "Currently we don't have properties in your exact budget range"
+               - Offer alternatives: "Would you like to explore payment plans or slightly higher budget options?"
+               - Suggest agent can source: "{self.agent_name} can search for off-market deals in your range"
+            10. When recommending properties, mention:
+                - Name, location, price
+                - Key features matching their needs
+                - Investment potential (ROI) if purpose is investment
+                - Golden Visa eligibility if purpose is residency
+            
+            ==== AGENT'S INVENTORY (USE ONLY THESE!) ====
             {tenant_data_prompt}
-            ==================================
+            =============================================
             
-            CURRENT LEAD PROFILE:
+            LEAD PROFILE (USE THIS TO PERSONALIZE):
             - Status: {lead.status.value if lead.status else 'new'}
             - Budget: {f"{lead.budget_min:,.0f}" if lead.budget_min else 'Not set'} - {f"{lead.budget_max:,.0f}" if lead.budget_max else 'Not set'} {lead.budget_currency or 'AED'}
             - Purpose: {lead.purpose.value if lead.purpose else 'not specified'}
             - Property Type: {lead.property_type.value if lead.property_type else 'not specified'}
-            - Location Interest: {lead.preferred_location or 'not specified'}
+            - Location: {lead.preferred_location or 'not specified'}
             - Pain Point: {lead.pain_point or 'not identified'}
             
-            Additional Context: {context}
+            CONVERSATION CONTEXT: {context}
+            
+            RESPONSE STYLE:
+            - Warm, consultative, and patient (NOT pushy sales)
+            - Acknowledge their concerns before presenting solutions
+            - Ask 1-2 follow-up questions per response to keep conversation flowing
+            - Use emojis moderately for friendliness
+            - Keep responses 2-4 sentences max unless explaining complex topic
             """.strip()
             
             response = await asyncio.to_thread(
@@ -1110,6 +1136,12 @@ AGENT'S FAQ & POLICIES:
         elif current_state == ConversationState.SOLUTION_BRIDGE:
             return await self._handle_solution_bridge(lang, callback_data, lead, lead_updates)
         
+        elif current_state == ConversationState.ENGAGEMENT:
+            # Check if user clicked "Schedule Consultation" button
+            if callback_data == "ready_schedule":
+                return await self._handle_schedule(lang, None, lead)
+            return await self._handle_engagement(lang, message, lead, lead_updates)
+        
         elif current_state == ConversationState.SCHEDULE:
             # If text message instead of button, use AI to respond + remind about slots
             if not callback_data and message:
@@ -1405,13 +1437,110 @@ AGENT'S FAQ & POLICIES:
         if property_recs:
             solution_msg = f"{solution_msg}\n\n{property_recs}"
         
+        # NEW: Go to ENGAGEMENT instead of SCHEDULE - let them ask questions first
+        engagement_prompt = {
+            Language.EN: "\n\n💬 Do you have any questions? I'm here to help you make the best decision!",
+            Language.FA: "\n\n💬 سوالی دارید؟ من اینجا هستم تا به شما کمک کنم بهترین تصمیم را بگیرید!",
+            Language.AR: "\n\n💬 هل لديك أي أسئلة؟ أنا هنا لمساعدتك في اتخاذ أفضل قرار!",
+            Language.RU: "\n\n💬 У вас есть вопросы? Я здесь, чтобы помочь вам принять лучшее решение!"
+        }
+        
+        solution_msg = f"{solution_msg}{engagement_prompt.get(lang, engagement_prompt[Language.EN])}"
+        
         return BrainResponse(
             message=solution_msg,
-            next_state=ConversationState.SCHEDULE,
+            next_state=ConversationState.ENGAGEMENT,  # Changed from SCHEDULE
             lead_updates=lead_updates,
-            buttons=[
-                {"text": self.get_text("btn_yes", lang), "callback_data": "solution_yes"}
-            ]
+            buttons=[]  # No buttons - free conversation
+        )
+    
+    async def _handle_engagement(self, lang: Language, message: str, lead: Lead, lead_updates: Dict) -> BrainResponse:
+        """
+        ENGAGEMENT state - Free conversation to nurture, answer questions, and build trust.
+        AI responds naturally and decides when lead is ready to schedule consultation.
+        """
+        # Load tenant context if not loaded
+        if not self.tenant_context:
+            await self.load_tenant_context(lead)
+        
+        # Enhanced AI prompt to handle engagement intelligently
+        engagement_context = f"""
+        ENGAGEMENT MODE - Lead is asking questions and exploring options.
+        
+        YOUR OBJECTIVES:
+        1. Answer their questions honestly and helpfully
+        2. Build trust and rapport
+        3. Identify if they're ready to schedule consultation
+        4. If they express strong interest or ask to speak with agent → Offer scheduling
+        5. If they're still unsure → Keep nurturing, ask clarifying questions
+        
+        TRIGGER PHRASES FOR SCHEDULING (suggest meeting if you detect these):
+        - "I want to see properties" / "میخوام ببینم" / "أريد أن أرى"
+        - "Can I talk to agent?" / "با مشاور حرف بزنم" / "هل يمكنني التحدث"
+        - "Schedule viewing" / "وقت بزارید" / "حدد موعد"
+        - "I'm interested" / "علاقه‌مندم" / "أنا مهتم"
+        - "Let's meet" / "بیایم" / "دعنا نلتقي"
+        
+        BUDGET MISMATCH HANDLING:
+        - If they say budget is low → Don't push expensive properties
+        - Explore: Payment plans, rent-to-own, smaller units, emerging areas
+        - Be honest: "Currently no properties in your exact range, but {self.agent_name} may find off-market deals"
+        - Alternative solutions: "Would you consider slightly higher budget?" or "Rent first then buy?"
+        
+        RESIDENCY WITHOUT BUDGET:
+        - Golden Visa requires minimum 2M AED investment
+        - Alternative visas: Employment visa, investor visa (lower amounts), freelancer visa
+        - Suggest: "Would you like to explore employment opportunities that come with visa?"
+        - Or: "Many clients rent initially while building investment capital"
+        
+        IMPORTANT: 
+        - Keep responses 2-4 sentences max
+        - Ask 1 follow-up question per response to maintain engagement
+        - Use emojis sparingly for warmth
+        - If they're ready → Return with schedule_ready=True in your response
+        
+        Previous conversation: {lead.pain_point or 'N/A'}
+        """
+        
+        # Generate AI response
+        ai_response = await self.generate_ai_response(message, lead, context=engagement_context)
+        
+        # Detect if AI suggests scheduling or user explicitly asks
+        schedule_triggers = [
+            "schedule", "meeting", "appointment", "viewing", "see properties",
+            "وقت", "قرار", "بازدید", "ببینم", "مشاور",
+            "موعد", "مقابلة", "عرض",
+            "встреча", "показ", "консультация"
+        ]
+        
+        user_message_lower = message.lower() if message else ""
+        ai_response_lower = ai_response.lower()
+        
+        schedule_ready = any(trigger in user_message_lower for trigger in schedule_triggers) or \
+                        any(trigger in ai_response_lower for trigger in schedule_triggers)
+        
+        # If ready to schedule, add scheduling button
+        if schedule_ready:
+            schedule_btn_text = {
+                Language.EN: "📅 Schedule Consultation",
+                Language.FA: "📅 وقت مشاوره بگیرم",
+                Language.AR: "📅 حدد موعد الاستشارة",
+                Language.RU: "📅 Назначить консультацию"
+            }
+            
+            return BrainResponse(
+                message=ai_response,
+                next_state=ConversationState.ENGAGEMENT,  # Stay in engagement
+                buttons=[
+                    {"text": schedule_btn_text.get(lang, schedule_btn_text[Language.EN]), "callback_data": "ready_schedule"}
+                ]
+            )
+        
+        # Otherwise, stay in engagement mode with no buttons (free conversation)
+        return BrainResponse(
+            message=ai_response,
+            next_state=ConversationState.ENGAGEMENT,
+            buttons=[]
         )
     
     async def _handle_schedule(self, lang: Language, callback_data: Optional[str], lead: Lead) -> BrainResponse:

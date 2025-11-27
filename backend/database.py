@@ -133,6 +133,7 @@ class ConversationState(str, Enum):
     PAYMENT_METHOD = "payment_method"  # Cash/Credit
     PURPOSE = "purpose"  # Residency/Investment/Living
     SOLUTION_BRIDGE = "solution_bridge"  # NEW: Connect pain to solution
+    ENGAGEMENT = "engagement"  # NEW: Free conversation for nurturing & qualifying
     SCHEDULE = "schedule"
     COMPLETED = "completed"
 
