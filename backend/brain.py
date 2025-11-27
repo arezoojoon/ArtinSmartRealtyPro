@@ -29,6 +29,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
+# Retry configuration for API calls
+MAX_RETRIES = 3
+RETRY_DELAY_BASE = 1  # seconds
+
 
 # ==================== LANGUAGE DETECTION & TRANSLATIONS ====================
 
@@ -316,6 +320,45 @@ BUDGET_RANGES = {
     4: (5000000, None)
 }
 
+def parse_budget_string(budget_str: str) -> Optional[int]:
+    """Parse budget strings like '2M', '500K', '1.5 Million' to integers."""
+    if not budget_str:
+        return None
+    
+    budget_str = budget_str.strip().upper().replace(',', '').replace(' ', '')
+    
+    # Extract number and multiplier
+    import re
+    match = re.search(r'([\d\.]+)\s*(M|K|MIL|MILLION|THOUSAND|K)?', budget_str)
+    if not match:
+        return None
+    
+    number = float(match.group(1))
+    multiplier = match.group(2) or ''
+    
+    if 'M' in multiplier or 'MIL' in multiplier:
+        return int(number * 1_000_000)
+    elif 'K' in multiplier or 'THOUSAND' in multiplier:
+        return int(number * 1_000)
+    else:
+        return int(number)
+
+
+# ==================== RETRY LOGIC ====================
+
+async def retry_with_backoff(func, max_retries=MAX_RETRIES, base_delay=RETRY_DELAY_BASE):
+    """Retry function with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return await func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logger.error(f"❌ All {max_retries} retries failed: {e}")
+                raise
+            
+            delay = base_delay * (2 ** attempt)
+            logger.warning(f"⚠️ Attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+            await asyncio.sleep(delay)
 
 # ==================== HELPER CLASSES ====================
 
@@ -500,7 +543,10 @@ AGENT'S FAQ & POLICIES:
                     genai.delete_file(audio_file.name)
                     return "Could not process audio file", {}
                 
-                # Generate transcript and extract entities
+                # Generate transcript and extract entities with retry logic
+                async def call_gemini_voice():
+                    return self.model.generate_content([audio_file, prompt])
+                
                 prompt = """
                 Please transcribe this audio message and extract any real estate-related information.
                 
@@ -524,7 +570,12 @@ AGENT'S FAQ & POLICIES:
                 Return ONLY valid JSON.
                 """
                 
-                response = self.model.generate_content([audio_file, prompt])
+                try:
+                    response = await retry_with_backoff(call_gemini_voice)
+                except Exception as e:
+                    logger.error(f"❌ Gemini voice API failed after retries: {e}")
+                    genai.delete_file(audio_file.name)
+                    return "Voice processing temporarily unavailable. Please try again or type your message.", {}
                 
                 # Clean up
                 genai.delete_file(audio_file.name)
@@ -1179,41 +1230,54 @@ AGENT'S FAQ & POLICIES:
         
         # === PRE-FILL FROM VOICE ENTITIES (if available) ===
         voice_entities = lead.voice_entities or {}
-        if voice_entities:
+        if voice_entities and isinstance(voice_entities, dict):
+            # DATA INTEGRITY: Validate types before using
             # Budget from voice
-            if voice_entities.get("budget_min") and not filled_slots.get("budget"):
-                conversation_data["budget_min"] = voice_entities["budget_min"]
-                conversation_data["budget_max"] = voice_entities.get("budget_max", voice_entities["budget_min"])
-                filled_slots["budget"] = True
-                lead_updates["budget_min"] = voice_entities["budget_min"]
-                lead_updates["budget_max"] = voice_entities.get("budget_max", voice_entities["budget_min"])
-                logger.info(f"🎤 Voice extracted budget: {voice_entities['budget_min']}")
+            try:
+                if voice_entities.get("budget_min") and not filled_slots.get("budget"):
+                    budget_min_val = int(voice_entities["budget_min"])  # Ensure integer
+                    budget_max_val = int(voice_entities.get("budget_max", budget_min_val))
+                    
+                    conversation_data["budget_min"] = budget_min_val
+                    conversation_data["budget_max"] = budget_max_val
+                    filled_slots["budget"] = True
+                    lead_updates["budget_min"] = budget_min_val
+                    lead_updates["budget_max"] = budget_max_val
+                    logger.info(f"🎤 Voice extracted budget: {budget_min_val}")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"⚠️ Invalid budget in voice_entities: {e}")
             
             # Property type from voice
-            if voice_entities.get("property_type") and not filled_slots.get("property_type"):
-                pt_str = voice_entities["property_type"].lower()
-                property_type_map = {
-                    "apartment": PropertyType.APARTMENT,
-                    "villa": PropertyType.VILLA,
-                    "penthouse": PropertyType.PENTHOUSE,
-                    "townhouse": PropertyType.TOWNHOUSE,
-                    "commercial": PropertyType.COMMERCIAL,
-                    "land": PropertyType.LAND
-                }
-                if pt_str in property_type_map:
-                    conversation_data["property_type"] = pt_str
-                    filled_slots["property_type"] = True
-                    lead_updates["property_type"] = property_type_map[pt_str]
-                    logger.info(f"🎤 Voice extracted property_type: {pt_str}")
+            try:
+                if voice_entities.get("property_type") and not filled_slots.get("property_type"):
+                    pt_str = str(voice_entities["property_type"]).lower().strip()
+                    property_type_map = {
+                        "apartment": PropertyType.APARTMENT,
+                        "villa": PropertyType.VILLA,
+                        "penthouse": PropertyType.PENTHOUSE,
+                        "townhouse": PropertyType.TOWNHOUSE,
+                        "commercial": PropertyType.COMMERCIAL,
+                        "land": PropertyType.LAND
+                    }
+                    if pt_str in property_type_map:
+                        conversation_data["property_type"] = pt_str
+                        filled_slots["property_type"] = True
+                        lead_updates["property_type"] = property_type_map[pt_str]
+                        logger.info(f"🎤 Voice extracted property_type: {pt_str}")
+            except (ValueError, TypeError, AttributeError) as e:
+                logger.warning(f"⚠️ Invalid property_type in voice_entities: {e}")
             
             # Transaction type from voice
-            if voice_entities.get("transaction_type") and not filled_slots.get("transaction_type"):
-                tt_str = voice_entities["transaction_type"].lower()
-                if tt_str in ["buy", "rent"]:
-                    conversation_data["transaction_type"] = tt_str
-                    filled_slots["transaction_type"] = True
-                    lead_updates["transaction_type"] = TransactionType.BUY if tt_str == "buy" else TransactionType.RENT
-                    logger.info(f"🎤 Voice extracted transaction_type: {tt_str}")
+            try:
+                if voice_entities.get("transaction_type") and not filled_slots.get("transaction_type"):
+                    tt_str = str(voice_entities["transaction_type"]).lower().strip()
+                    if tt_str in ["buy", "rent"]:
+                        conversation_data["transaction_type"] = tt_str
+                        filled_slots["transaction_type"] = True
+                        lead_updates["transaction_type"] = TransactionType.BUY if tt_str == "buy" else TransactionType.RENT
+                        logger.info(f"🎤 Voice extracted transaction_type: {tt_str}")
+            except (ValueError, TypeError, AttributeError) as e:
+                logger.warning(f"⚠️ Invalid transaction_type in voice_entities: {e}")
         
         # === HANDLE BUTTON RESPONSES (Slot Filling) ===
         if callback_data:
@@ -1331,6 +1395,45 @@ AGENT'S FAQ & POLICIES:
         
         # === HANDLE TEXT MESSAGES (FAQ Detection) ===
         if message and not callback_data:
+            # DATA INTEGRITY: Try to extract budget from free text before treating as FAQ
+            budget_extracted = parse_budget_string(message)
+            if budget_extracted and not filled_slots.get("budget"):
+                # User typed budget as text instead of clicking button
+                conversation_data["budget_min"] = budget_extracted
+                conversation_data["budget_max"] = budget_extracted * 1.5  # Assume 50% range
+                filled_slots["budget"] = True
+                lead_updates["budget_min"] = budget_extracted
+                lead_updates["budget_max"] = int(budget_extracted * 1.5)
+                logger.info(f"💰 Extracted budget from text: {budget_extracted}")
+                
+                # Move to next slot
+                property_question = {
+                    Language.EN: "Perfect! What type of property are you looking for?",
+                    Language.FA: "عالی! چه نوع ملکی مد نظر دارید",
+                    Language.AR: "رائع! ما نوع العقار الذي تبحث عنه",
+                    Language.RU: "Отлично! Какой тип недвижимости вы ищете?"
+                }
+                
+                property_buttons = [
+                    {"text": "🏢 " + ("آپارتمان" if lang == Language.FA else "Apartment"), "callback_data": "prop_apartment"},
+                    {"text": "🏠 " + ("ویلا" if lang == Language.FA else "Villa"), "callback_data": "prop_villa"},
+                    {"text": "🏰 " + ("پنت‌هاوس" if lang == Language.FA else "Penthouse"), "callback_data": "prop_penthouse"},
+                    {"text": "🏛️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse"), "callback_data": "prop_townhouse"},
+                    {"text": "🏪 " + ("تجاری" if lang == Language.FA else "Commercial"), "callback_data": "prop_commercial"},
+                    {"text": "🌞️ " + ("زمین" if lang == Language.FA else "Land"), "callback_data": "prop_land"},
+                ]
+                
+                return BrainResponse(
+                    message=property_question.get(lang, property_question[Language.EN]),
+                    next_state=ConversationState.SLOT_FILLING,
+                    lead_updates=lead_updates | {
+                        "conversation_data": conversation_data,
+                        "filled_slots": filled_slots,
+                        "pending_slot": "property_type"
+                    },
+                    buttons=property_buttons
+                )
+            
             # Use AI to respond (treats all text as FAQ)
             ai_response = await self.generate_ai_response(message, lead)
             
@@ -1517,7 +1620,20 @@ AGENT'S FAQ & POLICIES:
     # ==================== PHONE VALIDATION (Used by HARD_GATE) ====================
     
     async def _validate_phone_number(self, lang: Language, message: str, lead_updates: Dict) -> BrainResponse:
-        """Validate phone number with STRICT international validation."""
+        """Validate phone number with STRICT international validation and SQL injection protection."""
+        # DATA INTEGRITY: Sanitize input to prevent SQL injection
+        if not message or len(message) > 50:
+            error_msgs = {
+                Language.EN: "⚠️ Please provide a valid phone number (max 50 characters).",
+                Language.FA: "⚠️ لطفاً شماره تلفن معتبر وارد کنید (حداکثر 50 کاراکتر).",
+                Language.AR: "⚠️ يرجى إدخال رقم هاتف صالح (حد أقصى 50 حرفاً).",
+                Language.RU: "⚠️ Пожалуйста, укажите корректный номер (макс 50 символов)."
+            }
+            return BrainResponse(
+                message=error_msgs.get(lang, error_msgs[Language.EN]),
+                next_state=ConversationState.HARD_GATE
+            )
+        
         # Clean message: remove spaces, dashes, parentheses, dots
         cleaned_message = re.sub(r'[\s\-\(\)\.]', '', message.strip())
         
@@ -1573,97 +1689,22 @@ AGENT'S FAQ & POLICIES:
     # ==================== UTILITY & HELPER METHODS ====================
     
     def get_ghost_reminder(self, lead: Lead, use_fomo: bool = True) -> BrainResponse:
-        """Hard gate - collect phone number with STRICT international validation."""
-        # Clean message: remove spaces, dashes, parentheses, dots
-        cleaned_message = re.sub(r'[\s\-\(\)\.]', '', message.strip())
+        """Get ghost protocol reminder message with FOMO technique."""
+        lang = lead.language or Language.EN
         
-        # STRICT validation: Must start with + for international format
-        if not cleaned_message.startswith('+'):
-            # Try adding + if looks like phone number
-            if cleaned_message.isdigit() and len(cleaned_message) >= 10:
-                cleaned_message = '+' + cleaned_message
-            else:
-                valid = False
-                if re.match(phone_pattern, cleaned_message):
-                    # Check additional rules
-                    digits_only = cleaned_message.lstrip('+')
-                    
-                    # Reject if all same digit (e.g., 655444444, 11111111111)
-                    if len(set(digits_only)) <= 2:  # Max 2 unique digits is suspicious
-                        valid = False
-                    # Reject if too short (minimum 10 digits total including country code)
-                    elif len(digits_only) < 10:
-                        valid = False
-                    # Reject obvious fake patterns
-                    elif digits_only in ['12345678', '123456789', '1234567890', '0123456789', 
-                                        '111111111', '000000000', '1111111111', '0000000000',
-                                        '987654321', '9876543210']:
-                        valid = False
-                    # Reject repeating patterns like 555444444
-                    elif re.match(r'^(\d)\1+$', digits_only) or re.match(r'^(\d{2,})\1+$', digits_only):
-                        valid = False
-                    # Must have country code (can't start with 0 except some countries)
-                    elif not cleaned_message.startswith(('+1', '+2', '+3', '+4', '+5', '+6', '+7', '+8', '+9')):
-                        valid = False
-                    else:
-                        valid = True
-                else:
-                    valid = False
+        # Use FOMO message for better conversion
+        if use_fomo:
+            message_text = self.get_text("ghost_fomo", lang)
+        else:
+            message_text = self.get_text("ghost_reminder", lang)
         
-        # International phone pattern
-        phone_pattern = r'^\+\d{10,15}$'
-        
-        valid = False
-        if re.match(phone_pattern, cleaned_message):
-            digits_only = cleaned_message.lstrip('+')
-            
-            # Enhanced validation
-            unique_digits = len(set(digits_only))
-            
-            # Reject if too few unique digits (likely fake)
-            if unique_digits <= 2:
-                valid = False
-            # Reject sequential numbers
-            elif '0123456789' in digits_only or '9876543210' in digits_only:
-                valid = False
-            # Reject repeating patterns
-            elif re.match(r'^(\d{1,3})\1+$', digits_only):
-                valid = False
-            # Must be at least 10 digits
-            elif len(digits_only) < 10:
-                valid = False
-            else:
-                valid = True
-            
-            if valid:
-                # Ensure it starts with + for consistency
-                phone_number = cleaned_message if cleaned_message.startswith('+') else f'+{cleaned_message}'
-                lead_updates["phone"] = phone_number
-                lead_updates["status"] = LeadStatus.CONTACTED
-                
-                # Go to Pain Discovery
-                return BrainResponse(
-                    message=self.get_text("pain_discovery", lang),
-                    next_state=ConversationState.PAIN_DISCOVERY,
-                    lead_updates=lead_updates,
-                    buttons=[
-                        {"text": self.get_text("btn_inflation", lang), "callback_data": "pain_inflation"},
-                        {"text": self.get_text("btn_visa", lang), "callback_data": "pain_visa"},
-                        {"text": self.get_text("btn_income", lang), "callback_data": "pain_income"},
-                        {"text": self.get_text("btn_tax", lang), "callback_data": "pain_tax"}
-                    ]
-                )
-        
-        # Invalid phone - short error message with ONE example
-        error_msgs = {
-            Language.EN: "⚠️ Please provide a valid international phone number.\n\nExample: +971501234567",
-            Language.FA: "⚠️ لطفاً شماره تلفن بین‌المللی معتبر وارد کنید.\n\nمثال: +971501234567",
-            Language.AR: "⚠️ يرجى إدخال رقم هاتف دولي صالح.\n\nمثال: +971501234567",
-            Language.RU: "⚠️ Пожалуйста, укажите корректный международный номер.\n\nПример: +971501234567"
-        }
         return BrainResponse(
-            message=error_msgs.get(lang, error_msgs[Language.EN]),
-            next_state=ConversationState.PHONE_GATE
+            message=message_text,
+            next_state=ConversationState.ENGAGEMENT,
+            buttons=[
+                {"text": self.get_text("btn_yes", lang), "callback_data": "ghost_yes"},
+                {"text": self.get_text("btn_no", lang), "callback_data": "ghost_no"}
+            ]
         )
     
     def _handle_pain_discovery(self, lang: Language, callback_data: Optional[str], lead_updates: Dict) -> BrainResponse:

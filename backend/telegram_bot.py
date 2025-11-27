@@ -27,7 +27,7 @@ from sqlalchemy.future import select
 from database import (
     Tenant, Lead, AgentAvailability, get_tenant_by_bot_token, get_or_create_lead,
     update_lead, ConversationState, book_slot, create_appointment,
-    AppointmentType, async_session
+    AppointmentType, async_session, Language
 )
 from brain import Brain, BrainResponse, process_telegram_message, process_voice_message
 from redis_manager import redis_manager, init_redis, close_redis
@@ -281,7 +281,7 @@ class TelegramBotHandler:
         await self._send_response(update, context, response, lead)
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle inline keyboard callbacks."""
+        """Handle inline keyboard callbacks with race condition protection."""
         query = update.callback_query
         
         # Ignore disabled buttons (anti-loop protection)
@@ -292,7 +292,15 @@ class TelegramBotHandler:
         await query.answer()  # Acknowledge the callback
         
         lead = await self._get_or_create_lead(update)
+        telegram_id = str(update.effective_chat.id)
         callback_data = query.data
+        
+        # CRITICAL: Acquire lock to prevent race conditions
+        if telegram_id not in user_locks:
+            user_locks[telegram_id] = Lock()
+        
+        async with user_locks[telegram_id]:
+            logger.info(f"🔒 Lock acquired for callback user {telegram_id}")
         
         # Add checkmark to selected button (anti-loop)
         selected_button_text = None
@@ -353,35 +361,56 @@ class TelegramBotHandler:
             await edit_message_with_checkmark(update, context, selected_button_text)
             logger.info(f"✅ Checkmark added to button: {selected_button_text}")
         
-        # Save context to Redis
-        await save_context_to_redis(lead)
-        logger.info(f"💾 Saved callback context to Redis for lead {lead.id}")
-        
-        await self._send_response(update, context, response, lead)
+            # Save context to Redis
+            await save_context_to_redis(lead)
+            logger.info(f"💾 Saved callback context to Redis for lead {lead.id}")
+            
+            await self._send_response(update, context, response, lead)
+            logger.info(f"🔓 Lock released for callback user {telegram_id}")
     
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle text messages."""
+        """Handle text messages with race condition protection."""
         lead = await self._get_or_create_lead(update)
         message_text = update.message.text
-        
-        # Load context from Redis (with recovery if timeout occurred)
         telegram_id = str(update.effective_chat.id)
-        redis_context = await redis_manager.get_context(telegram_id, self.tenant.id)
-        if redis_context:
-            logger.info(f"📦 Loaded Redis context for lead {lead.id}: state={redis_context.get('state')}")
         
-        # Process through Brain
-        response = await self.brain.process_message(lead, message_text)
+        # CRITICAL: Acquire lock to prevent race conditions (2 messages in 1 second)
+        if telegram_id not in user_locks:
+            user_locks[telegram_id] = Lock()
         
-        # Save context to Redis after processing
-        await save_context_to_redis(lead)
-        logger.info(f"💾 Saved context to Redis for lead {lead.id}")
-        
-        await self._send_response(update, context, response, lead)
+        async with user_locks[telegram_id]:
+            logger.info(f"🔒 Lock acquired for user {telegram_id}")
+            
+            # Load context from Redis (with recovery if timeout occurred)
+            redis_context = await redis_manager.get_context(telegram_id, self.tenant.id)
+            if redis_context:
+                logger.info(f"📦 Loaded Redis context for lead {lead.id}: state={redis_context.get('state')}")
+            
+            # Process through Brain
+            response = await self.brain.process_message(lead, message_text)
+            
+            # Save context to Redis after processing
+            await save_context_to_redis(lead)
+            logger.info(f"💾 Saved context to Redis for lead {lead.id}")
+            
+            await self._send_response(update, context, response, lead)
+            logger.info(f"🔓 Lock released for user {telegram_id}")
     
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle voice messages."""
+        """Handle voice messages with slot filling protection."""
         lead = await self._get_or_create_lead(update)
+        
+        # ZOMBIE STATE PROTECTION: If in SLOT_FILLING with pending button selection, guide them
+        if lead.conversation_state == ConversationState.SLOT_FILLING and lead.pending_slot:
+            lang = lead.language or Language.EN
+            voice_redirect = {
+                Language.EN: "I'll process your voice in a moment! First, please select an option from the buttons above to continue.",
+                Language.FA: "یه لحظه بعد صداتو پردازش میکنم! اول لطفاً یکی از دکمه‌های بالا رو انتخاب کن.",
+                Language.AR: "سأعالج رسالتك الصوتية بعد قليل! أولاً، اختر خياراً من الأزرار أعلاه.",
+                Language.RU: "Обработаю голосовое чуть позже! Сначала выберите вариант из кнопок выше."
+            }
+            await update.message.reply_text(voice_redirect.get(lang, voice_redirect[Language.EN]))
+            return
         
         # Check if voice exists
         if not update.message.voice:
@@ -420,8 +449,32 @@ class TelegramBotHandler:
         await self._send_response(update, context, response, lead)
     
     async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle photo messages - find similar properties."""
+        """Handle photo messages - find similar properties OR handle unexpected photo during slot filling."""
         lead = await self._get_or_create_lead(update)
+        
+        # ZOMBIE STATE PROTECTION: If in SLOT_FILLING, guide back to slots
+        if lead.conversation_state == ConversationState.SLOT_FILLING:
+            lang = lead.language or Language.EN
+            fallback_msgs = {
+                Language.EN: "I see you sent a photo! I'll analyze it in a moment, but first let's finish your property preferences. Please select your budget:",
+                Language.FA: "عکس فرستادید! یه لحظه بعد بررسی میکنم، اما اول بیا ترجیحاتت رو کامل کنیم. لطفاً بودجه انتخاب کن:",
+                Language.AR: "أرى أنك أرسلت صورة! سأحللها بعد قليل، لكن دعنا ننهي تفضيلاتك. اختر ميزانيتك:",
+                Language.RU: "Вижу, вы отправили фото! Проанализирую чуть позже, но сначала завершим предпочтения. Выберите бюджет:"
+            }
+            
+            from brain import BUDGET_RANGES
+            budget_buttons = []
+            for idx, (min_val, max_val) in BUDGET_RANGES.items():
+                label = f"{min_val:,} - {max_val:,} AED" if max_val else f"{min_val:,}+ AED"
+                budget_buttons.append({"text": label, "callback_data": f"budget_{idx}"})
+            
+            response = BrainResponse(
+                message=fallback_msgs.get(lang, fallback_msgs[Language.EN]),
+                next_state=ConversationState.SLOT_FILLING,
+                buttons=budget_buttons
+            )
+            await self._send_response(update, context, response, lead)
+            return
         
         # Check if photo exists
         if not update.message.photo:
@@ -592,6 +645,10 @@ class BotManager:
 
 # Global bot manager instance
 bot_manager = BotManager()
+
+# User locks to prevent concurrent message processing (race condition protection)
+from asyncio import Lock
+user_locks: Dict[str, Lock] = {}
 
 
 # ==================== WEBHOOK HANDLER ====================

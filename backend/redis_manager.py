@@ -104,8 +104,8 @@ class RedisManager:
         """
         Retrieve user conversation context from Redis.
         
-        Returns:
-            Dictionary with conversation state or None if not found
+        EDGE CASE PROTECTION: If key expired at exactly 24h, return None gracefully.
+        Bot will detect missing context and create new session.
         """
         if not self.redis_client:
             return None
@@ -118,6 +118,14 @@ class RedisManager:
                 context = json.loads(context_json)
                 logger.info(f"📥 Context retrieved for user {telegram_id}")
                 return context
+            else:
+                # TTL EXPIRED - not an error, just log it
+                logger.info(f"⏱️ Session expired for user {telegram_id} - will create new session")
+                return None
+        except json.JSONDecodeError as e:
+            logger.error(f"⚠️ Corrupted context data for user {telegram_id}: {e}")
+            # Delete corrupted key
+            await self.delete_context(telegram_id, tenant_id)
             return None
         except Exception as e:
             logger.error(f"❌ Failed to get context: {e}")
