@@ -28,6 +28,7 @@ import {
     LogOut
 } from 'lucide-react';
 import SettingsPage from './Settings';
+import PropertiesManagement from './PropertiesManagement';
 
 // ==================== CONSTANTS ====================
 
@@ -653,18 +654,23 @@ const Dashboard = ({ user, onLogout }) => {
                         />
                     )}
 
+                    {/* Properties Tab */}
+                    {activeTab === 'properties' && (
+                        <PropertiesManagement tenantId={tenantId} />
+                    )}
+
                     {/* Settings Tab */}
                     {activeTab === 'settings' && (
                         <SettingsPage tenantId={tenantId} token={token} />
                     )}
 
-                    {/* Placeholder for other tabs */}
-                    {['properties', 'analytics'].includes(activeTab) && (
+                    {/* Placeholder for Analytics tab */}
+                    {activeTab === 'analytics' && (
                         <div className="glass-card rounded-xl h-96 flex items-center justify-center">
                             <div className="text-center">
-                                <div className="text-5xl mb-4">🚧</div>
+                                <div className="text-5xl mb-4">📊</div>
                                 <p className="text-gray-400">
-                                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} module coming soon!
+                                    Analytics module coming soon!
                                 </p>
                             </div>
                         </div>
