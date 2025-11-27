@@ -910,6 +910,13 @@ AGENT'S FAQ & POLICIES:
         
         # State Machine Logic
         if current_state == ConversationState.START:
+            # If user types a language name instead of clicking button, handle it
+            if message:
+                # Try to detect language from text
+                detected = self._detect_language_change(message, lang)
+                if detected:
+                    # User typed a language name - go to LANGUAGE_SELECT with that message
+                    return self._handle_language_select(detected, None, {"language": detected}, message)
             return self._handle_start(lang)
         
         elif current_state == ConversationState.LANGUAGE_SELECT:
