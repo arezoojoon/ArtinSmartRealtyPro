@@ -954,6 +954,15 @@ AGENT'S FAQ & POLICIES:
             return await self._handle_phone_gate(lang, message, lead_updates)
         
         elif current_state == ConversationState.PAIN_DISCOVERY:
+            # Check for language change request
+            requested_lang = self._detect_language_change(message, lang)
+            if requested_lang and requested_lang != lead.language:
+                # User wants to change language mid-conversation
+                lead_updates['language'] = requested_lang
+                lang = requested_lang
+                # Repeat PAIN_DISCOVERY in new language
+                return self._handle_pain_discovery(lang, callback_data=None, lead_updates=lead_updates)
+            
             # If text message instead of button, use AI to respond + remind about buttons
             if not callback_data and message:
                 ai_response = await self.generate_ai_response(message, lead)
@@ -988,6 +997,15 @@ AGENT'S FAQ & POLICIES:
             return self._handle_payment_method(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.PURPOSE:
+            # Check for language change request
+            requested_lang = self._detect_language_change(message, lang)
+            if requested_lang and requested_lang != lead.language:
+                # User wants to change language mid-conversation
+                lead_updates['language'] = requested_lang
+                lang = requested_lang
+                # Repeat PURPOSE in new language
+                return self._handle_purpose(lang, callback_data=None, lead_updates=lead_updates)
+            
             # If text message instead of button, use AI to respond + remind about buttons
             if not callback_data and message:
                 ai_response = await self.generate_ai_response(message, lead)

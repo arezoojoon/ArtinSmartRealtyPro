@@ -226,7 +226,9 @@ class TelegramBotHandler:
         
         # Reset conversation state for new start
         await update_lead(lead.id, conversation_state=ConversationState.START)
+        # CRITICAL: Update lead object in memory too!
         lead.conversation_state = ConversationState.START
+        lead.language = None  # Reset language to show language selection
         
         # Process through Brain
         response = await self.brain.process_message(lead, "/start")
