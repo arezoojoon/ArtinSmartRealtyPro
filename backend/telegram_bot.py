@@ -12,9 +12,7 @@ from datetime import datetime, timedelta
 from telegram import (
     Update, 
     InlineKeyboardButton, 
-    InlineKeyboardMarkup,
-    ReplyKeyboardMarkup,
-    KeyboardButton
+    InlineKeyboardMarkup
 )
 from telegram.ext import (
     Application,
@@ -32,6 +30,9 @@ from database import (
     AppointmentType, async_session
 )
 from brain import Brain, BrainResponse, process_telegram_message, process_voice_message
+from redis_manager import redis_manager, init_redis, close_redis
+from context_recovery import save_context_to_redis, handle_user_message_with_recovery
+from inline_keyboards import edit_message_with_checkmark
 
 # Configure logging
 logging.basicConfig(
@@ -62,6 +63,10 @@ class TelegramBotHandler:
             logger.error(f"No Telegram token for tenant {self.tenant.id}")
             return
         
+        # Initialize Redis for session management
+        await init_redis()
+        logger.info(f"✅ Redis initialized for tenant {self.tenant.id}")
+        
         self.application = Application.builder().token(self.tenant.telegram_bot_token).build()
         
         # Register handlers
@@ -86,6 +91,10 @@ class TelegramBotHandler:
             await self.application.stop()
             await self.application.shutdown()
             logger.info(f"Bot stopped for tenant: {self.tenant.name}")
+        
+        # Close Redis connection
+        await close_redis()
+        logger.info("✅ Redis connection closed")
     
     def _build_inline_keyboard(self, buttons: List[Dict[str, str]]) -> InlineKeyboardMarkup:
         """Build Telegram inline keyboard from button list."""
@@ -268,10 +277,25 @@ class TelegramBotHandler:
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle inline keyboard callbacks."""
         query = update.callback_query
+        
+        # Ignore disabled buttons (anti-loop protection)
+        if query.data in ["selected", "disabled"]:
+            await query.answer("Already selected ✅")
+            return
+        
         await query.answer()  # Acknowledge the callback
         
         lead = await self._get_or_create_lead(update)
         callback_data = query.data
+        
+        # Add checkmark to selected button (anti-loop)
+        selected_button_text = None
+        if query.message and query.message.reply_markup:
+            for row in query.message.reply_markup.inline_keyboard:
+                for button in row:
+                    if button.callback_data == callback_data:
+                        selected_button_text = button.text
+                        break
         
         # Handle slot booking
         if callback_data.startswith("slot_"):
@@ -317,6 +341,16 @@ class TelegramBotHandler:
         
         # Process through Brain
         response = await self.brain.process_message(lead, "", callback_data)
+        
+        # Add checkmark to selected button after Brain processing
+        if selected_button_text:
+            await edit_message_with_checkmark(update, context, selected_button_text)
+            logger.info(f"✅ Checkmark added to button: {selected_button_text}")
+        
+        # Save context to Redis
+        await save_context_to_redis(lead)
+        logger.info(f"💾 Saved callback context to Redis for lead {lead.id}")
+        
         await self._send_response(update, context, response, lead)
     
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -324,8 +358,19 @@ class TelegramBotHandler:
         lead = await self._get_or_create_lead(update)
         message_text = update.message.text
         
+        # Load context from Redis (with recovery if timeout occurred)
+        telegram_id = str(update.effective_chat.id)
+        redis_context = await redis_manager.get_context(telegram_id, self.tenant.id)
+        if redis_context:
+            logger.info(f"📦 Loaded Redis context for lead {lead.id}: state={redis_context.get('state')}")
+        
         # Process through Brain
         response = await self.brain.process_message(lead, message_text)
+        
+        # Save context to Redis after processing
+        await save_context_to_redis(lead)
+        logger.info(f"💾 Saved context to Redis for lead {lead.id}")
+        
         await self._send_response(update, context, response, lead)
     
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -361,6 +406,10 @@ class TelegramBotHandler:
         # Update lead with transcript if available
         if transcript:
             await update_lead(lead.id, voice_transcript=transcript)
+        
+        # Save context to Redis after voice processing
+        await save_context_to_redis(lead)
+        logger.info(f"💾 Saved voice context to Redis for lead {lead.id}")
         
         await self._send_response(update, context, response, lead)
     

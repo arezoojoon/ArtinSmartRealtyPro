@@ -995,301 +995,7 @@ AGENT'S FAQ & POLICIES:
         elif current_state == ConversationState.HARD_GATE:
             return await self._handle_hard_gate(lang, message, callback_data, lead, lead_updates)
         
-        # ===== OLD STATE MACHINE (KEPT FOR BACKWARD COMPATIBILITY - WILL BE REMOVED) =====
-        elif current_state == ConversationState.WELCOME:
-            # If language changed, update and repeat welcome in new language
-            if requested_lang and requested_lang != lead.language:
-                return BrainResponse(
-                    message=self.get_text("welcome", lang).format(agent_name=self.agent_name),
-                    next_state=ConversationState.WELCOME,
-                    lead_updates=lead_updates,
-                    buttons=[
-                        {"text": self.get_text("btn_yes", lang), "callback_data": "start_yes"},
-                        {"text": self.get_text("btn_no", lang), "callback_data": "start_no"}
-                    ]
-                )
-            # If text message instead of button, use AI to respond + remind about buttons
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n👆 Please click one of the buttons above.",
-                    Language.FA: "\n\n👆 لطفاً روی یکی از دکمه‌های بالا کلیک کنید.",
-                    Language.AR: "\n\n👆 يرجى النقر على أحد الأزرار أعلاه.",
-                    Language.RU: "\n\n👆 Пожалуйста, нажмите на одну из кнопок выше."
-                }
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.WELCOME,
-                    buttons=[
-                        {"text": self.get_text("btn_yes", lang), "callback_data": "start_yes"},
-                        {"text": self.get_text("btn_no", lang), "callback_data": "start_no"}
-                    ]
-                )
-            return self._handle_welcome_response(lang, callback_data)
-        
-        elif current_state == ConversationState.HOOK:
-            # If language changed, update and repeat hook in new language
-            if requested_lang and requested_lang != lead.language:
-                return BrainResponse(
-                    message=self.get_text("hook_roi", lang),
-                    next_state=ConversationState.HOOK,
-                    lead_updates=lead_updates,
-                    buttons=[
-                        {"text": self.get_text("btn_yes", lang), "callback_data": "roi_yes"},
-                        {"text": self.get_text("btn_no", lang), "callback_data": "roi_no"}
-                    ]
-                )
-            # If text message instead of button, use AI to respond + remind about buttons
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n👆 Please click one of the buttons above.",
-                    Language.FA: "\n\n👆 لطفاً روی یکی از دکمه‌های بالا کلیک کنید.",
-                    Language.AR: "\n\n👆 يرجى النقر على أحد الأزرار أعلاه.",
-                    Language.RU: "\n\n👆 Пожалуйста, нажмите на одну из кнопок выше."
-                }
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.HOOK,
-                    buttons=[
-                        {"text": self.get_text("btn_yes", lang), "callback_data": "roi_yes"},
-                        {"text": self.get_text("btn_no", lang), "callback_data": "roi_no"}
-                    ]
-                )
-            return self._handle_hook_response(lang, callback_data)
-        
-        elif current_state == ConversationState.PHONE_GATE:
-            # If language changed, update and repeat phone request in new language
-            if requested_lang and requested_lang != lead.language:
-                return BrainResponse(
-                    message=self.get_text("phone_request", lang),
-                    next_state=ConversationState.PHONE_GATE,
-                    lead_updates=lead_updates
-                )
-            return await self._handle_phone_gate(lang, message, lead_updates)
-        
-        elif current_state == ConversationState.PAIN_DISCOVERY:
-            # Check for language change request
-            if message and not callback_data:
-                message_lower = message.lower()
-                detected_lang = None
-                if re.search(r'فارسی|persian|farsi', message_lower, re.IGNORECASE):
-                    detected_lang = Language.FA
-                elif re.search(r'عربي|عربی|arabic', message_lower, re.IGNORECASE):
-                    detected_lang = Language.AR
-                elif re.search(r'русский|russian', message_lower, re.IGNORECASE):
-                    detected_lang = Language.RU
-                elif re.search(r'english|انگلیسی', message_lower, re.IGNORECASE):
-                    detected_lang = Language.EN
-                
-                if detected_lang and detected_lang != lead.language:
-                    # User wants to change language mid-conversation
-                    lead_updates['language'] = detected_lang
-                    lang = detected_lang
-                    # Repeat PAIN_DISCOVERY in new language
-                    return self._handle_pain_discovery(lang, callback_data=None, lead_updates=lead_updates)
-            
-            # If text message instead of button, use AI to respond + remind about buttons
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n👆 Please select one of the options above.",
-                    Language.FA: "\n\n👆 لطفاً یکی از گزینه‌های بالا را انتخاب کنید.",
-                    Language.AR: "\n\n👆 يرجى اختيار أحد الخيارات أعلاه.",
-                    Language.RU: "\n\n👆 Выберите один из вариантов выше."
-                }
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.PAIN_DISCOVERY,
-                    buttons=[
-                        {"text": self.get_text("btn_inflation", lang), "callback_data": "pain_inflation"},
-                        {"text": self.get_text("btn_visa", lang), "callback_data": "pain_visa"},
-                        {"text": self.get_text("btn_income", lang), "callback_data": "pain_income"},
-                        {"text": self.get_text("btn_tax", lang), "callback_data": "pain_tax"}
-                    ]
-                )
-            return self._handle_pain_discovery(lang, callback_data, lead_updates)
-        
-        elif current_state == ConversationState.TRANSACTION_TYPE:
-            # If text message instead of button, use AI to respond + show transaction buttons
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n🏘️ Are you looking to Buy or Rent?",
-                    Language.FA: "\n\n🏘️ آیا می‌خواهید بخرید یا اجاره کنید؟",
-                    Language.AR: "\n\n🏘️ هل تريد الشراء أم الإيجار؟",
-                    Language.RU: "\n\n🏘️ Вы хотите купить или арендовать?"
-                }
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.TRANSACTION_TYPE,
-                    buttons=[
-                        {"text": self.get_text("btn_buy", lang), "callback_data": "tx_buy"},
-                        {"text": self.get_text("btn_rent", lang), "callback_data": "tx_rent"}
-                    ]
-                )
-            return self._handle_transaction_type(lang, callback_data, lead_updates)
-        
-        elif current_state == ConversationState.PROPERTY_TYPE:
-            # If text message instead of button, use AI to respond + show property type buttons
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n🏢 What type of property are you interested in?",
-                    Language.FA: "\n\n🏢 چه نوع ملکی مد نظر دارید؟",
-                    Language.AR: "\n\n🏢 ما نوع العقار الذي تهتم به؟",
-                    Language.RU: "\n\n🏢 Какой тип недвижимости вас интересует?"
-                }
-                property_buttons = [
-                    {"text": "🏢 " + ("آپارتمان" if lang == Language.FA else "Apartment"), "callback_data": "prop_apartment"},
-                    {"text": "🏠 " + ("ویلا" if lang == Language.FA else "Villa"), "callback_data": "prop_villa"},
-                    {"text": "🏰 " + ("پنت‌هاوس" if lang == Language.FA else "Penthouse"), "callback_data": "prop_penthouse"},
-                    {"text": "🏘️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse"), "callback_data": "prop_townhouse"},
-                    {"text": "🏪 " + ("تجاری" if lang == Language.FA else "Commercial"), "callback_data": "prop_commercial"},
-                    {"text": "🏞️ " + ("زمین" if lang == Language.FA else "Land"), "callback_data": "prop_land"},
-                ]
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.PROPERTY_TYPE,
-                    buttons=property_buttons
-                )
-            return self._handle_property_type(lang, callback_data, lead_updates)
-        
-        elif current_state == ConversationState.BUDGET:
-            # If text message instead of button, use AI to respond + show budget buttons
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n💰 Please select your budget range:",
-                    Language.FA: "\n\n💰 لطفاً محدوده بودجه خود را انتخاب کنید:",
-                    Language.AR: "\n\n💰 يرجى اختيار ميزانيتك:",
-                    Language.RU: "\n\n💰 Пожалуйста, выберите ваш бюджет:"
-                }
-                # Show budget buttons again
-                budget_buttons = []
-                for idx, (min_val, max_val) in BUDGET_RANGES.items():
-                    if max_val:
-                        label = f"{min_val:,} - {max_val:,} AED"
-                    else:
-                        label = f"{min_val:,}+ AED"
-                    budget_buttons.append({
-                        "text": label,
-                        "callback_data": f"budget_{idx}"
-                    })
-                
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.BUDGET,
-                    buttons=budget_buttons
-                )
-            return self._handle_budget(lang, callback_data, lead_updates)
-        
-        elif current_state == ConversationState.PAYMENT_METHOD:
-            # If text message instead of button, use AI to respond + show payment buttons
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n💳 Payment preference?",
-                    Language.FA: "\n\n💳 روش پرداخت ترجیحی؟",
-                    Language.AR: "\n\n💳 ما هي طريقة الدفع المفضلة؟",
-                    Language.RU: "\n\n💳 Предпочтительный способ оплаты?"
-                }
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.PAYMENT_METHOD,
-                    buttons=[
-                        {"text": self.get_text("btn_cash", lang), "callback_data": "pay_cash"},
-                        {"text": self.get_text("btn_installment", lang), "callback_data": "pay_install"}
-                    ]
-                )
-            return self._handle_payment_method(lang, callback_data, lead_updates)
-        
-        elif current_state == ConversationState.PURPOSE:
-            # Check for language change request
-            if message and not callback_data:
-                message_lower = message.lower()
-                detected_lang = None
-                if re.search(r'فارسی|persian|farsi', message_lower, re.IGNORECASE):
-                    detected_lang = Language.FA
-                elif re.search(r'عربي|عربی|arabic', message_lower, re.IGNORECASE):
-                    detected_lang = Language.AR
-                elif re.search(r'русский|russian', message_lower, re.IGNORECASE):
-                    detected_lang = Language.RU
-                elif re.search(r'english|انگلیسی', message_lower, re.IGNORECASE):
-                    detected_lang = Language.EN
-                
-                if detected_lang and detected_lang != lead.language:
-                    # User wants to change language mid-conversation
-                    lead_updates['language'] = detected_lang
-                    lang = detected_lang
-                    # Repeat PURPOSE in new language
-                    return self._handle_purpose(lang, callback_data=None, lead_updates=lead_updates)
-            
-            # If text message instead of button, use AI to respond + remind about buttons
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n👆 Please select one of the options above to continue.",
-                    Language.FA: "\n\n👆 لطفاً یکی از گزینه‌های بالا را برای ادامه انتخاب کنید.",
-                    Language.AR: "\n\n👆 يرجى اختيار أحد الخيارات أعلاه للمتابعة.",
-                    Language.RU: "\n\n👆 Пожалуйста, выберите один из вариантов выше, чтобы продолжить."
-                }
-                logger.info(f"🔘 PURPOSE state - Returning AI response with 3 buttons")
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.PURPOSE,
-                    buttons=[
-                        {"text": self.get_text("btn_investment", lang), "callback_data": "purp_invest"},
-                        {"text": self.get_text("btn_living", lang), "callback_data": "purp_living"},
-                        {"text": self.get_text("btn_residency", lang), "callback_data": "purp_residency"}
-                    ]
-                )
-            return await self._handle_purpose(lang, callback_data, lead, lead_updates)
-        
-        elif current_state == ConversationState.SOLUTION_BRIDGE:
-            return await self._handle_solution_bridge(lang, callback_data, lead, lead_updates)
-        
-        elif current_state == ConversationState.ENGAGEMENT:
-            # Check if user clicked "Schedule Consultation" button
-            if callback_data == "ready_schedule":
-                return await self._handle_schedule(lang, None, lead)
-            return await self._handle_engagement(lang, message, lead, lead_updates)
-        
-        elif current_state == ConversationState.SCHEDULE:
-            # If text message instead of button, use AI to respond + remind about slots
-            if not callback_data and message:
-                ai_response = await self.generate_ai_response(message, lead)
-                reminder = {
-                    Language.EN: "\n\n👆 Please select an available time slot above to schedule your consultation.",
-                    Language.FA: "\n\n👆 لطفاً یک زمان موجود را برای مشاوره انتخاب کنید.",
-                    Language.AR: "\n\n👆 يرجى اختيار وقت متاح لحجز استشارتك.",
-                    Language.RU: "\n\n👆 Выберите доступное время для консультации."
-                }
-                # Re-fetch slots to show buttons
-                slots = await get_available_slots(lead.tenant_id)
-                slot_buttons = []
-                if slots:
-                    limited_slots = slots[:4]
-                    for slot in limited_slots:
-                        day = slot.day_of_week.value.capitalize()
-                        time_str = slot.start_time.strftime("%H:%M")
-                        slot_buttons.append({
-                            "text": f"🔥 {day} {time_str}",
-                            "callback_data": f"slot_{slot.id}"
-                        })
-                return BrainResponse(
-                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
-                    next_state=ConversationState.SCHEDULE,
-                    buttons=slot_buttons
-                )
-            return await self._handle_schedule(lang, callback_data, lead)
-        
-        elif current_state == ConversationState.COMPLETED:
-            # For completed leads, use AI for free-form conversation
-            ai_response = await self.generate_ai_response(message, lead)
-            return BrainResponse(message=ai_response)
-        
-        # Default: restart flow
+        # Default: restart flow if unknown state
         return self._handle_start(lang)
     
     def _handle_start(self, lang: Language) -> BrainResponse:
@@ -1740,11 +1446,11 @@ AGENT'S FAQ & POLICIES:
         
         # If user provided phone number (text message)
         if message:
-            # Validate phone number using existing method
-            phone_response = await self._handle_phone_gate(lang, message, lead_updates)
+            # Validate phone number using NEW validation method
+            phone_response = await self._validate_phone_number(lang, message, lead_updates)
             
             # If validation successful, move to ENGAGEMENT with PDF flag
-            if phone_response.lead_updates and "phone_number" in phone_response.lead_updates:
+            if phone_response.next_state == ConversationState.ENGAGEMENT:
                 pdf_sent_message = {
                     Language.EN: "📄 Preparing your detailed ROI report...\n\nIt will be sent to you shortly!",
                     Language.FA: "📄 گزارش ROI شما در حال آماده‌سازی است...\n\nبه زودی برایتان ارسال می‌شود!",
@@ -1768,35 +1474,65 @@ AGENT'S FAQ & POLICIES:
             next_state=ConversationState.HARD_GATE
         )
     
-    # ==================== OLD STATE MACHINE HANDLERS (TO BE REMOVED) ====================
+    # ==================== PHONE VALIDATION (Used by HARD_GATE) ====================
     
-    def _handle_welcome_response(self, lang: Language, callback_data: Optional[str]) -> BrainResponse:
-        """Handle response to welcome message - proceed to hook."""
+    async def _validate_phone_number(self, lang: Language, message: str, lead_updates: Dict) -> BrainResponse:
+        """Validate phone number with STRICT international validation."""
+        # Clean message: remove spaces, dashes, parentheses, dots
+        cleaned_message = re.sub(r'[\s\-\(\)\.]', '', message.strip())
+        
+        # Add + if missing
+        if not cleaned_message.startswith('+'):
+            if cleaned_message.isdigit() and len(cleaned_message) >= 10:
+                cleaned_message = '+' + cleaned_message
+        
+        # International phone pattern
+        phone_pattern = r'^\+\d{10,15}$'
+        
+        valid = False
+        if re.match(phone_pattern, cleaned_message):
+            digits_only = cleaned_message.lstrip('+')
+            unique_digits = len(set(digits_only))
+            
+            # Validation rules
+            if unique_digits <= 2:
+                valid = False  # Too few unique digits (e.g., 111111111)
+            elif '0123456789' in digits_only or '9876543210' in digits_only:
+                valid = False  # Sequential numbers
+            elif re.match(r'^(\d{1,3})\1+$', digits_only):
+                valid = False  # Repeating patterns
+            elif len(digits_only) < 10:
+                valid = False  # Too short
+            else:
+                valid = True
+            
+            if valid:
+                phone_number = cleaned_message if cleaned_message.startswith('+') else f'+{cleaned_message}'
+                lead_updates["phone"] = phone_number
+                lead_updates["status"] = LeadStatus.CONTACTED
+                
+                return BrainResponse(
+                    message="✅",  # Success marker
+                    next_state=ConversationState.ENGAGEMENT,
+                    lead_updates=lead_updates
+                )
+        
+        # Invalid phone - ONE example only
+        error_msgs = {
+            Language.EN: "⚠️ Please provide a valid international phone number.\n\nExample: +971501234567",
+            Language.FA: "⚠️ لطفاً شماره تلفن بین‌المللی معتبر وارد کنید.\n\nمثال: +971501234567",
+            Language.AR: "⚠️ يرجى إدخال رقم هاتف دولي صالح.\n\nمثال: +971501234567",
+            Language.RU: "⚠️ Пожалуйста, укажите корректный международный номер.\n\nПример: +971501234567"
+        }
         return BrainResponse(
-            message=self.get_text("hook_roi", lang),
-            next_state=ConversationState.HOOK,
-            buttons=[
-                {"text": self.get_text("btn_yes", lang), "callback_data": "roi_yes"},
-                {"text": self.get_text("btn_no", lang), "callback_data": "roi_no"}
-            ]
+            message=error_msgs.get(lang, error_msgs[Language.EN]),
+            next_state=ConversationState.HARD_GATE
         )
     
-    def _handle_hook_response(self, lang: Language, callback_data: Optional[str]) -> BrainResponse:
-        """Handle ROI hook response - proceed to phone gate."""
-        if callback_data == "roi_yes":
-            return BrainResponse(
-                message=self.get_text("phone_request", lang),
-                next_state=ConversationState.PHONE_GATE,
-                should_generate_roi=True
-            )
-        else:
-            # Skip ROI but still collect phone
-            return BrainResponse(
-                message=self.get_text("phone_request", lang),
-                next_state=ConversationState.PHONE_GATE
-            )
     
-    async def _handle_phone_gate(self, lang: Language, message: str, lead_updates: Dict) -> BrainResponse:
+    # ==================== UTILITY & HELPER METHODS ====================
+    
+    def get_ghost_reminder(self, lead: Lead, use_fomo: bool = True) -> BrainResponse:
         """Hard gate - collect phone number with STRICT international validation."""
         # Clean message: remove spaces, dashes, parentheses, dots
         cleaned_message = re.sub(r'[\s\-\(\)\.]', '', message.strip())
