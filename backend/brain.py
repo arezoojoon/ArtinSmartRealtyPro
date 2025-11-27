@@ -1263,42 +1263,64 @@ AGENT'S FAQ & POLICIES:
             )
     
     async def _handle_phone_gate(self, lang: Language, message: str, lead_updates: Dict) -> BrainResponse:
-        """Hard gate - collect phone number with strict validation."""
-        # Strict phone validation: Must start with + and have 10-15 digits
-        phone_pattern = r'^\+?[1-9]\d{9,14}$'
+        """Hard gate - collect phone number with international validation."""
+        # Clean message: remove spaces, dashes, parentheses, dots
+        cleaned_message = re.sub(r'[\s\-\(\)\.]', '', message.strip())
         
-        # Clean message: remove spaces, dashes, parentheses
-        cleaned_message = re.sub(r'[\s\-\(\)]', '', message.strip())
+        # International phone validation:
+        # - Optional + at start
+        # - Country code: 1-4 digits (covers all countries including USA=1, Iran=98, UAE=971, Russia=7, etc.)
+        # - Total length after country code: 7-14 digits (accommodates different countries)
+        # - Must not be all same digit (e.g., 11111111111)
+        phone_pattern = r'^\+?\d{8,18}$'
         
-        if re.match(phone_pattern, cleaned_message) and len(cleaned_message) >= 10:
-            # Valid phone number
-            lead_updates["phone"] = cleaned_message
-            lead_updates["status"] = LeadStatus.CONTACTED
+        # Additional validation: Check if it's a reasonable phone number
+        if re.match(phone_pattern, cleaned_message):
+            # Remove + for further checks
+            digits_only = cleaned_message.lstrip('+')
             
-            # Go to Pain Discovery
-            return BrainResponse(
-                message=self.get_text("pain_discovery", lang),
-                next_state=ConversationState.PAIN_DISCOVERY,
-                lead_updates=lead_updates,
-                buttons=[
-                    {"text": self.get_text("btn_inflation", lang), "callback_data": "pain_inflation"},
-                    {"text": self.get_text("btn_visa", lang), "callback_data": "pain_visa"},
-                    {"text": self.get_text("btn_income", lang), "callback_data": "pain_income"},
-                    {"text": self.get_text("btn_tax", lang), "callback_data": "pain_tax"}
-                ]
-            )
-        else:
-            # Invalid phone - explain format and ask again
-            error_msgs = {
-                Language.EN: "⚠️ Please provide a valid phone number.\n\nExamples:\n• +971501234567\n• +989121234567\n• +79001234567",
-                Language.FA: "⚠️ لطفاً شماره تلفن معتبر وارد کنید.\n\nمثال:\n• +971501234567\n• +989121234567\n• +79001234567",
-                Language.AR: "⚠️ يرجى إدخال رقم هاتف صالح.\n\nأمثلة:\n• +971501234567\n• +989121234567\n• +79001234567",
-                Language.RU: "⚠️ Пожалуйста, укажите корректный номер.\n\nПримеры:\n• +971501234567\n• +989121234567\n• +79001234567"
-            }
-            return BrainResponse(
-                message=error_msgs.get(lang, error_msgs[Language.EN]),
-                next_state=ConversationState.PHONE_GATE
-            )
+            # Reject if all same digit (e.g., 11111111111, 00000000000)
+            if len(set(digits_only)) == 1:
+                valid = False
+            # Reject if too short (minimum 8 digits after country code)
+            elif len(digits_only) < 8:
+                valid = False
+            # Reject obvious fake patterns
+            elif digits_only in ['12345678', '123456789', '1234567890', '11111111', '00000000']:
+                valid = False
+            else:
+                valid = True
+            
+            if valid:
+                # Ensure it starts with + for consistency
+                phone_number = cleaned_message if cleaned_message.startswith('+') else f'+{cleaned_message}'
+                lead_updates["phone"] = phone_number
+                lead_updates["status"] = LeadStatus.CONTACTED
+                
+                # Go to Pain Discovery
+                return BrainResponse(
+                    message=self.get_text("pain_discovery", lang),
+                    next_state=ConversationState.PAIN_DISCOVERY,
+                    lead_updates=lead_updates,
+                    buttons=[
+                        {"text": self.get_text("btn_inflation", lang), "callback_data": "pain_inflation"},
+                        {"text": self.get_text("btn_visa", lang), "callback_data": "pain_visa"},
+                        {"text": self.get_text("btn_income", lang), "callback_data": "pain_income"},
+                        {"text": self.get_text("btn_tax", lang), "callback_data": "pain_tax"}
+                    ]
+                )
+        
+        # Invalid phone - explain format and ask again
+        error_msgs = {
+            Language.EN: "⚠️ Please provide a valid phone number.\n\nExamples:\n• +971501234567 (UAE)\n• +989121234567 (Iran)\n• +12025551234 (USA)\n• +447911123456 (UK)",
+            Language.FA: "⚠️ لطفاً شماره تلفن معتبر وارد کنید.\n\nمثال:\n• +971501234567 (امارات)\n• +989121234567 (ایران)\n• +12025551234 (آمریکا)\n• +447911123456 (انگلیس)",
+            Language.AR: "⚠️ يرجى إدخال رقم هاتف صالح.\n\nأمثلة:\n• +971501234567 (الإمارات)\n• +989121234567 (إيران)\n• +12025551234 (أمريكا)\n• +447911123456 (بريطانيا)",
+            Language.RU: "⚠️ Пожалуйста, укажите корректный номер.\n\nПримеры:\n• +971501234567 (ОАЭ)\n• +989121234567 (Иран)\n• +12025551234 (США)\n• +447911123456 (Великобритания)"
+        }
+        return BrainResponse(
+            message=error_msgs.get(lang, error_msgs[Language.EN]),
+            next_state=ConversationState.PHONE_GATE
+        )
     
     def _handle_pain_discovery(self, lang: Language, callback_data: Optional[str], lead_updates: Dict) -> BrainResponse:
         """Handle pain point discovery - Psychology technique."""
