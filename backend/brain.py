@@ -881,6 +881,9 @@ AGENT'S FAQ & POLICIES:
         detected_lang = self.detect_language(message)
         current_state = lead.conversation_state or ConversationState.START
         
+        # DEBUG LOGGING
+        logger.info(f"🔍 process_message - Lead {lead.id}: state={current_state}, message='{message}', callback={callback_data}, lead.lang={lead.language}")
+        
         # Check if user is explicitly requesting language change mid-conversation
         lang_change_patterns = {
             Language.FA: r'فارسی|persian|farsi',
@@ -896,6 +899,10 @@ AGENT'S FAQ & POLICIES:
                 if re.search(pattern, message_lower, re.IGNORECASE):
                     requested_lang = lang
                     break
+        
+        # DEBUG LOGGING
+        if requested_lang:
+            logger.info(f"🔍 Detected language change request: {requested_lang}")
         
         # Prioritize: 1) Explicit language request, 2) Lead's saved language, 3) Detected language
         if requested_lang:

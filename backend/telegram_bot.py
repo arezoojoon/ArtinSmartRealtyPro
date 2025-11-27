@@ -170,8 +170,11 @@ class TelegramBotHandler:
         if response.next_state:
             updates["conversation_state"] = response.next_state
         
+        logger.info(f"💾 Saving updates for Lead {lead.id}: {updates}")
+        
         if updates:
             await update_lead(lead.id, **updates)
+            logger.info(f"✅ Lead {lead.id} updated successfully")
         
         # Handle ROI generation if requested
         if response.should_generate_roi:
@@ -224,11 +227,15 @@ class TelegramBotHandler:
         """Handle /start command."""
         lead = await self._get_or_create_lead(update)
         
+        logger.info(f"🔄 /start command - Lead {lead.id}: Before reset - state={lead.conversation_state}, lang={lead.language}")
+        
         # Reset conversation state for new start
         await update_lead(lead.id, conversation_state=ConversationState.START)
         # CRITICAL: Update lead object in memory too!
         lead.conversation_state = ConversationState.START
         lead.language = None  # Reset language to show language selection
+        
+        logger.info(f"🔄 /start command - Lead {lead.id}: After reset - state={lead.conversation_state}, lang={lead.language}")
         
         # Process through Brain
         response = await self.brain.process_message(lead, "/start")
