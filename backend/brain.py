@@ -239,7 +239,25 @@ TRANSLATIONS = {
         Language.EN: "🛂 Residency/Visa",
         Language.FA: "🛂 اقامت/ویزا",
         Language.AR: "🛂 إقامة/تأشيرة",
-        Language.RU: "🛂 Резидентство/Виза"
+        Language.RU: "🛂 Резidency/Виза"
+    },
+    "voice_acknowledged": {
+        Language.EN: "🎤 Got it! I heard you say:\n\"{transcript}\"\n\nLet me process that...",
+        Language.FA: "🎤 گرفتم! شما گفتید:\n\"{transcript}\"\n\nبذارید پردازش کنم...",
+        Language.AR: "🎤 فهمت! سمعتك تقول:\n\"{transcript}\"\n\nدعني أعالج ذلك...",
+        Language.RU: "🎤 Понял! Вы сказали:\n\"{transcript}\"\n\nДайте обработать..."
+    },
+    "voice_processing": {
+        Language.EN: "🎤 Processing your voice message... Please wait.",
+        Language.FA: "🎤 در حال پردازش پیام صوتی شما... لطفاً صبر کنید.",
+        Language.AR: "🎤 جاري معالجة رسالتك الصوتية... يرجى الانتظار.",
+        Language.RU: "🎤 Обрабатываю голосовое сообщение... Подождите."
+    },
+    "voice_error": {
+        Language.EN: "😔 Sorry, I couldn't understand the audio. Could you please type your message or send a clearer voice note?",
+        Language.FA: "😔 متاسفم، صدا را متوجه نشدم. میشه لطفاً پیامتون رو تایپ کنید یا یک ویس واضح‌تر بفرستید؟",
+        Language.AR: "😔 عذرًا، لم أتمكن من فهم الصوت. هل يمكنك كتابة رسالتك أو إرسال مذكرة صوتية أوضح؟",
+        Language.RU: "😔 Извините, не удалось разобрать аудио. Не могли бы вы написать текстом или отправить более чёткое голосовое?"
     }
 }
 
@@ -408,24 +426,91 @@ AGENT'S FAQ & POLICIES:
     
     async def process_voice(self, audio_data: bytes, file_extension: str = "ogg") -> Tuple[str, Dict[str, Any]]:
         """
-        Process voice message using Gemini.
+        Process voice message using Gemini's multimodal capabilities.
         Returns transcript and extracted entities.
         """
         if not self.model:
-            return "", {}
+            return "Voice processing unavailable (Gemini API not configured)", {}
         
         try:
-            # Create a prompt for voice transcription and entity extraction
-            # Note: Actual audio processing would require additional setup
-            # This is a placeholder for the voice processing logic
+            # Save audio temporarily
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=f".{file_extension}", delete=False) as temp_audio:
+                temp_audio.write(audio_data)
+                temp_audio_path = temp_audio.name
             
-            # For production, you'd use Gemini's multimodal capabilities
-            # or a dedicated speech-to-text service
-            
-            return "", {}
+            try:
+                # Upload audio file to Gemini
+                audio_file = genai.upload_file(path=temp_audio_path)
+                
+                # Wait for processing
+                import time
+                while audio_file.state.name == "PROCESSING":
+                    time.sleep(1)
+                    audio_file = genai.get_file(audio_file.name)
+                
+                if audio_file.state.name == "FAILED":
+                    return "Could not process audio file", {}
+                
+                # Generate transcript and extract entities
+                prompt = """
+                Please transcribe this audio message and extract any real estate-related information.
+                
+                Provide response in this JSON format:
+                {
+                    "transcript": "full text of what was said",
+                    "language": "detected language code (en/fa/ar/ru)",
+                    "entities": {
+                        "budget_min": number or null,
+                        "budget_max": number or null,
+                        "location": "string or null",
+                        "property_type": "apartment/villa/penthouse/commercial/land or null",
+                        "transaction_type": "buy/rent or null",
+                        "purpose": "investment/living/residency or null",
+                        "bedrooms": number or null,
+                        "phone_number": "string or null"
+                    }
+                }
+                
+                Extract any mentioned budget, location, property preferences, or contact information.
+                Return ONLY valid JSON.
+                """
+                
+                response = self.model.generate_content([audio_file, prompt])
+                
+                # Clean up
+                genai.delete_file(audio_file.name)
+                
+                # Parse JSON response
+                response_text = response.text.strip()
+                
+                # Remove markdown code blocks if present
+                response_text = re.sub(r'^```json\s*', '', response_text)
+                response_text = re.sub(r'\s*```$', '', response_text)
+                
+                result = json.loads(response_text)
+                
+                transcript = result.get("transcript", "")
+                entities = result.get("entities", {})
+                
+                # Clean up entities (remove null values)
+                entities = {k: v for k, v in entities.items() if v is not None}
+                
+                return transcript, entities
+                
+            finally:
+                # Clean up temp file
+                import os
+                try:
+                    os.unlink(temp_audio_path)
+                except:
+                    pass
+                    
         except Exception as e:
             print(f"Voice processing error: {e}")
-            return "", {}
+            import traceback
+            traceback.print_exc()
+            return f"Error processing voice: {str(e)}", {}
     
     async def extract_entities_from_text(self, text: str, lang: Language) -> Dict[str, Any]:
         """
@@ -1004,13 +1089,24 @@ async def process_voice_message(
 ) -> Tuple[str, BrainResponse]:
     """
     Process a voice message and return transcript + response.
+    Shows acknowledgment of what was heard, then processes it.
     """
     brain = Brain(tenant)
+    lang = lead.language or Language.EN
+    
+    # Process voice to get transcript and entities
     transcript, entities = await brain.process_voice(audio_data, file_extension)
+    
+    # If no transcript, return error
+    if not transcript or "Error" in transcript or "unavailable" in transcript:
+        error_msg = brain.get_text("voice_error", lang)
+        return transcript, BrainResponse(message=error_msg)
+    
+    # Update lead with transcript
+    lead_updates = {"voice_transcript": transcript}
     
     # Update lead with extracted entities if any
     if entities:
-        lead_updates = {}
         if "budget_min" in entities:
             lead_updates["budget_min"] = entities["budget_min"]
         if "budget_max" in entities:
@@ -1024,7 +1120,7 @@ async def process_voice_message(
                 "townhouse": PropertyType.TOWNHOUSE,
                 "commercial": PropertyType.COMMERCIAL,
                 "land": PropertyType.LAND,
-                "residential": PropertyType.APARTMENT,  # Default to apartment
+                "residential": PropertyType.APARTMENT,
             }
             lead_updates["property_type"] = property_type_map.get(pt, PropertyType.APARTMENT)
         if "transaction_type" in entities:
@@ -1045,14 +1141,21 @@ async def process_voice_message(
         if "bedrooms" in entities:
             lead_updates["bedrooms_min"] = entities.get("bedrooms_min", entities.get("bedrooms"))
             lead_updates["bedrooms_max"] = entities.get("bedrooms_max", entities.get("bedrooms"))
+        if "phone_number" in entities:
+            lead_updates["phone"] = entities["phone_number"]
         
-        # Store all extracted entities
+        # Store all extracted entities as JSON
         lead_updates["voice_entities"] = entities
-        
-        if lead_updates:
-            await update_lead(lead.id, **lead_updates)
     
-    # Process as regular message with transcript
-    response = await brain.process_message(lead, transcript or "voice message")
+    # Update lead in database
+    if lead_updates:
+        await update_lead(lead.id, **lead_updates)
+    
+    # Process the transcript as a regular text message
+    response = await brain.process_message(lead, transcript)
+    
+    # Prepend acknowledgment of what was heard
+    ack_msg = brain.get_text("voice_acknowledged", lang).format(transcript=transcript[:100])
+    response.message = f"{ack_msg}\n\n{response.message}"
     
     return transcript, response
