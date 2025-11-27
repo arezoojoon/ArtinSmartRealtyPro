@@ -188,6 +188,27 @@ class WhatsAppBotHandler:
         
         if updates:
             await update_lead(lead.id, **updates)
+        
+        # Handle ROI generation if requested
+        if response.should_generate_roi:
+            try:
+                from roi_engine import generate_roi_pdf
+                
+                # Generate PDF
+                pdf_bytes = await generate_roi_pdf(
+                    tenant=self.tenant,
+                    lead=lead,
+                    property_value=lead.budget_max or lead.budget_min
+                )
+                
+                # Upload PDF to WhatsApp and send
+                # Note: WhatsApp requires media to be uploaded first, then sent by media_id
+                # This is a simplified version - in production, upload PDF to a server first
+                logger.info(f"ROI PDF generated ({len(pdf_bytes)} bytes) for lead {lead.id}")
+                # TODO: Implement WhatsApp document sending via Media Upload API
+                
+            except Exception as e:
+                logger.error(f"Failed to generate ROI PDF: {e}")
     
     async def handle_webhook(self, payload: Dict[str, Any]) -> bool:
         """
@@ -246,6 +267,39 @@ class WhatsAppBotHandler:
                     response = await self.brain.process_message(lead, "", callback_data)
                     await self._send_response(from_phone, response, lead)
             
+            elif message_type == "image":
+                # Handle image - find similar properties
+                image_info = message.get("image", {})
+                image_id = image_info.get("id")
+                
+                if image_id:
+                    # Send processing message
+                    from brain import Language
+                    lang = lead.language or Language.EN
+                    processing_msg = self.brain.get_text("image_processing", lang)
+                    await self.send_message(from_phone, processing_msg)
+                    
+                    # Download and process image
+                    image_url = await self._get_media_url(image_id)
+                    if image_url:
+                        # Download image data
+                        import httpx
+                        async with httpx.AsyncClient() as client:
+                            headers = {"Authorization": f"Bearer {self.tenant.whatsapp_access_token}"}
+                            img_response = await client.get(image_url, headers=headers)
+                            if img_response.status_code == 200:
+                                image_data = img_response.content
+                                
+                                # Process through brain
+                                from brain import process_image_message
+                                description, response = await process_image_message(
+                                    tenant=self.tenant,
+                                    lead=lead,
+                                    image_data=image_data,
+                                    file_extension="jpg"
+                                )
+                                await self._send_response(from_phone, response, lead)
+            
             elif message_type == "audio":
                 # Handle voice message
                 audio_info = message.get("audio", {})
@@ -255,12 +309,23 @@ class WhatsAppBotHandler:
                     # Download and process voice
                     audio_url = await self._get_media_url(audio_id)
                     if audio_url:
-                        # Process through brain (placeholder for now)
-                        response = await self.brain.process_message(
-                            lead, 
-                            "[Voice message received - transcription pending]"
-                        )
-                        await self._send_response(from_phone, response, lead)
+                        # Download audio data
+                        import httpx
+                        async with httpx.AsyncClient() as client:
+                            headers = {"Authorization": f"Bearer {self.tenant.whatsapp_access_token}"}
+                            audio_response = await client.get(audio_url, headers=headers)
+                            if audio_response.status_code == 200:
+                                audio_data = audio_response.content
+                                
+                                # Process through brain
+                                from brain import process_voice_message
+                                transcript, response = await process_voice_message(
+                                    tenant=self.tenant,
+                                    lead=lead,
+                                    audio_data=audio_data,
+                                    file_extension="ogg"
+                                )
+                                await self._send_response(from_phone, response, lead)
             
             elif message_type == "location":
                 # Handle location sharing

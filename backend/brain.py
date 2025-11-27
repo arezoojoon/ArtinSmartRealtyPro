@@ -258,6 +258,36 @@ TRANSLATIONS = {
         Language.FA: "😔 متاسفم، صدا را متوجه نشدم. میشه لطفاً پیامتون رو تایپ کنید یا یک ویس واضح‌تر بفرستید؟",
         Language.AR: "😔 عذرًا، لم أتمكن من فهم الصوت. هل يمكنك كتابة رسالتك أو إرسال مذكرة صوتية أوضح؟",
         Language.RU: "😔 Извините, не удалось разобрать аудио. Не могли бы вы написать текстом или отправить более чёткое голосовое?"
+    },
+    "image_request": {
+        Language.EN: "📸 Want to see your dream home? Send me a photo of any property you love, and I'll find similar ones for you!",
+        Language.FA: "📸 می‌خوای خونه رویایی‌ات رو ببینی? یه عکس از هر ملکی که دوست داری برام بفرست تا مشابهش رو پیدا کنم!",
+        Language.AR: "📸 تريد رؤية منزل أحلامك؟ أرسل لي صورة لأي عقار تحبه وسأجد لك عقارات مشابهة!",
+        Language.RU: "📸 Хотите увидеть дом своей мечты? Отправьте фото любой недвижимости, и я найду похожие варианты!"
+    },
+    "image_processing": {
+        Language.EN: "🔍 Analyzing your image... Let me find similar properties for you!",
+        Language.FA: "🔍 در حال تحلیل عکس شما... بذارید املاک مشابه رو پیدا کنم!",
+        Language.AR: "🔍 جاري تحليل صورتك... دعني أجد عقارات مشابهة لك!",
+        Language.RU: "🔍 Анализирую изображение... Сейчас найду похожие варианты!"
+    },
+    "image_results": {
+        Language.EN: "✨ Found {count} similar properties! Here's the best match:\n\n{property_details}",
+        Language.FA: "✨ {count} ملک مشابه پیدا کردم! اینم بهترینش:\n\n{property_details}",
+        Language.AR: "✨ وجدت {count} عقار مشابه! إليك الأفضل:\n\n{property_details}",
+        Language.RU: "✨ Нашёл {count} похожих вариантов! Вот лучший:\n\n{property_details}"
+    },
+    "image_no_results": {
+        Language.EN: "😔 Couldn't find exact matches, but I can help you find your perfect home! What's your budget?",
+        Language.FA: "😔 دقیقاً مشابه پیدا نکردم، اما میتونم خونه کاملت رو پیدا کنم! بودجه‌ت چقدره؟",
+        Language.AR: "😔 لم أجد تطابقات دقيقة، لكن يمكنني مساعدتك في العثور على منزلك المثالي! ما هي ميزانيتك؟",
+        Language.RU: "😔 Точных совпадений не нашёл, но помогу найти идеальное жильё! Какой у вас бюджет?"
+    },
+    "image_error": {
+        Language.EN: "😔 Sorry, couldn't process the image. Please try sending a clearer photo.",
+        Language.FA: "😔 متاسفم، نتونستم عکس رو پردازش کنم. لطفاً یه عکس واضح‌تر بفرستید.",
+        Language.AR: "😔 عذرًا، لم أتمكن من معالجة الصورة. يرجى إرسال صورة أوضح.",
+        Language.RU: "😔 Извините, не удалось обработать изображение. Отправьте более чёткое фото."
     }
 }
 
@@ -511,6 +541,123 @@ AGENT'S FAQ & POLICIES:
             import traceback
             traceback.print_exc()
             return f"Error processing voice: {str(e)}", {}
+    
+    async def process_image(self, image_data: bytes, file_extension: str = "jpg") -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Process image using Gemini Vision to find similar properties.
+        Returns description and list of matching properties from database.
+        """
+        if not self.model:
+            return "Image processing unavailable (Gemini API not configured)", []
+        
+        try:
+            # Save image temporarily
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=f".{file_extension}", delete=False) as temp_image:
+                temp_image.write(image_data)
+                temp_image_path = temp_image.name
+            
+            try:
+                # Upload image to Gemini
+                image_file = genai.upload_file(path=temp_image_path)
+                
+                # Wait for processing
+                import time
+                while image_file.state.name == "PROCESSING":
+                    time.sleep(1)
+                    image_file = genai.get_file(image_file.name)
+                
+                if image_file.state.name == "FAILED":
+                    return "Could not process image file", []
+                
+                # Analyze image and extract features
+                prompt = """
+                Analyze this property image and extract visual features.
+                
+                Provide response in this JSON format:
+                {
+                    "description": "brief description of the property shown",
+                    "property_type": "apartment/villa/penthouse/townhouse/commercial/land",
+                    "style": "modern/luxury/traditional/minimalist/etc",
+                    "features": ["feature1", "feature2", ...],
+                    "estimated_bedrooms": number or null,
+                    "view_type": "sea/city/golf/garden/etc or null",
+                    "interior_quality": "luxury/premium/standard",
+                    "color_scheme": "dominant colors",
+                    "search_keywords": ["keyword1", "keyword2", ...]
+                }
+                
+                Focus on architectural style, luxury level, type of property, and visual features.
+                Return ONLY valid JSON.
+                """
+                
+                response = self.model.generate_content([image_file, prompt])
+                
+                # Clean up
+                genai.delete_file(image_file.name)
+                
+                # Parse JSON response
+                response_text = response.text.strip()
+                response_text = re.sub(r'^```json\s*', '', response_text)
+                response_text = re.sub(r'\s*```$', '', response_text)
+                
+                result = json.loads(response_text)
+                
+                # Get image description
+                description = result.get("description", "property image")
+                property_type = result.get("property_type", "apartment")
+                features = result.get("features", [])
+                style = result.get("style", "")
+                
+                # Search for similar properties in tenant's inventory
+                properties = self.tenant_context.get("properties", [])
+                
+                # Simple matching algorithm based on extracted features
+                matching_properties = []
+                for prop in properties:
+                    score = 0
+                    
+                    # Match property type
+                    if prop.get("type", "").lower() == property_type.lower():
+                        score += 5
+                    
+                    # Match features
+                    prop_features_lower = [f.lower() for f in prop.get("features", [])]
+                    for feature in features:
+                        if any(feature.lower() in pf for pf in prop_features_lower):
+                            score += 2
+                    
+                    # Match style
+                    if style and style.lower() in prop.get("description", "").lower():
+                        score += 3
+                    
+                    if score > 0:
+                        matching_properties.append({
+                            "property": prop,
+                            "similarity_score": score
+                        })
+                
+                # Sort by similarity score
+                matching_properties.sort(key=lambda x: x["similarity_score"], reverse=True)
+                
+                # Return top 3 matches
+                top_matches = [m["property"] for m in matching_properties[:3]]
+                
+                return description, top_matches
+                
+            finally:
+                # Clean up temp file
+                import os
+                try:
+                    os.unlink(temp_image_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            print(f"Image processing error: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"Error processing image: {str(e)}", []
     
     async def extract_entities_from_text(self, text: str, lang: Language) -> Dict[str, Any]:
         """
@@ -1159,3 +1306,65 @@ async def process_voice_message(
     response.message = f"{ack_msg}\n\n{response.message}"
     
     return transcript, response
+
+
+async def process_image_message(
+    tenant: Tenant,
+    lead: Lead,
+    image_data: bytes,
+    file_extension: str = "jpg"
+) -> Tuple[str, BrainResponse]:
+    """
+    Process an image and find similar properties.
+    Shows image analysis results and matching properties.
+    """
+    brain = Brain(tenant)
+    lang = lead.language or Language.EN
+    
+    # Process image to get description and matches
+    description, matching_properties = await brain.process_image(image_data, file_extension)
+    
+    # If error, return error message
+    if "Error" in description or "unavailable" in description:
+        error_msg = brain.get_text("image_error", lang)
+        return description, BrainResponse(message=error_msg)
+    
+    # If no matches found
+    if not matching_properties:
+        no_results_msg = brain.get_text("image_no_results", lang)
+        return description, BrainResponse(message=no_results_msg)
+    
+    # Format matching properties
+    property_details_parts = []
+    for i, prop in enumerate(matching_properties[:3], 1):
+        price_str = f"AED {prop['price']:,.0f}" if prop.get('price') else "Price on request"
+        features_str = ", ".join(prop.get('features', [])[:3])
+        golden_str = " 🛂 Golden Visa" if prop.get('golden_visa') else ""
+        roi_str = f" | ROI: {prop['roi']}%" if prop.get('roi') else ""
+        
+        property_details_parts.append(
+            f"{i}. **{prop['name']}**\n"
+            f"   📍 {prop['location']}\n"
+            f"   🏠 {prop['bedrooms']}BR {prop['type']}\n"
+            f"   💰 {price_str}{golden_str}{roi_str}\n"
+            f"   ✨ {features_str}\n"
+        )
+    
+    property_details = "\n".join(property_details_parts)
+    
+    # Build response message
+    results_msg = brain.get_text("image_results", lang).format(
+        count=len(matching_properties),
+        property_details=property_details
+    )
+    
+    # Update lead with image search data
+    lead_updates = {
+        "image_description": description,
+        "image_search_results": len(matching_properties)
+    }
+    
+    await update_lead(lead.id, **lead_updates)
+    
+    return description, BrainResponse(message=results_msg)
+

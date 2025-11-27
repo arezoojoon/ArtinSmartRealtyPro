@@ -63,6 +63,7 @@ class TelegramBotHandler:
         # Register handlers
         self.application.add_handler(CommandHandler("start", self.handle_start))
         self.application.add_handler(CallbackQueryHandler(self.handle_callback))
+        self.application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
         self.application.add_handler(MessageHandler(filters.VOICE, self.handle_voice))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
         self.application.add_handler(MessageHandler(filters.CONTACT, self.handle_contact))
@@ -174,9 +175,39 @@ class TelegramBotHandler:
         
         # Handle ROI generation if requested
         if response.should_generate_roi:
-            # This would trigger ROI PDF generation
-            # Imported from roi_engine when needed
-            pass
+            try:
+                from roi_engine import generate_roi_pdf
+                from io import BytesIO
+                
+                # Generate PDF
+                pdf_bytes = await generate_roi_pdf(
+                    tenant=self.tenant,
+                    lead=lead,
+                    property_value=lead.budget_max or lead.budget_min
+                )
+                
+                # Send PDF as document
+                pdf_file = BytesIO(pdf_bytes)
+                pdf_file.name = f"roi_analysis_{lead.id}.pdf"
+                
+                lang = lead.language or Language.EN
+                caption_map = {
+                    Language.EN: "📊 Here's your personalized ROI Analysis Report!",
+                    Language.FA: "📊 این هم گزارش تحلیل سود سرمایه‌گذاری شما!",
+                    Language.AR: "📊 إليك تقرير تحليل العائد على الاستثمار الشخصي!",
+                    Language.RU: "📊 Вот ваш персональный отчёт ROI!"
+                }
+                
+                await update.message.reply_document(
+                    document=pdf_file,
+                    filename=f"ROI_Analysis_{self.tenant.name}.pdf",
+                    caption=caption_map.get(lang, caption_map[Language.EN])
+                )
+                
+            except Exception as e:
+                logger.error(f"Failed to generate ROI PDF: {e}")
+                # Don't fail the whole message if PDF generation fails
+                pass
     
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command."""
@@ -275,6 +306,35 @@ class TelegramBotHandler:
         # Update lead with transcript if available
         if transcript:
             await update_lead(lead.id, voice_transcript=transcript)
+        
+        await self._send_response(update, context, response, lead)
+    
+    async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle photo messages - find similar properties."""
+        lead = await self._get_or_create_lead(update)
+        
+        # Get the largest photo
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        
+        # Download to bytes
+        image_bytes = await file.download_as_bytearray()
+        
+        # Send processing message
+        lang = lead.language or Language.EN
+        from brain import Brain
+        brain = Brain(self.tenant)
+        processing_msg = brain.get_text("image_processing", lang)
+        await update.message.reply_text(processing_msg)
+        
+        # Process through Brain
+        from brain import process_image_message
+        description, response = await process_image_message(
+            tenant=self.tenant,
+            lead=lead,
+            image_data=bytes(image_bytes),
+            file_extension="jpg"
+        )
         
         await self._send_response(update, context, response, lead)
     
