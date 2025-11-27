@@ -38,11 +38,17 @@ LANGUAGE_PATTERNS = {
 
 # Translations dictionary
 TRANSLATIONS = {
+    "language_select": {
+        Language.EN: "👋 Hello! I'm {agent_name}'s AI Assistant.\n\nPlease select your preferred language:\nلطفاً زبان خود را انتخاب کنید:\nيرجى اختيار لغتك:\nПожалуйста, выберите язык:",
+        Language.FA: "👋 سلام! من دستیار هوش مصنوعی {agent_name} هستم.\n\nلطفاً زبان خود را انتخاب کنید:\nPlease select your language:\nيرجى اختيار لغتك:\nПожалуйста, выберите язык:",
+        Language.AR: "👋 مرحبًا! أنا المساعد الذكي لـ {agent_name}.\n\nيرجى اختيار لغتك:\nPlease select your language:\nلطفاً زبان خود را انتخاب کنید:\nПожалуйста, выберите язык:",
+        Language.RU: "👋 Здравствуйте! Я AI-ассистент {agent_name}.\n\nПожалуйста, выберите язык:\nPlease select your language:\nلطفاً زبان خود را انتخاب کنید:\nيرجى اختيار لغتك:"
+    },
     "welcome": {
-        Language.EN: "👋 Welcome! I'm {agent_name}'s AI Assistant. How can I help you find your perfect property in Dubai?",
-        Language.FA: "👋 سلام! من دستیار هوش مصنوعی {agent_name} هستم. چگونه می‌توانم به شما در یافتن ملک مناسب در دبی کمک کنم؟",
-        Language.AR: "👋 مرحبًا! أنا المساعد الذكي لـ {agent_name}. كيف يمكنني مساعدتك في العثور على عقارك المثالي في دبي؟",
-        Language.RU: "👋 Добро пожаловать! Я AI-ассистент {agent_name}. Как я могу помочь вам найти идеальную недвижимость в Дубае?"
+        Language.EN: "👋 Wonderful! I'm so excited to help you discover amazing investment opportunities in Dubai!\n\nDid you know Dubai real estate offers 7-10% rental yields? Let me show you how you can grow your wealth here! 🚀",
+        Language.FA: "👋 عالیه! من خیلی هیجان‌زده‌ام که به شما کمک کنم فرصت‌های سرمایه‌گذاری شگفت‌انگیز در دبی را کشف کنید!\n\nمیدونستید املاک دبی ۷-۱۰٪ بازده اجاره دارد؟ بذار بهتون نشون بدم چطور میتونید ثروتتون رو اینجا رشد بدید! 🚀",
+        Language.AR: "👋 رائع! أنا متحمس جدًا لمساعدتك في اكتشاف فرص استثمارية مذهلة في دبي!\n\nهل تعلم أن العقارات في دبي توفر عوائد إيجارية 7-10%؟ دعني أريك كيف يمكنك تنمية ثروتك هنا! 🚀",
+        Language.RU: "👋 Замечательно! Я так рад помочь вам открыть потрясающие инвестиционные возможности в Дубае!\n\nЗнаете ли вы, что недвижимость в Дубае приносит 7-10% арендной доходности? Позвольте показать, как вы можете приумножить капитал здесь! 🚀"
     },
     "hook_roi": {
         Language.EN: "🏠 Get a FREE ROI Analysis!\n\nSee how much you could earn from Dubai Real Estate investment.\n\nWould you like to receive your personalized report?",
@@ -51,10 +57,10 @@ TRANSLATIONS = {
         Language.RU: "🏠 Получите БЕСПЛАТНЫЙ анализ ROI!\n\nУзнайте, сколько вы можете заработать на недвижимости в Дубае.\n\nХотите получить персональный отчёт?"
     },
     "phone_request": {
-        Language.EN: "📱 Great! To send you the personalized ROI report, I'll need your phone number.\n\nPlease share your WhatsApp number:",
-        Language.FA: "📱 عالی! برای ارسال گزارش ROI شخصی‌سازی شده، به شماره تلفن شما نیاز دارم.\n\nلطفاً شماره واتساپ خود را ارسال کنید:",
-        Language.AR: "📱 رائع! لإرسال تقرير العائد على الاستثمار المخصص لك، أحتاج إلى رقم هاتفك.\n\nيرجى مشاركة رقم الواتساب الخاص بك:",
-        Language.RU: "📱 Отлично! Чтобы отправить вам персональный отчёт ROI, мне нужен ваш номер телефона.\n\nПожалуйста, поделитесь вашим номером WhatsApp:"
+        Language.EN: "📱 Great! To send you the personalized ROI report, I'll need your phone number.\n\nPlease share your WhatsApp number:\n\nExample: +971501234567 or +989121234567",
+        Language.FA: "📱 عالی! برای ارسال گزارش ROI شخصی‌سازی شده، به شماره تلفن شما نیاز دارم.\n\nلطفاً شماره واتساپ خود را ارسال کنید:\n\nمثال: +971501234567 یا +989121234567",
+        Language.AR: "📱 رائع! لإرسال تقرير العائد على الاستثمار المخصص لك، أحتاج إلى رقم هاتفك.\n\nيرجى مشاركة رقم الواتساب الخاص بك:\n\nمثال: +971501234567 أو +989121234567",
+        Language.RU: "📱 Отлично! Чтобы отправить вам персональный отчёт ROI, мне нужен ваш номер телефона.\n\nПожалуйста, поделитесь вашим номером WhatsApp:\n\nПример: +971501234567 или +989121234567"
     },
     "transaction_type": {
         Language.EN: "🏘️ Are you looking to Buy or Rent?",
@@ -610,6 +616,9 @@ AGENT'S FAQ & POLICIES:
         if current_state == ConversationState.START:
             return self._handle_start(lang)
         
+        elif current_state == ConversationState.LANGUAGE_SELECT:
+            return self._handle_language_select(lang, callback_data, lead_updates)
+        
         elif current_state == ConversationState.WELCOME:
             return self._handle_welcome_response(lang, callback_data)
         
@@ -652,10 +661,35 @@ AGENT'S FAQ & POLICIES:
         return self._handle_start(lang)
     
     def _handle_start(self, lang: Language) -> BrainResponse:
-        """Initial state - send welcome message."""
+        """Initial state - show language selection."""
         return BrainResponse(
-            message=self.get_text("welcome", lang),
+            message=self.get_text("language_select", lang).format(agent_name=self.agent_name),
+            next_state=ConversationState.LANGUAGE_SELECT,
+            buttons=[
+                {"text": "🇬🇧 English", "callback_data": "lang_en"},
+                {"text": "🇮🇷 فارسی", "callback_data": "lang_fa"},
+                {"text": "🇸🇦 العربية", "callback_data": "lang_ar"},
+                {"text": "🇷🇺 Русский", "callback_data": "lang_ru"}
+            ]
+        )
+    
+    def _handle_language_select(self, lang: Language, callback_data: Optional[str], lead_updates: Dict) -> BrainResponse:
+        """Handle language selection - update lead language and proceed to welcome."""
+        lang_map = {
+            "lang_en": Language.EN,
+            "lang_fa": Language.FA,
+            "lang_ar": Language.AR,
+            "lang_ru": Language.RU
+        }
+        
+        if callback_data in lang_map:
+            lang = lang_map[callback_data]
+            lead_updates["language"] = lang
+        
+        return BrainResponse(
+            message=self.get_text("welcome", lang).format(agent_name=self.agent_name),
             next_state=ConversationState.WELCOME,
+            lead_updates=lead_updates,
             buttons=[
                 {"text": self.get_text("btn_yes", lang), "callback_data": "start_yes"},
                 {"text": self.get_text("btn_no", lang), "callback_data": "start_no"}

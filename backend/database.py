@@ -121,6 +121,7 @@ class PainPoint(str, Enum):
 class ConversationState(str, Enum):
     """State machine for Turbo Qualification Flow"""
     START = "start"
+    LANGUAGE_SELECT = "language_select"  # NEW: Language selection first
     WELCOME = "welcome"
     HOOK = "hook"  # ROI Offer
     PHONE_GATE = "phone_gate"  # Hard Gate
