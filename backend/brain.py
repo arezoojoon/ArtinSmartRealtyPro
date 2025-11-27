@@ -934,6 +934,23 @@ AGENT'S FAQ & POLICIES:
                         {"text": self.get_text("btn_no", lang), "callback_data": "start_no"}
                     ]
                 )
+            # If text message instead of button, use AI to respond + remind about buttons
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n👆 Please click one of the buttons above.",
+                    Language.FA: "\n\n👆 لطفاً روی یکی از دکمه‌های بالا کلیک کنید.",
+                    Language.AR: "\n\n👆 يرجى النقر على أحد الأزرار أعلاه.",
+                    Language.RU: "\n\n👆 Пожалуйста, нажмите на одну из кнопок выше."
+                }
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.WELCOME,
+                    buttons=[
+                        {"text": self.get_text("btn_yes", lang), "callback_data": "start_yes"},
+                        {"text": self.get_text("btn_no", lang), "callback_data": "start_no"}
+                    ]
+                )
             return self._handle_welcome_response(lang, callback_data)
         
         elif current_state == ConversationState.HOOK:
@@ -943,6 +960,23 @@ AGENT'S FAQ & POLICIES:
                     message=self.get_text("hook_roi", lang),
                     next_state=ConversationState.HOOK,
                     lead_updates=lead_updates,
+                    buttons=[
+                        {"text": self.get_text("btn_yes", lang), "callback_data": "roi_yes"},
+                        {"text": self.get_text("btn_no", lang), "callback_data": "roi_no"}
+                    ]
+                )
+            # If text message instead of button, use AI to respond + remind about buttons
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n👆 Please click one of the buttons above.",
+                    Language.FA: "\n\n👆 لطفاً روی یکی از دکمه‌های بالا کلیک کنید.",
+                    Language.AR: "\n\n👆 يرجى النقر على أحد الأزرار أعلاه.",
+                    Language.RU: "\n\n👆 Пожалуйста, нажмите на одну из кнопок выше."
+                }
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.HOOK,
                     buttons=[
                         {"text": self.get_text("btn_yes", lang), "callback_data": "roi_yes"},
                         {"text": self.get_text("btn_no", lang), "callback_data": "roi_no"}
