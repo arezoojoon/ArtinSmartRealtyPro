@@ -120,21 +120,29 @@ class PainPoint(str, Enum):
 
 
 class ConversationState(str, Enum):
-    """State machine for Turbo Qualification Flow"""
+    """Optimized State Machine for High-Ticket Real Estate Sales"""
     START = "start"
-    LANGUAGE_SELECT = "language_select"  # NEW: Language selection first
-    WELCOME = "welcome"
-    HOOK = "hook"  # ROI Offer
-    PHONE_GATE = "phone_gate"  # Hard Gate
-    PAIN_DISCOVERY = "pain_discovery"  # NEW: Identify pain points
-    TRANSACTION_TYPE = "transaction_type"  # Buy/Rent
-    PROPERTY_TYPE = "property_type"  # Residential/Commercial
-    BUDGET = "budget"
-    PAYMENT_METHOD = "payment_method"  # Cash/Credit
-    PURPOSE = "purpose"  # Residency/Investment/Living
-    SOLUTION_BRIDGE = "solution_bridge"  # NEW: Connect pain to solution
-    ENGAGEMENT = "engagement"  # NEW: Free conversation for nurturing & qualifying
-    SCHEDULE = "schedule"
+    LANGUAGE_SELECT = "language_select"
+    
+    # Phase 1: Warmup & Profiling (1-2 questions max)
+    WARMUP = "warmup"  # Goal: Investment/Living/Residency
+    
+    # Phase 2: Slot Filling (Qualify with context retention)
+    SLOT_FILLING = "slot_filling"  # Collect: budget, property_type, location
+    
+    # Phase 3: Value Proposition (Show matching properties)
+    VALUE_PROPOSITION = "value_proposition"  # Present solutions based on slots
+    
+    # Phase 4: Hard Gate (Capture contact)
+    HARD_GATE = "hard_gate"  # Get phone for PDF/Follow-up
+    
+    # Phase 5: Engagement (Free conversation with context)
+    ENGAGEMENT = "engagement"  # Answer questions, handle objections
+    
+    # Phase 6: Handoff (Schedule or Urgent Alert)
+    HANDOFF_SCHEDULE = "handoff_schedule"  # Book appointment
+    HANDOFF_URGENT = "handoff_urgent"  # Hot lead - immediate notification
+    
     COMPLETED = "completed"
 
 
@@ -245,6 +253,8 @@ class Lead(Base):
     # Conversation State (for state machine)
     conversation_state = Column(SQLEnum(ConversationState), default=ConversationState.START)
     conversation_data = Column(JSON, default=dict)  # Temporary data during qualification
+    filled_slots = Column(JSON, default=dict)  # Tracks which slots are filled: {goal: True, budget: True, ...}
+    pending_slot = Column(String(50), nullable=True)  # Current slot being filled (for context retention)
     
     # Tracking
     source = Column(String(100), default="telegram")  # "telegram" or "whatsapp"

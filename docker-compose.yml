@@ -19,6 +19,24 @@ services:
     networks:
       - artinrealty-network
 
+  # Redis (Bot Context & Session Management)
+  redis:
+    image: redis:7-alpine
+    container_name: artinrealty-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - artinrealty-network
+
   # FastAPI Backend
   backend:
     build:
@@ -27,6 +45,9 @@ services:
     container_name: artinrealty-backend
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD:-postgres}@db:5432/artinrealty
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       PDF_OUTPUT_DIR: /app/pdf_reports
       DEBUG: ${DEBUG:-false}
@@ -36,6 +57,8 @@ services:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - pdf_reports:/app/pdf_reports
@@ -79,6 +102,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   pdf_reports:
 
 networks:

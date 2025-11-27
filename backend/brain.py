@@ -982,6 +982,20 @@ AGENT'S FAQ & POLICIES:
         elif current_state == ConversationState.LANGUAGE_SELECT:
             return self._handle_language_select(lang, callback_data, lead_updates, message)
         
+        # ===== NEW STATE MACHINE ROUTING =====
+        elif current_state == ConversationState.WARMUP:
+            return await self._handle_warmup(lang, message, callback_data, lead, lead_updates)
+        
+        elif current_state == ConversationState.SLOT_FILLING:
+            return await self._handle_slot_filling(lang, message, callback_data, lead, lead_updates)
+        
+        elif current_state == ConversationState.VALUE_PROPOSITION:
+            return await self._handle_value_proposition(lang, message, callback_data, lead, lead_updates)
+        
+        elif current_state == ConversationState.HARD_GATE:
+            return await self._handle_hard_gate(lang, message, callback_data, lead, lead_updates)
+        
+        # ===== OLD STATE MACHINE (KEPT FOR BACKWARD COMPATIBILITY - WILL BE REMOVED) =====
         elif current_state == ConversationState.WELCOME:
             # If language changed, update and repeat welcome in new language
             if requested_lang and requested_lang != lead.language:
@@ -1322,15 +1336,439 @@ AGENT'S FAQ & POLICIES:
                 lang = Language.EN
                 lead_updates["language"] = lang
         
+        # After language selection, go directly to WARMUP (new flow)
+        warmup_message = {
+            Language.EN: f"Great to meet you, {self.agent_name} here! 🎯\n\nAre you looking for Investment, Living, or Residency in Dubai?",
+            Language.FA: f"خوشحالم که با شما آشنا شدم، {self.agent_name} هستم! 🎯\n\nبه دنبال سرمایه‌گذاری، زندگی یا اقامت در دبی هستید؟",
+            Language.AR: f"سعيد بلقائك، أنا {self.agent_name}! 🎯\n\nهل تبحث عن الاستثمار أم العيش أم الإقامة في دبي؟",
+            Language.RU: f"Приятно познакомиться, я {self.agent_name}! 🎯\n\nВы ищете инвестиции, проживание или резиденцию в Дубае?"
+        }
+        
         return BrainResponse(
-            message=self.get_text("welcome", lang).format(agent_name=self.agent_name),
-            next_state=ConversationState.WELCOME,
+            message=warmup_message.get(lang, warmup_message[Language.EN]),
+            next_state=ConversationState.WARMUP,
             lead_updates=lead_updates,
             buttons=[
-                {"text": self.get_text("btn_yes", lang), "callback_data": "start_yes"},
-                {"text": self.get_text("btn_no", lang), "callback_data": "start_no"}
+                {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
+                {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living"), "callback_data": "goal_living"},
+                {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
             ]
         )
+    
+    # ==================== NEW STATE MACHINE HANDLERS ====================
+    # These handlers implement the 6-phase professional sales flow
+    
+    async def _handle_warmup(
+        self, 
+        lang: Language, 
+        message: Optional[str], 
+        callback_data: Optional[str],
+        lead: Lead,
+        lead_updates: Dict
+    ) -> BrainResponse:
+        """
+        WARMUP Phase: Quick rapport building (1-2 questions max)
+        Goal: Identify primary objective (Investment, Living, or Residency)
+        """
+        # If button clicked, capture goal and move to SLOT_FILLING
+        if callback_data and callback_data.startswith("goal_"):
+            goal = callback_data.replace("goal_", "")
+            
+            # Store in conversation_data
+            conversation_data = lead.conversation_data or {}
+            conversation_data["goal"] = goal
+            
+            # Mark filled_slots
+            filled_slots = lead.filled_slots or {}
+            filled_slots["goal"] = True
+            
+            lead_updates["conversation_data"] = conversation_data
+            lead_updates["filled_slots"] = filled_slots
+            
+            # Move to SLOT_FILLING with first question
+            next_question = {
+                Language.EN: f"Great! Let's find the perfect property for {goal}.\n\nWhat's your budget range?",
+                Language.FA: f"عالی! بیایید بهترین ملک را برای {goal} پیدا کنیم.\n\nبودجه‌ات چقدر است؟",
+                Language.AR: f"رائع! دعنا نجد العقار المثالي لـ {goal}.\n\nما هو نطاق ميزانيتك؟",
+                Language.RU: f"Отлично! Давайте найдем идеальную недвижимость для {goal}.\n\nКаков ваш بюджет?"
+            }
+            
+            # Show budget buttons
+            budget_buttons = []
+            for idx, (min_val, max_val) in BUDGET_RANGES.items():
+                if max_val:
+                    label = f"{min_val:,} - {max_val:,} AED"
+                else:
+                    label = f"{min_val:,}+ AED"
+                budget_buttons.append({
+                    "text": label,
+                    "callback_data": f"budget_{idx}"
+                })
+            
+            return BrainResponse(
+                message=next_question.get(lang, next_question[Language.EN]),
+                next_state=ConversationState.SLOT_FILLING,
+                lead_updates=lead_updates | {"pending_slot": "budget"},
+                buttons=budget_buttons
+            )
+        
+        # If text message, use AI to answer FAQ but return to goal question
+        if message and not callback_data:
+            # Check if this is an FAQ or off-topic
+            ai_response = await self.generate_ai_response(message, lead)
+            
+            # After answering, return to goal question
+            goal_question = {
+                Language.EN: "\n\nNow, are you looking for Investment, Living, or Residency?",
+                Language.FA: "\n\nخب، به دنبال سرمایه‌گذاری، زندگی یا اقامت هستید؟",
+                Language.AR: "\n\nحسنًا، هل تبحث عن الاستثمار أم العيش أم الإقامة؟",
+                Language.RU: "\n\nИтак، вы ищете инвестиции, проживание или резиденцию?"
+            }
+            
+            return BrainResponse(
+                message=ai_response + goal_question.get(lang, goal_question[Language.EN]),
+                next_state=ConversationState.WARMUP,
+                buttons=[
+                    {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
+                    {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living"), "callback_data": "goal_living"},
+                    {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
+                ]
+            )
+        
+        # Default: Show goal buttons (initial entry to WARMUP)
+        warmup_message = {
+            Language.EN: "Great to meet you! 🎯\n\nAre you looking for Investment, Living, or Residency in Dubai?",
+            Language.FA: "خوشحالم که با شما آشنا شدم! 🎯\n\nبه دنبال سرمایه‌گذاری، زندگی یا اقامت در دبی هستید؟",
+            Language.AR: "سعيد بلقائك! 🎯\n\nهل تبحث عن الاستثمار أم العيش أم الإقامة في دبي؟",
+            Language.RU: "Приятно познакомиться! 🎯\n\nВы ищете инвестиции, проживание или резиденцию в Дубае?"
+        }
+        
+        return BrainResponse(
+            message=warmup_message.get(lang, warmup_message[Language.EN]),
+            next_state=ConversationState.WARMUP,
+            buttons=[
+                {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
+                {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living"), "callback_data": "goal_living"},
+                {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
+            ]
+        )
+    
+    async def _handle_slot_filling(
+        self,
+        lang: Language,
+        message: Optional[str],
+        callback_data: Optional[str],
+        lead: Lead,
+        lead_updates: Dict
+    ) -> BrainResponse:
+        """
+        SLOT_FILLING Phase: Intelligent qualification with FAQ tolerance.
+        Required slots: budget, property_type, transaction_type
+        KEY FEATURE: If user asks FAQ mid-filling, answer it and return to slot collection.
+        """
+        conversation_data = lead.conversation_data or {}
+        filled_slots = lead.filled_slots or {}
+        
+        # === HANDLE BUTTON RESPONSES (Slot Filling) ===
+        if callback_data:
+            # Budget selection
+            if callback_data.startswith("budget_"):
+                idx = int(callback_data.replace("budget_", ""))
+                min_val, max_val = BUDGET_RANGES[idx]
+                
+                conversation_data["budget_min"] = min_val
+                conversation_data["budget_max"] = max_val
+                filled_slots["budget"] = True
+                lead_updates["budget_min"] = min_val
+                lead_updates["budget_max"] = max_val
+                
+                # Next: Ask property type
+                property_question = {
+                    Language.EN: "Perfect! What type of property are you looking for?",
+                    Language.FA: "عالی! چه نوع ملکی مد نظر دارید؟",
+                    Language.AR: "رائع! ما نوع العقار الذي تبحث عنه؟",
+                    Language.RU: "Отлично! Какой тип недвижимости вы ищете?"
+                }
+                
+                property_buttons = [
+                    {"text": "🏢 " + ("آپارتمان" if lang == Language.FA else "Apartment"), "callback_data": "prop_apartment"},
+                    {"text": "🏠 " + ("ویلا" if lang == Language.FA else "Villa"), "callback_data": "prop_villa"},
+                    {"text": "🏰 " + ("پنت‌هاوس" if lang == Language.FA else "Penthouse"), "callback_data": "prop_penthouse"},
+                    {"text": "🏘️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse"), "callback_data": "prop_townhouse"},
+                    {"text": "🏪 " + ("تجاری" if lang == Language.FA else "Commercial"), "callback_data": "prop_commercial"},
+                    {"text": "🏞️ " + ("زمین" if lang == Language.FA else "Land"), "callback_data": "prop_land"},
+                ]
+                
+                return BrainResponse(
+                    message=property_question.get(lang, property_question[Language.EN]),
+                    next_state=ConversationState.SLOT_FILLING,
+                    lead_updates=lead_updates | {
+                        "conversation_data": conversation_data,
+                        "filled_slots": filled_slots,
+                        "pending_slot": "property_type"
+                    },
+                    buttons=property_buttons
+                )
+            
+            # Property type selection
+            elif callback_data.startswith("prop_"):
+                property_type_str = callback_data.replace("prop_", "")
+                property_type_map = {
+                    "apartment": PropertyType.APARTMENT,
+                    "villa": PropertyType.VILLA,
+                    "penthouse": PropertyType.PENTHOUSE,
+                    "townhouse": PropertyType.TOWNHOUSE,
+                    "commercial": PropertyType.COMMERCIAL,
+                    "land": PropertyType.LAND
+                }
+                
+                conversation_data["property_type"] = property_type_str
+                filled_slots["property_type"] = True
+                lead_updates["property_type"] = property_type_map.get(property_type_str)
+                
+                # Next: Ask transaction type (buy/rent)
+                transaction_question = {
+                    Language.EN: "Got it! Are you looking to Buy or Rent?",
+                    Language.FA: "فهمیدم! می‌خواهید بخرید یا اجاره کنید؟",
+                    Language.AR: "فهمت! هل تريد الشراء أم الإيجار؟",
+                    Language.RU: "Понял! Вы хотите купить или арендовать?"
+                }
+                
+                return BrainResponse(
+                    message=transaction_question.get(lang, transaction_question[Language.EN]),
+                    next_state=ConversationState.SLOT_FILLING,
+                    lead_updates=lead_updates | {
+                        "conversation_data": conversation_data,
+                        "filled_slots": filled_slots,
+                        "pending_slot": "transaction_type"
+                    },
+                    buttons=[
+                        {"text": self.get_text("btn_buy", lang), "callback_data": "tx_buy"},
+                        {"text": self.get_text("btn_rent", lang), "callback_data": "tx_rent"}
+                    ]
+                )
+            
+            # Transaction type selection
+            elif callback_data.startswith("tx_"):
+                transaction_type_str = callback_data.replace("tx_", "")
+                transaction_type_map = {
+                    "buy": TransactionType.BUY,
+                    "rent": TransactionType.RENT
+                }
+                
+                conversation_data["transaction_type"] = transaction_type_str
+                filled_slots["transaction_type"] = True
+                lead_updates["transaction_type"] = transaction_type_map.get(transaction_type_str)
+                
+                # Check if all REQUIRED slots are filled
+                required_slots = ["budget", "property_type", "transaction_type"]
+                all_filled = all(filled_slots.get(slot, False) for slot in required_slots)
+                
+                if all_filled:
+                    # Move to VALUE_PROPOSITION
+                    transition_message = {
+                        Language.EN: "Perfect! Let me show you some amazing properties that match your criteria...",
+                        Language.FA: "عالی! بذار چند ملک فوق‌العاده که با معیارهات مچ میشه رو نشونت بدم...",
+                        Language.AR: "رائع! دعني أريك بعض العقارات المذهلة التي تتناسب مع معاييرك...",
+                        Language.RU: "Отлично! Позвольте показать вам несколько потрясающих объектов..."
+                    }
+                    
+                    return BrainResponse(
+                        message=transition_message.get(lang, transition_message[Language.EN]),
+                        next_state=ConversationState.VALUE_PROPOSITION,
+                        lead_updates=lead_updates | {
+                            "conversation_data": conversation_data,
+                            "filled_slots": filled_slots,
+                            "pending_slot": None
+                        }
+                    )
+        
+        # === HANDLE TEXT MESSAGES (FAQ Detection) ===
+        if message and not callback_data:
+            # Use AI to respond (treats all text as FAQ)
+            ai_response = await self.generate_ai_response(message, lead)
+            
+            # Determine next missing slot
+            next_slot_question = None
+            next_slot_buttons = []
+            next_pending_slot = None
+            
+            if not filled_slots.get("budget"):
+                next_slot_question = {
+                    Language.EN: "\n\nGreat question! Now, what's your budget range?",
+                    Language.FA: "\n\nسوال خوبی بود! خب، بودجه‌ات چقدر است؟",
+                    Language.AR: "\n\nسؤال رائع! حسنًا، ما هو نطاق ميزانيتك؟",
+                    Language.RU: "\n\nОтличный вопрос! Итак, каков ваш бюджет?"
+                }
+                next_pending_slot = "budget"
+                for idx, (min_val, max_val) in BUDGET_RANGES.items():
+                    if max_val:
+                        label = f"{min_val:,} - {max_val:,} AED"
+                    else:
+                        label = f"{min_val:,}+ AED"
+                    next_slot_buttons.append({"text": label, "callback_data": f"budget_{idx}"})
+            
+            elif not filled_slots.get("property_type"):
+                next_slot_question = {
+                    Language.EN: "\n\nGood to know! What type of property are you interested in?",
+                    Language.FA: "\n\nخوبه که می‌دونم! چه نوع ملکی مد نظر دارید؟",
+                    Language.AR: "\n\nجيد أن أعرف! ما نوع العقار الذي تهتم به؟",
+                    Language.RU: "\n\nХорошо знать! Какой тип недвижимости вас интересует?"
+                }
+                next_pending_slot = "property_type"
+                next_slot_buttons = [
+                    {"text": "🏢 " + ("آپارتمان" if lang == Language.FA else "Apartment"), "callback_data": "prop_apartment"},
+                    {"text": "🏠 " + ("ویلا" if lang == Language.FA else "Villa"), "callback_data": "prop_villa"},
+                    {"text": "🏰 " + ("پنت‌هاوس" if lang == Language.FA else "Penthouse"), "callback_data": "prop_penthouse"},
+                    {"text": "🏘️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse"), "callback_data": "prop_townhouse"},
+                    {"text": "🏪 " + ("تجاری" if lang == Language.FA else "Commercial"), "callback_data": "prop_commercial"},
+                    {"text": "🏞️ " + ("زمین" if lang == Language.FA else "Land"), "callback_data": "prop_land"},
+                ]
+            
+            elif not filled_slots.get("transaction_type"):
+                next_slot_question = {
+                    Language.EN: "\n\nUnderstood! Are you looking to Buy or Rent?",
+                    Language.FA: "\n\nمتوجه شدم! می‌خواهید بخرید یا اجاره کنید؟",
+                    Language.AR: "\n\nفهمت! هل تريد الشراء أم الإيجار؟",
+                    Language.RU: "\n\nПонял! Вы хотите купить или арендовать?"
+                }
+                next_pending_slot = "transaction_type"
+                next_slot_buttons = [
+                    {"text": self.get_text("btn_buy", lang), "callback_data": "tx_buy"},
+                    {"text": self.get_text("btn_rent", lang), "callback_data": "tx_rent"}
+                ]
+            
+            # Return AI response + next slot question
+            return BrainResponse(
+                message=ai_response + (next_slot_question.get(lang, next_slot_question[Language.EN]) if next_slot_question else ""),
+                next_state=ConversationState.SLOT_FILLING,
+                lead_updates={"pending_slot": next_pending_slot},
+                buttons=next_slot_buttons
+            )
+        
+        # Default fallback
+        return BrainResponse(
+            message="Error in slot filling",
+            next_state=ConversationState.SLOT_FILLING
+        )
+    
+    async def _handle_value_proposition(
+        self,
+        lang: Language,
+        message: Optional[str],
+        callback_data: Optional[str],
+        lead: Lead,
+        lead_updates: Dict
+    ) -> BrainResponse:
+        """
+        VALUE_PROPOSITION Phase: Show matching properties from inventory.
+        Goal: Demonstrate value BEFORE asking for contact info.
+        """
+        # Get property recommendations
+        property_recs = await self.get_property_recommendations(lead)
+        
+        # Parse recommendations (simplified)
+        if property_recs and "no properties" not in property_recs.lower():
+            value_message = {
+                Language.EN: f"Here are some perfect matches for you:\n\n{property_recs}\n\nWould you like to receive a detailed PDF report with ROI projections?",
+                Language.FA: f"اینها چند تا ملک عالی برای شما هستند:\n\n{property_recs}\n\nمایل هستید یک گزارش کامل PDF با پیش‌بینی ROI دریافت کنید؟",
+                Language.AR: f"إليك بعض الخيارات المثالية لك:\n\n{property_recs}\n\nهل ترغب في تلقي تقرير PDF مفصل مع توقعات عائد الاستثمار؟",
+                Language.RU: f"Вот несколько идеальных вариантов для вас:\n\n{property_recs}\n\nХотите получить подробный PDF-отчет с прогнозами ROI?"
+            }
+            
+            return BrainResponse(
+                message=value_message.get(lang, value_message[Language.EN]),
+                next_state=ConversationState.HARD_GATE,
+                buttons=[
+                    {"text": self.get_text("btn_yes", lang), "callback_data": "pdf_yes"},
+                    {"text": self.get_text("btn_no", lang), "callback_data": "pdf_no"}
+                ]
+            )
+        else:
+            # No matching properties
+            no_match_message = {
+                Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Share your contact?",
+                Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. شماره‌تون رو به اشتراک می‌گذارید؟",
+                Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تشارك معلومات الاتصال الخاصة بك؟",
+                Language.RU: "У меня нет точных совпадений прямо сейчас, но я могу отправить вам подробный анализ рынка. Поделитесь контактом?"
+            }
+            
+            return BrainResponse(
+                message=no_match_message.get(lang, no_match_message[Language.EN]),
+                next_state=ConversationState.HARD_GATE
+            )
+    
+    async def _handle_hard_gate(
+        self,
+        lang: Language,
+        message: Optional[str],
+        callback_data: Optional[str],
+        lead: Lead,
+        lead_updates: Dict
+    ) -> BrainResponse:
+        """
+        HARD_GATE Phase: Capture phone number for PDF delivery.
+        This happens AFTER showing value, not before!
+        """
+        # If user clicked "Yes, send PDF"
+        if callback_data == "pdf_yes":
+            phone_request = {
+                Language.EN: "Perfect! To send you the PDF report, I need your phone number.\n\nPlease share your contact or type your number:",
+                Language.FA: "عالی! برای ارسال گزارش PDF، به شماره تماس شما نیاز دارم.\n\nلطفاً شماره خود را به اشتراک بگذارید یا تایپ کنید:",
+                Language.AR: "رائع! لإرسال تقرير PDF لك، أحتاج رقم هاتفك.\n\nيرجى مشاركة جهة الاتصال الخاصة بك أو كتابة رقمك:",
+                Language.RU: "Отлично! Чтобы отправить вам PDF-отчет, мне нужен ваш номер телефона.\n\nПожалуйста, поделитесь контактом или введите номер:"
+            }
+            
+            return BrainResponse(
+                message=phone_request.get(lang, phone_request[Language.EN]),
+                next_state=ConversationState.HARD_GATE
+            )
+        
+        # If user clicked "No, thanks"
+        if callback_data == "pdf_no":
+            engagement_message = {
+                Language.EN: "No problem! Do you have any questions about Dubai real estate?",
+                Language.FA: "مشکلی نیست! سوالی درباره املاک دبی دارید؟",
+                Language.AR: "لا مشكلة! هل لديك أي أسئلة عن العقارات في دبي؟",
+                Language.RU: "Без проблем! У вас есть вопросы о недвижимости в Дубае?"
+            }
+            
+            return BrainResponse(
+                message=engagement_message.get(lang, engagement_message[Language.EN]),
+                next_state=ConversationState.ENGAGEMENT
+            )
+        
+        # If user provided phone number (text message)
+        if message:
+            # Validate phone number using existing method
+            phone_response = await self._handle_phone_gate(lang, message, lead_updates)
+            
+            # If validation successful, move to ENGAGEMENT with PDF flag
+            if phone_response.lead_updates and "phone_number" in phone_response.lead_updates:
+                pdf_sent_message = {
+                    Language.EN: "📄 Preparing your detailed ROI report...\n\nIt will be sent to you shortly!",
+                    Language.FA: "📄 گزارش ROI شما در حال آماده‌سازی است...\n\nبه زودی برایتان ارسال می‌شود!",
+                    Language.AR: "📄 جاري إعداد تقرير عائد الاستثمار المفصل...\n\nسيتم إرساله إليك قريبًا!",
+                    Language.RU: "📄 Готовлю ваш подробный отчет ROI...\n\nОн скоро будет отправлен!"
+                }
+                
+                return BrainResponse(
+                    message=pdf_sent_message.get(lang, pdf_sent_message[Language.EN]),
+                    next_state=ConversationState.ENGAGEMENT,
+                    lead_updates=phone_response.lead_updates,
+                    metadata={"send_pdf": True}
+                )
+            else:
+                # Phone validation failed - return error
+                return phone_response
+        
+        # Default
+        return BrainResponse(
+            message="Please provide your phone number",
+            next_state=ConversationState.HARD_GATE
+        )
+    
+    # ==================== OLD STATE MACHINE HANDLERS (TO BE REMOVED) ====================
     
     def _handle_welcome_response(self, lang: Language, callback_data: Optional[str]) -> BrainResponse:
         """Handle response to welcome message - proceed to hook."""
