@@ -803,6 +803,74 @@ async def list_tenants(
 
 # ==================== LEAD ENDPOINTS ====================
 
+@app.get("/api/tenants/{tenant_id}/leads/export")
+async def export_leads_excel(
+    tenant_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Export all leads to Excel (.xlsx) file. MUST be before /leads/{lead_id} route."""
+    # Verify access
+    await verify_tenant_access(credentials, tenant_id, db)
+    
+    # Get all leads for tenant
+    result = await db.execute(
+        select(Lead).where(Lead.tenant_id == tenant_id).order_by(Lead.created_at.desc())
+    )
+    leads = result.scalars().all()
+    
+    # Create workbook
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Leads"
+    
+    # Define headers
+    headers = [
+        "ID", "Name", "Phone", "Telegram Username", "Language", "Status",
+        "Transaction Type", "Property Type", "Budget Min", "Budget Max",
+        "Payment Method", "Purpose", "Bedrooms Min", "Bedrooms Max",
+        "Location", "Notes", "Source", "Created At"
+    ]
+    ws.append(headers)
+    
+    # Add data rows
+    for lead in leads:
+        ws.append([
+            lead.id,
+            lead.name or "",
+            lead.phone or "",
+            lead.telegram_username or "",
+            lead.language.value if lead.language else "",
+            lead.status.value if lead.status else "",
+            lead.transaction_type.value if lead.transaction_type else "",
+            lead.property_type.value if lead.property_type else "",
+            lead.budget_min or "",
+            lead.budget_max or "",
+            lead.payment_method.value if lead.payment_method else "",
+            lead.purpose.value if lead.purpose else "",
+            lead.bedrooms_min or "",
+            lead.bedrooms_max or "",
+            lead.preferred_location or "",
+            lead.notes or "",
+            lead.source or "",
+            lead.created_at.strftime("%Y-%m-%d %H:%M") if lead.created_at else ""
+        ])
+    
+    # Save to BytesIO
+    from io import BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    # Return as downloadable file
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=leads_{tenant_id}.xlsx"}
+    )
+
+
 @app.get("/api/tenants/{tenant_id}/leads", response_model=List[LeadResponse])
 async def list_leads(
     tenant_id: int,
