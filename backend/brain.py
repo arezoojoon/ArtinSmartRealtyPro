@@ -777,7 +777,7 @@ AGENT'S FAQ & POLICIES:
             
             CURRENT LEAD PROFILE:
             - Status: {lead.status.value if lead.status else 'new'}
-            - Budget: {lead.budget_min:,.0f if lead.budget_min else 'Not set'} - {lead.budget_max:,.0f if lead.budget_max else 'Not set'} {lead.budget_currency or 'AED'}
+            - Budget: {f"{lead.budget_min:,.0f}" if lead.budget_min else 'Not set'} - {f"{lead.budget_max:,.0f}" if lead.budget_max else 'Not set'} {lead.budget_currency or 'AED'}
             - Purpose: {lead.purpose.value if lead.purpose else 'not specified'}
             - Property Type: {lead.property_type.value if lead.property_type else 'not specified'}
             - Location Interest: {lead.preferred_location or 'not specified'}
