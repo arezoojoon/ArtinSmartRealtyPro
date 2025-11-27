@@ -1076,21 +1076,33 @@ AGENT'S FAQ & POLICIES:
         if callback_data in lang_map:
             lang = lang_map[callback_data]
             lead_updates["language"] = lang
-        # Handle text-based language selection (user types language name)
+        # Handle text-based language selection (user types language name or any text)
         elif message:
             message_lower = message.lower().strip()
-            # Detect language from typed text
-            if re.search(r'[\u0600-\u06FF]', message):  # Persian/Arabic script
-                if 'فارسی' in message or 'persian' in message_lower or 'fa' in message_lower:
-                    lang = Language.FA
-                    lead_updates["language"] = lang
-                elif 'عربي' in message or 'arabic' in message_lower or 'ar' in message_lower:
-                    lang = Language.AR
-                    lead_updates["language"] = lang
+            
+            # First check for explicit language keywords
+            if 'فارسی' in message or 'persian' in message_lower or 'fa' in message_lower:
+                lang = Language.FA
+                lead_updates["language"] = lang
+            elif 'عربي' in message or 'arabic' in message_lower or 'ar' in message_lower:
+                lang = Language.AR
+                lead_updates["language"] = lang
             elif 'русский' in message_lower or 'russian' in message_lower or 'ru' in message_lower:
                 lang = Language.RU
                 lead_updates["language"] = lang
             elif 'english' in message_lower or 'en' in message_lower:
+                lang = Language.EN
+                lead_updates["language"] = lang
+            # Auto-detect language from script if no explicit keyword
+            elif re.search(r'[\u0600-\u06FF]', message):  # Persian/Arabic script detected
+                # Default to Persian for now (could add Arabic detection heuristics later)
+                lang = Language.FA
+                lead_updates["language"] = lang
+            elif re.search(r'[\u0400-\u04FF]', message):  # Cyrillic script
+                lang = Language.RU
+                lead_updates["language"] = lang
+            else:
+                # Default to English for Latin script
                 lang = Language.EN
                 lead_updates["language"] = lang
         
