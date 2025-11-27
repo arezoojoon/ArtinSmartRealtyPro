@@ -7,6 +7,7 @@ Multi-Language Support, Voice Intelligence, Turbo Qualification Flow
 import os
 import re
 import json
+import logging
 import asyncio
 from typing import Optional, Dict, Any, List, Tuple
 from enum import Enum
@@ -20,6 +21,8 @@ from database import (
     PainPoint, get_tenant_context_for_ai
 )
 
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Configure Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -473,13 +476,21 @@ AGENT'S FAQ & POLICIES:
                 # Upload audio file to Gemini
                 audio_file = genai.upload_file(path=temp_audio_path)
                 
-                # Wait for processing
+                # Wait for processing with timeout
                 import time
-                while audio_file.state.name == "PROCESSING":
+                max_wait = 30  # 30 seconds timeout
+                elapsed = 0
+                while audio_file.state.name == "PROCESSING" and elapsed < max_wait:
                     time.sleep(1)
+                    elapsed += 1
                     audio_file = genai.get_file(audio_file.name)
                 
+                if audio_file.state.name == "PROCESSING":
+                    genai.delete_file(audio_file.name)
+                    return "Audio processing timeout - file too large or complex", {}
+                
                 if audio_file.state.name == "FAILED":
+                    genai.delete_file(audio_file.name)
                     return "Could not process audio file", {}
                 
                 # Generate transcript and extract entities
@@ -518,7 +529,12 @@ AGENT'S FAQ & POLICIES:
                 response_text = re.sub(r'^```json\s*', '', response_text)
                 response_text = re.sub(r'\s*```$', '', response_text)
                 
-                result = json.loads(response_text)
+                try:
+                    result = json.loads(response_text)
+                except json.JSONDecodeError as je:
+                    logger.error(f"Failed to parse Gemini response as JSON: {response_text[:200]}")
+                    # Try to extract transcript manually from text
+                    return response_text[:500] if response_text else "Could not parse voice", {}
                 
                 transcript = result.get("transcript", "")
                 entities = result.get("entities", {})
@@ -561,13 +577,21 @@ AGENT'S FAQ & POLICIES:
                 # Upload image to Gemini
                 image_file = genai.upload_file(path=temp_image_path)
                 
-                # Wait for processing
+                # Wait for processing with timeout
                 import time
-                while image_file.state.name == "PROCESSING":
+                max_wait = 30  # 30 seconds timeout
+                elapsed = 0
+                while image_file.state.name == "PROCESSING" and elapsed < max_wait:
                     time.sleep(1)
+                    elapsed += 1
                     image_file = genai.get_file(image_file.name)
                 
+                if image_file.state.name == "PROCESSING":
+                    genai.delete_file(image_file.name)
+                    return "Image processing timeout - file too large or complex", []
+                
                 if image_file.state.name == "FAILED":
+                    genai.delete_file(image_file.name)
                     return "Could not process image file", []
                 
                 # Analyze image and extract features
@@ -601,7 +625,12 @@ AGENT'S FAQ & POLICIES:
                 response_text = re.sub(r'^```json\s*', '', response_text)
                 response_text = re.sub(r'\s*```$', '', response_text)
                 
-                result = json.loads(response_text)
+                try:
+                    result = json.loads(response_text)
+                except json.JSONDecodeError as je:
+                    logger.error(f"Failed to parse Gemini image response as JSON: {response_text[:200]}")
+                    # Return basic description
+                    return response_text[:300] if response_text else "property image", []
                 
                 # Get image description
                 description = result.get("description", "property image")
@@ -609,8 +638,16 @@ AGENT'S FAQ & POLICIES:
                 features = result.get("features", [])
                 style = result.get("style", "")
                 
+                # Ensure features is a list
+                if not isinstance(features, list):
+                    features = []
+                
                 # Search for similar properties in tenant's inventory
                 properties = self.tenant_context.get("properties", [])
+                
+                # Handle empty properties list
+                if not properties:
+                    return description, []
                 
                 # Simple matching algorithm based on extracted features
                 matching_properties = []
@@ -622,13 +659,15 @@ AGENT'S FAQ & POLICIES:
                         score += 5
                     
                     # Match features
-                    prop_features_lower = [f.lower() for f in prop.get("features", [])]
-                    for feature in features:
-                        if any(feature.lower() in pf for pf in prop_features_lower):
-                            score += 2
+                    prop_features = prop.get("features", [])
+                    if isinstance(prop_features, list):
+                        prop_features_lower = [f.lower() for f in prop_features if isinstance(f, str)]
+                        for feature in features:
+                            if isinstance(feature, str) and any(feature.lower() in pf for pf in prop_features_lower):
+                                score += 2
                     
                     # Match style
-                    if style and style.lower() in prop.get("description", "").lower():
+                    if style and isinstance(prop.get("description"), str) and style.lower() in prop.get("description", "").lower():
                         score += 3
                     
                     if score > 0:
@@ -1338,14 +1377,23 @@ async def process_image_message(
     property_details_parts = []
     for i, prop in enumerate(matching_properties[:3], 1):
         price_str = f"AED {prop['price']:,.0f}" if prop.get('price') else "Price on request"
-        features_str = ", ".join(prop.get('features', [])[:3])
+        
+        # Safely handle features (could be list or string)
+        features = prop.get('features', [])
+        if isinstance(features, list):
+            features_str = ", ".join(str(f) for f in features[:3])
+        elif isinstance(features, str):
+            features_str = features[:100]  # Truncate if too long
+        else:
+            features_str = ""
+        
         golden_str = " 🛂 Golden Visa" if prop.get('golden_visa') else ""
         roi_str = f" | ROI: {prop['roi']}%" if prop.get('roi') else ""
         
         property_details_parts.append(
-            f"{i}. **{prop['name']}**\n"
-            f"   📍 {prop['location']}\n"
-            f"   🏠 {prop['bedrooms']}BR {prop['type']}\n"
+            f"{i}. **{prop.get('name', 'Property')}**\n"
+            f"   📍 {prop.get('location', 'Dubai')}\n"
+            f"   🏠 {prop.get('bedrooms', 'N/A')}BR {prop.get('type', 'Property')}\n"
             f"   💰 {price_str}{golden_str}{roi_str}\n"
             f"   ✨ {features_str}\n"
         )

@@ -198,7 +198,17 @@ class TelegramBotHandler:
                     Language.RU: "📊 Вот ваш персональный отчёт ROI!"
                 }
                 
-                await update.message.reply_document(
+                # Determine chat context (message or callback query)
+                if update.message:
+                    chat_id = update.message.chat_id
+                elif update.callback_query:
+                    chat_id = update.callback_query.message.chat_id
+                else:
+                    logger.error("No valid chat context for ROI PDF")
+                    return
+                
+                await context.bot.send_document(
+                    chat_id=chat_id,
                     document=pdf_file,
                     filename=f"ROI_Analysis_{self.tenant.name}.pdf",
                     caption=caption_map.get(lang, caption_map[Language.EN])
@@ -206,8 +216,9 @@ class TelegramBotHandler:
                 
             except Exception as e:
                 logger.error(f"Failed to generate ROI PDF: {e}")
+                import traceback
+                traceback.print_exc()
                 # Don't fail the whole message if PDF generation fails
-                pass
     
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command."""
@@ -288,8 +299,19 @@ class TelegramBotHandler:
         """Handle voice messages."""
         lead = await self._get_or_create_lead(update)
         
+        # Check if voice exists
+        if not update.message.voice:
+            await update.message.reply_text("No voice message received. Please try again.")
+            return
+        
         # Download voice file
         voice = update.message.voice
+        
+        # Check voice duration (max 5 minutes)
+        if voice.duration > 300:
+            await update.message.reply_text("Voice message too long (max 5 minutes). Please send a shorter message.")
+            return
+        
         file = await context.bot.get_file(voice.file_id)
         
         # Download to bytes
@@ -313,12 +335,22 @@ class TelegramBotHandler:
         """Handle photo messages - find similar properties."""
         lead = await self._get_or_create_lead(update)
         
+        # Check if photo exists
+        if not update.message.photo:
+            await update.message.reply_text("No photo received. Please try again.")
+            return
+        
         # Get the largest photo
         photo = update.message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
         
         # Download to bytes
         image_bytes = await file.download_as_bytearray()
+        
+        # Validate image size (max 20MB for Gemini)
+        if len(image_bytes) > 20 * 1024 * 1024:
+            await update.message.reply_text("Image too large (max 20MB). Please send a smaller image.")
+            return
         
         # Send processing message
         lang = lead.language or Language.EN

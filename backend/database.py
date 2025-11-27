@@ -229,6 +229,11 @@ class Lead(Base):
     voice_file_url = Column(String(512), nullable=True)
     voice_entities = Column(JSON, default=dict)  # Extracted entities from voice: {budget, location, etc.}
     
+    # Image Data
+    image_description = Column(Text, nullable=True)  # Gemini Vision description of uploaded image
+    image_search_results = Column(Integer, default=0)  # Number of matching properties found
+    image_file_url = Column(String(512), nullable=True)  # Optional: store image URL
+    
     # Sales Psychology - Pain Points (Pain & Solution technique)
     pain_point = Column(String(50), nullable=True)  # Primary pain point
     pain_points = Column(JSON, default=list)  # Multiple pain points

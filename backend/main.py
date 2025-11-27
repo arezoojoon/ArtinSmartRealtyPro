@@ -231,6 +231,8 @@ class LeadResponse(BaseModel):
     taste_tags: List[str]
     voice_transcript: Optional[str]
     voice_entities: Optional[dict]
+    image_description: Optional[str]
+    image_search_results: Optional[int]
     conversation_state: Optional[ConversationState]
     source: str
     last_interaction: Optional[datetime]
