@@ -688,7 +688,7 @@ async def verify_super_admin(credentials: HTTPAuthorizationCredentials):
     """Verify that the request is from super admin."""
     try:
         token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         tenant_id = payload.get("tenant_id")
         
         logger.info(f"🔐 Super admin verification - tenant_id: {tenant_id}, email: {payload.get('email')}")
