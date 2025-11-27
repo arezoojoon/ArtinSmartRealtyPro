@@ -148,7 +148,7 @@ async def save_context_to_redis(lead: Lead):
     }
     
     await redis_manager.save_context(
-        telegram_id=lead.telegram_id,
+        telegram_id=int(lead.telegram_chat_id),
         tenant_id=lead.tenant_id,
         context=context
     )
