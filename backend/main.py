@@ -8,9 +8,13 @@ import io
 import asyncio
 import secrets
 import hashlib
+import logging
 from datetime import datetime, time, timedelta
 from typing import Optional, List
 from contextlib import asynccontextmanager
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
