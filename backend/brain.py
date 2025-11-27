@@ -888,7 +888,7 @@ AGENT'S FAQ & POLICIES:
             return self._handle_start(lang)
         
         elif current_state == ConversationState.LANGUAGE_SELECT:
-            return self._handle_language_select(lang, callback_data, lead_updates)
+            return self._handle_language_select(lang, callback_data, lead_updates, message)
         
         elif current_state == ConversationState.WELCOME:
             return self._handle_welcome_response(lang, callback_data)
@@ -944,7 +944,7 @@ AGENT'S FAQ & POLICIES:
             ]
         )
     
-    def _handle_language_select(self, lang: Language, callback_data: Optional[str], lead_updates: Dict) -> BrainResponse:
+    def _handle_language_select(self, lang: Language, callback_data: Optional[str], lead_updates: Dict, message: Optional[str] = None) -> BrainResponse:
         """Handle language selection - update lead language and proceed to welcome."""
         lang_map = {
             "lang_en": Language.EN,
@@ -953,9 +953,27 @@ AGENT'S FAQ & POLICIES:
             "lang_ru": Language.RU
         }
         
+        # Handle callback button selection
         if callback_data in lang_map:
             lang = lang_map[callback_data]
             lead_updates["language"] = lang
+        # Handle text-based language selection (user types language name)
+        elif message:
+            message_lower = message.lower().strip()
+            # Detect language from typed text
+            if re.search(r'[\u0600-\u06FF]', message):  # Persian/Arabic script
+                if 'فارسی' in message or 'persian' in message_lower or 'fa' in message_lower:
+                    lang = Language.FA
+                    lead_updates["language"] = lang
+                elif 'عربي' in message or 'arabic' in message_lower or 'ar' in message_lower:
+                    lang = Language.AR
+                    lead_updates["language"] = lang
+            elif 'русский' in message_lower or 'russian' in message_lower or 'ru' in message_lower:
+                lang = Language.RU
+                lead_updates["language"] = lang
+            elif 'english' in message_lower or 'en' in message_lower:
+                lang = Language.EN
+                lead_updates["language"] = lang
         
         return BrainResponse(
             message=self.get_text("welcome", lang).format(agent_name=self.agent_name),

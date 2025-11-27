@@ -150,6 +150,7 @@ const PropertiesManagement = ({ tenantId }) => {
     };
 
     const openModal = (property = null) => {
+        console.log('Opening modal for property:', property);  // Debug log
         if (property) {
             setEditingProperty(property);
             setFormData({
@@ -199,6 +200,7 @@ const PropertiesManagement = ({ tenantId }) => {
                 image_urls: [],
             });
         }
+        console.log('Setting showModal to true');  // Debug log
         setShowModal(true);
     };
 
@@ -367,8 +369,17 @@ const PropertiesManagement = ({ tenantId }) => {
 
             {/* Add/Edit Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                    <div className="glass-card max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+                <div 
+                    className="fixed inset-0 bg-black bg-opacity-75 flex items-start justify-center p-4 z-50 overflow-y-auto"
+                    style={{ zIndex: 9999 }}
+                    onClick={(e) => {
+                        // Close modal if clicking the backdrop
+                        if (e.target === e.currentTarget) {
+                            closeModal();
+                        }
+                    }}
+                >
+                    <div className="glass-card max-w-2xl w-full p-6 my-8 max-h-[85vh] overflow-y-auto">
                         {/* Modal Header */}
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-2xl font-bold text-white">
@@ -376,6 +387,7 @@ const PropertiesManagement = ({ tenantId }) => {
                             </h3>
                             <button
                                 onClick={closeModal}
+                                type="button"
                                 className="text-gray-400 hover:text-white transition-colors"
                             >
                                 <X className="w-6 h-6" />
