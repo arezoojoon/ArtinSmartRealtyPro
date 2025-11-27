@@ -37,7 +37,7 @@ from database import (
     Tenant, Lead, AgentAvailability, Appointment,
     TenantProperty, TenantProject, TenantKnowledge,
     LeadStatus, TransactionType, PropertyType, PaymentMethod, Purpose,
-    AppointmentType, DayOfWeek, Language, ConversationState,
+    AppointmentType, DayOfWeek, Language, ConversationState, SubscriptionStatus,
     get_leads_needing_reminder, get_appointments_needing_reminder,
     get_available_slots, book_slot, create_appointment, update_lead
 )
