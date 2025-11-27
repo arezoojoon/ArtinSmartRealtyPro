@@ -60,17 +60,18 @@ class LeadStatus(str, Enum):
 
 
 class TransactionType(str, Enum):
-    BUY = "buy"
-    RENT = "rent"
+    BUY = "BUY"
+    RENT = "RENT"
 
 
 class PropertyType(str, Enum):
-    APARTMENT = "apartment"
-    VILLA = "villa"
-    PENTHOUSE = "penthouse"
-    TOWNHOUSE = "townhouse"
-    COMMERCIAL = "commercial"
-    LAND = "land"
+    APARTMENT = "APARTMENT"
+    VILLA = "VILLA"
+    PENTHOUSE = "PENTHOUSE"
+    TOWNHOUSE = "TOWNHOUSE"
+    STUDIO = "STUDIO"
+    COMMERCIAL = "COMMERCIAL"
+    LAND = "LAND"
 
 
 class PaymentMethod(str, Enum):

@@ -335,7 +335,10 @@ class TenantPropertyCreate(BaseModel):
     golden_visa_eligible: bool = False
     is_urgent: bool = False  # For "Urgent Sale" properties
     images: Optional[List[str]] = []
+    image_urls: Optional[List[str]] = []  # Added for frontend compatibility
     is_featured: bool = False
+    
+    model_config = {"extra": "ignore"}  # Ignore unknown fields from frontend
 
 
 class TenantPropertyResponse(BaseModel):
@@ -1351,20 +1354,24 @@ async def create_property(
     db: AsyncSession = Depends(get_db)
 ):
     """Add a new property to tenant's inventory. AI will use this for recommendations."""
-    # Verify tenant exists
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    
-    property_obj = TenantProperty(
-        tenant_id=tenant_id,
-        **property_data.model_dump()
-    )
-    db.add(property_obj)
-    await db.commit()
-    await db.refresh(property_obj)
-    
-    return property_obj
+    try:
+        # Verify tenant exists
+        result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        property_obj = TenantProperty(
+            tenant_id=tenant_id,
+            **property_data.model_dump()
+        )
+        db.add(property_obj)
+        await db.commit()
+        await db.refresh(property_obj)
+        
+        return property_obj
+    except Exception as e:
+        logger.error(f"❌ Failed to create property: {str(e)}", exc_info=True)
+        raise
 
 
 @app.put("/api/tenants/{tenant_id}/properties/{property_id}", response_model=TenantPropertyResponse)
