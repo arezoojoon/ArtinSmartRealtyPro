@@ -94,6 +94,7 @@ const PropertiesManagement = ({ tenantId }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        console.log('Form submitted!', formData);  // Debug log
         
         try {
             const payload = {
@@ -114,6 +115,8 @@ const PropertiesManagement = ({ tenantId }) => {
             
             const method = editingProperty ? 'PUT' : 'POST';
 
+            console.log('Sending request:', { method, url, payload });  // Debug log
+
             const response = await fetch(url, {
                 method,
                 headers: {
@@ -123,12 +126,22 @@ const PropertiesManagement = ({ tenantId }) => {
                 body: JSON.stringify(payload),
             });
 
+            console.log('Response:', response.status, response.statusText);  // Debug log
+
             if (response.ok) {
+                const result = await response.json();
+                console.log('Success:', result);  // Debug log
                 await loadProperties();
                 closeModal();
+                alert(editingProperty ? 'Property updated successfully!' : 'Property created successfully!');
+            } else {
+                const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                console.error('Server error:', error);
+                alert(`Failed to save property: ${error.detail || 'Unknown error'}`);
             }
         } catch (error) {
             console.error('Failed to save property:', error);
+            alert(`Error: ${error.message}`);
         }
     };
 
