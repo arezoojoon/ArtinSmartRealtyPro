@@ -1095,6 +1095,7 @@ AGENT'S FAQ & POLICIES:
                     Language.AR: "\n\n👆 يرجى اختيار أحد الخيارات أعلاه للمتابعة.",
                     Language.RU: "\n\n👆 Пожалуйста, выберите один из вариантов выше, чтобы продолжить."
                 }
+                logger.info(f"🔘 PURPOSE state - Returning AI response with 3 buttons")
                 return BrainResponse(
                     message=ai_response + reminder.get(lang, reminder[Language.EN]),
                     next_state=ConversationState.PURPOSE,
