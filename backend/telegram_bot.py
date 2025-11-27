@@ -193,8 +193,14 @@ class TelegramBotHandler:
             await update_lead(lead.id, **updates)
             logger.info(f"✅ Lead {lead.id} updated successfully")
         
-        # Handle ROI generation if requested
-        if response.should_generate_roi:
+        # Handle PDF delivery if metadata flag is set
+        send_pdf = False
+        if response.metadata and response.metadata.get("send_pdf"):
+            send_pdf = True
+        elif response.should_generate_roi:
+            send_pdf = True
+        
+        if send_pdf:
             try:
                 from roi_engine import generate_roi_pdf
                 from io import BytesIO

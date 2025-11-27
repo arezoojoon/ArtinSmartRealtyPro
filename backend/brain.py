@@ -328,6 +328,7 @@ class BrainResponse:
     lead_updates: Optional[Dict[str, Any]] = None
     should_generate_roi: bool = False
     schedule_slots: Optional[List[Dict]] = None
+    metadata: Optional[Dict[str, Any]] = None  # For PDF delivery, etc.
 
 
 # ==================== BRAIN CLASS ====================
@@ -1171,9 +1172,48 @@ AGENT'S FAQ & POLICIES:
         SLOT_FILLING Phase: Intelligent qualification with FAQ tolerance.
         Required slots: budget, property_type, transaction_type
         KEY FEATURE: If user asks FAQ mid-filling, answer it and return to slot collection.
+        VOICE SUPPORT: Extracts entities from voice_entities field (populated by process_voice).
         """
         conversation_data = lead.conversation_data or {}
         filled_slots = lead.filled_slots or {}
+        
+        # === PRE-FILL FROM VOICE ENTITIES (if available) ===
+        voice_entities = lead.voice_entities or {}
+        if voice_entities:
+            # Budget from voice
+            if voice_entities.get("budget_min") and not filled_slots.get("budget"):
+                conversation_data["budget_min"] = voice_entities["budget_min"]
+                conversation_data["budget_max"] = voice_entities.get("budget_max", voice_entities["budget_min"])
+                filled_slots["budget"] = True
+                lead_updates["budget_min"] = voice_entities["budget_min"]
+                lead_updates["budget_max"] = voice_entities.get("budget_max", voice_entities["budget_min"])
+                logger.info(f"🎤 Voice extracted budget: {voice_entities['budget_min']}")
+            
+            # Property type from voice
+            if voice_entities.get("property_type") and not filled_slots.get("property_type"):
+                pt_str = voice_entities["property_type"].lower()
+                property_type_map = {
+                    "apartment": PropertyType.APARTMENT,
+                    "villa": PropertyType.VILLA,
+                    "penthouse": PropertyType.PENTHOUSE,
+                    "townhouse": PropertyType.TOWNHOUSE,
+                    "commercial": PropertyType.COMMERCIAL,
+                    "land": PropertyType.LAND
+                }
+                if pt_str in property_type_map:
+                    conversation_data["property_type"] = pt_str
+                    filled_slots["property_type"] = True
+                    lead_updates["property_type"] = property_type_map[pt_str]
+                    logger.info(f"🎤 Voice extracted property_type: {pt_str}")
+            
+            # Transaction type from voice
+            if voice_entities.get("transaction_type") and not filled_slots.get("transaction_type"):
+                tt_str = voice_entities["transaction_type"].lower()
+                if tt_str in ["buy", "rent"]:
+                    conversation_data["transaction_type"] = tt_str
+                    filled_slots["transaction_type"] = True
+                    lead_updates["transaction_type"] = TransactionType.BUY if tt_str == "buy" else TransactionType.RENT
+                    logger.info(f"🎤 Voice extracted transaction_type: {tt_str}")
         
         # === HANDLE BUTTON RESPONSES (Slot Filling) ===
         if callback_data:
