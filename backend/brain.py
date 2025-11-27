@@ -1105,7 +1105,7 @@ AGENT'S FAQ & POLICIES:
                         {"text": self.get_text("btn_residency", lang), "callback_data": "purp_residency"}
                     ]
                 )
-            return self._handle_purpose(lang, callback_data, lead_updates)
+            return await self._handle_purpose(lang, callback_data, lead, lead_updates)
         
         elif current_state == ConversationState.SOLUTION_BRIDGE:
             return await self._handle_solution_bridge(lang, callback_data, lead, lead_updates)
@@ -1367,7 +1367,7 @@ AGENT'S FAQ & POLICIES:
             ]
         )
     
-    def _handle_purpose(self, lang: Language, callback_data: Optional[str], lead_updates: Dict) -> BrainResponse:
+    async def _handle_purpose(self, lang: Language, callback_data: Optional[str], lead: Lead, lead_updates: Dict) -> BrainResponse:
         """Handle purpose selection."""
         if callback_data == "purp_invest":
             lead_updates["purpose"] = Purpose.INVESTMENT
@@ -1379,11 +1379,8 @@ AGENT'S FAQ & POLICIES:
         lead_updates["status"] = LeadStatus.QUALIFIED
         
         # NEW: Go to Solution Bridge to connect pain to solution (Psychology technique)
-        return BrainResponse(
-            message="",  # Will be set in solution bridge based on pain point
-            next_state=ConversationState.SOLUTION_BRIDGE,
-            lead_updates=lead_updates
-        )
+        # Call solution bridge directly to get the proper message
+        return await self._handle_solution_bridge(lang, None, lead, lead_updates)
     
     async def _handle_solution_bridge(self, lang: Language, callback_data: Optional[str], lead: Lead, lead_updates: Dict) -> BrainResponse:
         """Present personalized solution based on pain point + property recommendations."""
