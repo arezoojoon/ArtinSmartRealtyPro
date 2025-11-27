@@ -139,9 +139,13 @@ class TelegramBotHandler:
         """Send Brain response to user via Telegram."""
         chat_id = update.effective_chat.id
         
+        # DEBUG: Log response details
+        logger.info(f"🔍 _send_response - Lead {lead.id}: buttons={len(response.buttons) if response.buttons else 0}, message_len={len(response.message)}")
+        
         # Prepare keyboard if buttons exist
         reply_markup = None
         if response.buttons:
+            logger.info(f"🔘 Building keyboard with {len(response.buttons)} buttons: {[b['text'] for b in response.buttons]}")
             reply_markup = self._build_inline_keyboard(response.buttons)
         
         # Send message
