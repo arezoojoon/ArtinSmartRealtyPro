@@ -121,7 +121,7 @@ const PropertyImageUpload = ({ propertyId, tenantId, images = [], onImagesChange
             );
 
             // Upload to backend
-            const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+            const API_BASE_URL = window.ENV?.VITE_API_URL || import.meta.env.VITE_API_URL || '';
             const response = await fetch(
                 `${API_BASE_URL}/api/tenants/${tenantId}/properties/${propertyId}/images`,
                 {
@@ -205,7 +205,7 @@ const PropertyImageUpload = ({ propertyId, tenantId, images = [], onImagesChange
         if (!confirm('آیا مطمئن هستید می‌خواهید این عکس را حذف کنید؟')) return;
 
         try {
-            const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+            const API_BASE_URL = window.ENV?.VITE_API_URL || import.meta.env.VITE_API_URL || '';
             const response = await fetch(
                 `${API_BASE_URL}/api/tenants/${tenantId}/properties/${propertyId}/images/${filename}`,
                 {

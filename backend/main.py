@@ -544,7 +544,19 @@ async def health_check():
 
 @app.post("/api/auth/register", response_model=LoginResponse)
 async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    """Register a new tenant/agent."""
+    """
+    Register a new tenant/agent.
+    DISABLED for public registration - use Super Admin panel instead.
+    To enable public registration, remove the HTTPException below.
+    """
+    # Disable public registration - only admin can create tenants
+    raise HTTPException(
+        status_code=403,
+        detail="Public registration is disabled. Please contact admin for account creation."
+    )
+    
+    # Uncomment below to enable public registration:
+    """
     # Check if email already exists
     result = await db.execute(select(Tenant).where(Tenant.email == data.email))
     if result.scalar_one_or_none():
@@ -572,6 +584,7 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
         name=tenant.name,
         email=tenant.email
     )
+    """
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
@@ -663,6 +676,145 @@ async def reset_password(data: PasswordResetConfirm, db: AsyncSession = Depends(
     await db.commit()
     
     return {"message": "Password reset successful"}
+
+
+# ==================== SUPER ADMIN ENDPOINTS ====================
+
+async def verify_super_admin(credentials: HTTPAuthorizationCredentials):
+    """Verify that the request is from super admin."""
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        tenant_id = payload.get("tenant_id")
+        
+        if tenant_id != 0:  # Super admin has tenant_id = 0
+            raise HTTPException(status_code=403, detail="Super admin access required")
+        
+        return payload
+    except Exception as e:
+        raise HTTPException(status_code=403, detail="Super admin access required")
+
+
+@app.get("/api/admin/tenants")
+async def list_all_tenants(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all tenants. Super admin only."""
+    await verify_super_admin(credentials)
+    
+    result = await db.execute(select(Tenant).order_by(Tenant.created_at.desc()))
+    tenants = result.scalars().all()
+    
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "email": t.email,
+            "company_name": t.company_name,
+            "phone": t.phone,
+            "telegram_bot_token": t.telegram_bot_token,
+            "subscription_status": t.subscription_status.value if t.subscription_status else "TRIAL",
+            "is_active": t.is_active,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "trial_ends_at": t.trial_ends_at.isoformat() if t.trial_ends_at else None
+        }
+        for t in tenants
+    ]
+
+
+@app.post("/api/admin/tenants")
+async def create_tenant(
+    data: dict,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new tenant. Super admin only."""
+    await verify_super_admin(credentials)
+    
+    # Check if email already exists
+    result = await db.execute(select(Tenant).where(Tenant.email == data.get("email")))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create tenant
+    tenant = Tenant(
+        name=data["name"],
+        email=data["email"],
+        password_hash=hash_password(data["password"]),
+        company_name=data.get("company_name"),
+        phone=data.get("phone"),
+        telegram_bot_token=data.get("telegram_bot_token"),
+        subscription_status=SubscriptionStatus[data.get("subscription_status", "TRIAL")],
+        is_active=True,
+        created_at=datetime.utcnow(),
+        trial_ends_at=datetime.utcnow() + timedelta(days=14)  # 14 day trial
+    )
+    
+    db.add(tenant)
+    await db.commit()
+    await db.refresh(tenant)
+    
+    return {"id": tenant.id, "message": "Tenant created successfully"}
+
+
+@app.put("/api/admin/tenants/{tenant_id}")
+async def update_tenant(
+    tenant_id: int,
+    data: dict,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a tenant. Super admin only."""
+    await verify_super_admin(credentials)
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Update fields
+    if "name" in data:
+        tenant.name = data["name"]
+    if "email" in data:
+        tenant.email = data["email"]
+    if "company_name" in data:
+        tenant.company_name = data["company_name"]
+    if "phone" in data:
+        tenant.phone = data["phone"]
+    if "telegram_bot_token" in data:
+        tenant.telegram_bot_token = data["telegram_bot_token"]
+    if "subscription_status" in data:
+        tenant.subscription_status = SubscriptionStatus[data["subscription_status"]]
+    if "is_active" in data:
+        tenant.is_active = data["is_active"]
+    
+    tenant.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    return {"message": "Tenant updated successfully"}
+
+
+@app.delete("/api/admin/tenants/{tenant_id}")
+async def delete_tenant(
+    tenant_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a tenant. Super admin only."""
+    await verify_super_admin(credentials)
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    await db.delete(tenant)
+    await db.commit()
+    
+    return {"message": "Tenant deleted successfully"}
 
 
 @app.get("/api/auth/me")

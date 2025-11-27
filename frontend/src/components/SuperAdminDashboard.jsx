@@ -3,22 +3,14 @@
  * Platform owner dashboard for managing all tenants
  */
 
-import React, { useState, useEffect } from 'react';
-import {
-    Users,
-    Building2,
-    TrendingUp,
-    AlertCircle,
-    Check,
-    X,
-    Search,
-    MoreHorizontal,
-    Clock,
-    Ban,
-    CheckCircle,
-    Bot,
-    MessageCircle
-} from 'lucide-react';
+import React from 'react';
+import SuperAdminPanel from './SuperAdminPanel';
+
+const SuperAdminDashboard = ({ token, onSelectTenant }) => {
+    return <SuperAdminPanel onSelectTenant={onSelectTenant} />;
+};
+
+export default SuperAdminDashboard;
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
