@@ -26,6 +26,7 @@ Pillow==10.2.0
 
 # Excel Export
 openpyxl==3.1.2
+pandas==2.1.4
 
 # Scheduling
 apscheduler==3.10.4
