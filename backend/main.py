@@ -687,11 +687,18 @@ async def verify_super_admin(credentials: HTTPAuthorizationCredentials):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         tenant_id = payload.get("tenant_id")
         
+        logger.info(f"🔐 Super admin verification - tenant_id: {tenant_id}, email: {payload.get('email')}")
+        
         if tenant_id != 0:  # Super admin has tenant_id = 0
+            logger.warning(f"❌ Non-admin access attempt - tenant_id: {tenant_id}")
             raise HTTPException(status_code=403, detail="Super admin access required")
         
+        logger.info("✅ Super admin verified successfully")
         return payload
+    except HTTPException:
+        raise  # Re-raise HTTPException as-is
     except Exception as e:
+        logger.error(f"❌ Super admin verification failed: {type(e).__name__}: {e}")
         raise HTTPException(status_code=403, detail="Super admin access required")
 
 
