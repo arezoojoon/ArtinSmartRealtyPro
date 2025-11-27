@@ -918,12 +918,22 @@ AGENT'S FAQ & POLICIES:
         # State Machine Logic
         if current_state == ConversationState.START:
             # If user types a language name instead of clicking button, handle it
-            if message:
-                # Try to detect language from text
-                detected = self._detect_language_change(message, lang)
-                if detected:
+            if message and not callback_data:
+                # Check if message contains language request
+                message_lower = message.lower()
+                detected_lang = None
+                if re.search(r'فارسی|persian|farsi', message_lower, re.IGNORECASE):
+                    detected_lang = Language.FA
+                elif re.search(r'عربي|عربی|arabic', message_lower, re.IGNORECASE):
+                    detected_lang = Language.AR
+                elif re.search(r'русский|russian', message_lower, re.IGNORECASE):
+                    detected_lang = Language.RU
+                elif re.search(r'english|انگلیسی', message_lower, re.IGNORECASE):
+                    detected_lang = Language.EN
+                
+                if detected_lang:
                     # User typed a language name - go to LANGUAGE_SELECT with that message
-                    return self._handle_language_select(detected, None, {"language": detected}, message)
+                    return self._handle_language_select(detected_lang, None, {"language": detected_lang}, message)
             return self._handle_start(lang)
         
         elif current_state == ConversationState.LANGUAGE_SELECT:
@@ -1003,13 +1013,24 @@ AGENT'S FAQ & POLICIES:
         
         elif current_state == ConversationState.PAIN_DISCOVERY:
             # Check for language change request
-            requested_lang = self._detect_language_change(message, lang)
-            if requested_lang and requested_lang != lead.language:
-                # User wants to change language mid-conversation
-                lead_updates['language'] = requested_lang
-                lang = requested_lang
-                # Repeat PAIN_DISCOVERY in new language
-                return self._handle_pain_discovery(lang, callback_data=None, lead_updates=lead_updates)
+            if message and not callback_data:
+                message_lower = message.lower()
+                detected_lang = None
+                if re.search(r'فارسی|persian|farsi', message_lower, re.IGNORECASE):
+                    detected_lang = Language.FA
+                elif re.search(r'عربي|عربی|arabic', message_lower, re.IGNORECASE):
+                    detected_lang = Language.AR
+                elif re.search(r'русский|russian', message_lower, re.IGNORECASE):
+                    detected_lang = Language.RU
+                elif re.search(r'english|انگلیسی', message_lower, re.IGNORECASE):
+                    detected_lang = Language.EN
+                
+                if detected_lang and detected_lang != lead.language:
+                    # User wants to change language mid-conversation
+                    lead_updates['language'] = detected_lang
+                    lang = detected_lang
+                    # Repeat PAIN_DISCOVERY in new language
+                    return self._handle_pain_discovery(lang, callback_data=None, lead_updates=lead_updates)
             
             # If text message instead of button, use AI to respond + remind about buttons
             if not callback_data and message:
@@ -1046,13 +1067,24 @@ AGENT'S FAQ & POLICIES:
         
         elif current_state == ConversationState.PURPOSE:
             # Check for language change request
-            requested_lang = self._detect_language_change(message, lang)
-            if requested_lang and requested_lang != lead.language:
-                # User wants to change language mid-conversation
-                lead_updates['language'] = requested_lang
-                lang = requested_lang
-                # Repeat PURPOSE in new language
-                return self._handle_purpose(lang, callback_data=None, lead_updates=lead_updates)
+            if message and not callback_data:
+                message_lower = message.lower()
+                detected_lang = None
+                if re.search(r'فارسی|persian|farsi', message_lower, re.IGNORECASE):
+                    detected_lang = Language.FA
+                elif re.search(r'عربي|عربی|arabic', message_lower, re.IGNORECASE):
+                    detected_lang = Language.AR
+                elif re.search(r'русский|russian', message_lower, re.IGNORECASE):
+                    detected_lang = Language.RU
+                elif re.search(r'english|انگلیسی', message_lower, re.IGNORECASE):
+                    detected_lang = Language.EN
+                
+                if detected_lang and detected_lang != lead.language:
+                    # User wants to change language mid-conversation
+                    lead_updates['language'] = detected_lang
+                    lang = detected_lang
+                    # Repeat PURPOSE in new language
+                    return self._handle_purpose(lang, callback_data=None, lead_updates=lead_updates)
             
             # If text message instead of button, use AI to respond + remind about buttons
             if not callback_data and message:
