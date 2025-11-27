@@ -274,6 +274,12 @@ TRANSLATIONS = {
         Language.AR: "🔍 جاري تحليل صورتك... دعني أجد عقارات مشابهة لك!",
         Language.RU: "🔍 Анализирую изображение... Сейчас найду похожие варианты!"
     },
+    "pdf_generating": {
+        Language.EN: "📊 Preparing your personalized ROI report... This will take just a moment!",
+        Language.FA: "📊 در حال آماده‌سازی گزارش ROI شخصی‌سازی شده... چند لحظه صبر کنید!",
+        Language.AR: "📊 جاري تحضير تقرير العائد على الاستثمار الشخصي... سيستغرق لحظات فقط!",
+        Language.RU: "📊 Готовлю персональный отчёт ROI... Это займёт всего мгновение!"
+    },
     "image_results": {
         Language.EN: "✨ Found {count} similar properties! Here's the best match:\n\n{property_details}",
         Language.FA: "✨ {count} ملک مشابه پیدا کردم! اینم بهترینش:\n\n{property_details}",
@@ -1083,15 +1089,97 @@ AGENT'S FAQ & POLICIES:
             return self._handle_pain_discovery(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.TRANSACTION_TYPE:
+            # If text message instead of button, use AI to respond + show transaction buttons
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n🏘️ Are you looking to Buy or Rent?",
+                    Language.FA: "\n\n🏘️ آیا می‌خواهید بخرید یا اجاره کنید؟",
+                    Language.AR: "\n\n🏘️ هل تريد الشراء أم الإيجار؟",
+                    Language.RU: "\n\n🏘️ Вы хотите купить или арендовать?"
+                }
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.TRANSACTION_TYPE,
+                    buttons=[
+                        {"text": self.get_text("btn_buy", lang), "callback_data": "tx_buy"},
+                        {"text": self.get_text("btn_rent", lang), "callback_data": "tx_rent"}
+                    ]
+                )
             return self._handle_transaction_type(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.PROPERTY_TYPE:
+            # If text message instead of button, use AI to respond + show property type buttons
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n🏢 What type of property are you interested in?",
+                    Language.FA: "\n\n🏢 چه نوع ملکی مد نظر دارید؟",
+                    Language.AR: "\n\n🏢 ما نوع العقار الذي تهتم به؟",
+                    Language.RU: "\n\n🏢 Какой тип недвижимости вас интересует?"
+                }
+                property_buttons = [
+                    {"text": "🏢 " + ("آپارتمان" if lang == Language.FA else "Apartment"), "callback_data": "prop_apartment"},
+                    {"text": "🏠 " + ("ویلا" if lang == Language.FA else "Villa"), "callback_data": "prop_villa"},
+                    {"text": "🏰 " + ("پنت‌هاوس" if lang == Language.FA else "Penthouse"), "callback_data": "prop_penthouse"},
+                    {"text": "🏘️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse"), "callback_data": "prop_townhouse"},
+                    {"text": "🏪 " + ("تجاری" if lang == Language.FA else "Commercial"), "callback_data": "prop_commercial"},
+                    {"text": "🏞️ " + ("زمین" if lang == Language.FA else "Land"), "callback_data": "prop_land"},
+                ]
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.PROPERTY_TYPE,
+                    buttons=property_buttons
+                )
             return self._handle_property_type(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.BUDGET:
+            # If text message instead of button, use AI to respond + show budget buttons
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n💰 Please select your budget range:",
+                    Language.FA: "\n\n💰 لطفاً محدوده بودجه خود را انتخاب کنید:",
+                    Language.AR: "\n\n💰 يرجى اختيار ميزانيتك:",
+                    Language.RU: "\n\n💰 Пожалуйста, выберите ваш бюджет:"
+                }
+                # Show budget buttons again
+                budget_buttons = []
+                for idx, (min_val, max_val) in BUDGET_RANGES.items():
+                    if max_val:
+                        label = f"{min_val:,} - {max_val:,} AED"
+                    else:
+                        label = f"{min_val:,}+ AED"
+                    budget_buttons.append({
+                        "text": label,
+                        "callback_data": f"budget_{idx}"
+                    })
+                
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.BUDGET,
+                    buttons=budget_buttons
+                )
             return self._handle_budget(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.PAYMENT_METHOD:
+            # If text message instead of button, use AI to respond + show payment buttons
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n💳 Payment preference?",
+                    Language.FA: "\n\n💳 روش پرداخت ترجیحی؟",
+                    Language.AR: "\n\n💳 ما هي طريقة الدفع المفضلة؟",
+                    Language.RU: "\n\n💳 Предпочтительный способ оплаты?"
+                }
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.PAYMENT_METHOD,
+                    buttons=[
+                        {"text": self.get_text("btn_cash", lang), "callback_data": "pay_cash"},
+                        {"text": self.get_text("btn_installment", lang), "callback_data": "pay_install"}
+                    ]
+                )
             return self._handle_payment_method(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.PURPOSE:

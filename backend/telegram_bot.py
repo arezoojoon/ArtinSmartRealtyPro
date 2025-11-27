@@ -189,6 +189,32 @@ class TelegramBotHandler:
             try:
                 from roi_engine import generate_roi_pdf
                 from io import BytesIO
+                from brain import Language
+                
+                lang = lead.language or Language.EN
+                
+                # Send "Preparing..." message first
+                preparing_msgs = {
+                    Language.EN: "📊 Preparing your personalized ROI report... This will take just a moment!",
+                    Language.FA: "📊 در حال آماده‌سازی گزارش ROI شخصی‌سازی شده... چند لحظه صبر کنید!",
+                    Language.AR: "📊 جاري تحضير تقرير العائد على الاستثمار الشخصي... سيستغرق لحظات فقط!",
+                    Language.RU: "📊 Готовлю персональный отчёт ROI... Это займёт всего мгновение!"
+                }
+                
+                # Determine chat context
+                if update.message:
+                    chat_id = update.message.chat_id
+                elif update.callback_query:
+                    chat_id = update.callback_query.message.chat_id
+                else:
+                    logger.error("No valid chat context for ROI PDF")
+                    return
+                
+                # Send preparing message
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=preparing_msgs.get(lang, preparing_msgs[Language.EN])
+                )
                 
                 # Generate PDF
                 pdf_bytes = await generate_roi_pdf(
@@ -201,22 +227,12 @@ class TelegramBotHandler:
                 pdf_file = BytesIO(pdf_bytes)
                 pdf_file.name = f"roi_analysis_{lead.id}.pdf"
                 
-                lang = lead.language or Language.EN
                 caption_map = {
                     Language.EN: "📊 Here's your personalized ROI Analysis Report!",
                     Language.FA: "📊 این هم گزارش تحلیل سود سرمایه‌گذاری شما!",
                     Language.AR: "📊 إليك تقرير تحليل العائد على الاستثمار الشخصي!",
                     Language.RU: "📊 Вот ваш персональный отчёт ROI!"
                 }
-                
-                # Determine chat context (message or callback query)
-                if update.message:
-                    chat_id = update.message.chat_id
-                elif update.callback_query:
-                    chat_id = update.callback_query.message.chat_id
-                else:
-                    logger.error("No valid chat context for ROI PDF")
-                    return
                 
                 await context.bot.send_document(
                     chat_id=chat_id,
