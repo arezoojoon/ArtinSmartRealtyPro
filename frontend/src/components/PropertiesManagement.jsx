@@ -18,8 +18,10 @@ import {
     Square,
     TrendingUp,
     Award,
-    Save
+    Save,
+    AlertCircle
 } from 'lucide-react';
+import PropertyImageUpload from './PropertyImageUpload';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -62,10 +64,13 @@ const PropertiesManagement = ({ tenantId }) => {
         area_sqft: '',
         features: '',
         description: '',
+        full_description: '',  // Rich text with emojis
         expected_roi: '',
         rental_yield: '',
         golden_visa_eligible: false,
         is_featured: false,
+        is_urgent: false,  // Urgent Sale flag
+        image_urls: [],  // Property images
     });
 
     useEffect(() => {
@@ -161,10 +166,13 @@ const PropertiesManagement = ({ tenantId }) => {
                 area_sqft: property.area_sqft || '',
                 features: property.features?.join(', ') || '',
                 description: property.description || '',
+                full_description: property.full_description || '',
                 expected_roi: property.expected_roi || '',
                 rental_yield: property.rental_yield || '',
                 golden_visa_eligible: property.golden_visa_eligible || false,
                 is_featured: property.is_featured || false,
+                is_urgent: property.is_urgent || false,
+                image_urls: property.image_urls || [],
             });
         } else {
             setEditingProperty(null);
@@ -182,10 +190,13 @@ const PropertiesManagement = ({ tenantId }) => {
                 area_sqft: '',
                 features: '',
                 description: '',
+                full_description: '',
                 expected_roi: '',
                 rental_yield: '',
                 golden_visa_eligible: false,
                 is_featured: false,
+                is_urgent: false,
+                image_urls: [],
             });
         }
         setShowModal(true);
@@ -559,6 +570,60 @@ const PropertiesManagement = ({ tenantId }) => {
                                     placeholder="Property description..."
                                     className="w-full bg-navy-light border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold"
                                 />
+                            </div>
+
+                            {/* Full Description (Rich Text with Emojis) */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Full Description (با ایموجی)
+                                </label>
+                                <textarea
+                                    name="full_description"
+                                    value={formData.full_description}
+                                    onChange={handleInputChange}
+                                    rows="8"
+                                    placeholder="🏠 ویلا مدرن در شمال تهران&#10;📍 محدوده: سعادت آباد&#10;📏 متراژ: 250 متر&#10;🛏️ 3 خوابه + 3 سرویس&#10;✨ امکانات: پارکینگ، انباری، آسانسور..."
+                                    className="w-full bg-navy-light border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold font-medium"
+                                    style={{ direction: 'rtl', textAlign: 'right' }}
+                                />
+                            </div>
+
+                            {/* Urgent Sale Flag */}
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    name="is_urgent"
+                                    checked={formData.is_urgent}
+                                    onChange={(e) => setFormData({ ...formData, is_urgent: e.target.checked })}
+                                    className="w-4 h-4 text-gold bg-navy-light border-gray-700 rounded focus:ring-gold focus:ring-2"
+                                />
+                                <label className="ml-2 text-sm font-medium text-gray-300">
+                                    🔥 فروش فوری (Urgent Sale)
+                                </label>
+                            </div>
+
+                            {/* Property Images */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Property Images (حداکثر 5 عکس)
+                                </label>
+                                {editingProperty?.id ? (
+                                    <PropertyImageUpload
+                                        propertyId={editingProperty.id}
+                                        tenantId={tenantId}
+                                        images={formData.image_urls || []}
+                                        onImagesChange={(newImages) => {
+                                            setFormData({ 
+                                                ...formData, 
+                                                image_urls: newImages 
+                                            });
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="bg-navy-light border border-gray-700 rounded-lg p-6 text-center text-gray-400">
+                                        <p>💾 ابتدا ملک را ذخیره کنید، سپس می‌توانید عکس آپلود کنید</p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* ROI & Rental Yield */}

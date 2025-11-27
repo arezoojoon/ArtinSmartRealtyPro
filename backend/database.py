@@ -324,11 +324,18 @@ class TenantProperty(Base):
     golden_visa_eligible = Column(Boolean, default=False)
     
     # Media
-    images = Column(JSON, default=list)  # List of image URLs
+    images = Column(JSON, default=list)  # List of image URLs/paths
+    image_urls = Column(JSON, default=list)  # Full URLs for display
+    image_files = Column(JSON, default=list)  # File metadata: [{filename, size, uploaded_at, url}]
+    primary_image = Column(String(512), nullable=True)  # Main display image
+    
+    # Full Description (formatted text from agent)
+    full_description = Column(Text, nullable=True)  # Rich text description with emojis
     
     # Status
     is_available = Column(Boolean, default=True)
     is_featured = Column(Boolean, default=False)
+    is_urgent = Column(Boolean, default=False)  # For "Urgent Sale" properties
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

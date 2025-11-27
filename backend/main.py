@@ -12,10 +12,11 @@ from datetime import datetime, time, timedelta
 from typing import Optional, List
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header
+from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -328,9 +329,11 @@ class TenantPropertyCreate(BaseModel):
     area_sqft: Optional[float] = Field(None, ge=0)
     features: Optional[List[str]] = []
     description: Optional[str] = None
+    full_description: Optional[str] = None  # Rich formatted description with emojis
     expected_roi: Optional[float] = Field(None, ge=0, le=100)
     rental_yield: Optional[float] = Field(None, ge=0, le=100)
     golden_visa_eligible: bool = False
+    is_urgent: bool = False  # For "Urgent Sale" properties
     images: Optional[List[str]] = []
     is_featured: bool = False
 
@@ -343,9 +346,17 @@ class TenantPropertyResponse(BaseModel):
     price: Optional[float]
     bedrooms: Optional[int]
     features: Optional[List[str]]
+    description: Optional[str]
+    full_description: Optional[str]
     golden_visa_eligible: bool
     is_available: bool
     is_featured: bool
+    is_urgent: bool
+    image_urls: Optional[List[str]]
+    primary_image: Optional[str]
+    image_files: Optional[List[dict]]
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -503,6 +514,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for uploads
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 # ==================== DEPENDENCY ====================
@@ -1358,7 +1374,10 @@ async def update_property(
     property_data: TenantPropertyCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Update a property in tenant's inventory."""
+    """
+    Update a property in tenant's inventory.
+    NOTE: This does NOT update image_urls/image_files - use image upload/delete endpoints for that.
+    """
     result = await db.execute(
         select(TenantProperty).where(
             TenantProperty.tenant_id == tenant_id,
@@ -1370,8 +1389,13 @@ async def update_property(
     if not property_obj:
         raise HTTPException(status_code=404, detail="Property not found")
     
-    for key, value in property_data.model_dump().items():
-        setattr(property_obj, key, value)
+    # اصلاح: حفظ image-related fields و فقط بروزرسانی فیلدهای دیگر
+    update_data = property_data.model_dump(exclude={'images'})
+    
+    for key, value in update_data.items():
+        # حفظ image_urls، image_files، primary_image
+        if key not in ['image_urls', 'image_files', 'primary_image']:
+            setattr(property_obj, key, value)
     
     property_obj.updated_at = datetime.utcnow()
     await db.commit()
@@ -1398,10 +1422,226 @@ async def delete_property(
     if not property_obj:
         raise HTTPException(status_code=404, detail="Property not found")
     
-    db.delete(property_obj)
+    # Delete property images from filesystem
+    from file_manager import file_manager
+    if property_obj.image_files:
+        deleted_count = file_manager.delete_property_images(property_obj.image_files)
+        logger.info(f"Deleted {deleted_count} images for property {property_id}")
+    
+    # Cleanup property directory
+    file_manager.cleanup_property_directory(tenant_id, property_id)
+    
+    await db.delete(property_obj)
     await db.commit()
     
     return {"status": "deleted", "id": property_id}
+
+
+@app.post("/api/tenants/{tenant_id}/properties/{property_id}/images")
+async def upload_property_images(
+    tenant_id: int,
+    property_id: int,
+    files: List[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Upload multiple images for a property (max 5 images, 5MB each).
+    Returns list of uploaded file metadata.
+    """
+    from file_manager import file_manager, MAX_IMAGES_PER_PROPERTY
+    
+    # Verify property exists
+    result = await db.execute(
+        select(TenantProperty).where(
+            TenantProperty.tenant_id == tenant_id,
+            TenantProperty.id == property_id
+        )
+    )
+    property_obj = result.scalar_one_or_none()
+    
+    if not property_obj:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Check current image count - بررسی تعداد عکس‌ها
+    current_images = property_obj.image_files or []
+    current_count = len(current_images)
+    new_count = len(files)
+    total_count = current_count + new_count
+    
+    # محدودیت: حداکثر 5 عکس
+    if total_count > MAX_IMAGES_PER_PROPERTY:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "تعداد عکس‌ها بیش از حد مجاز است",
+                "message": f"حداکثر {MAX_IMAGES_PER_PROPERTY} عکس برای هر ملک مجاز است",
+                "current": current_count,
+                "attempting": new_count,
+                "max_allowed": MAX_IMAGES_PER_PROPERTY
+            }
+        )
+    
+    # بررسی تعداد فایل‌های ارسالی
+    if new_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="هیچ فایلی برای آپلود انتخاب نشده است"
+        )
+    
+    if new_count > MAX_IMAGES_PER_PROPERTY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"نمی‌توانید بیش از {MAX_IMAGES_PER_PROPERTY} فایل به یکباره آپلود کنید"
+        )
+    
+    # Upload files - آپلود و بررسی هر فایل
+    uploaded_files = []
+    failed_files = []
+    
+    for file in files:
+        try:
+            # بررسی نوع فایل از MIME type
+            if not file.content_type or not file.content_type.startswith('image/'):
+                failed_files.append({
+                    "filename": file.filename,
+                    "error": f"فایل باید عکس باشد. نوع فایل: {file.content_type}"
+                })
+                continue
+            
+            # Read file data
+            file_data = await file.read()
+            
+            # بررسی حجم فایل قبل از ذخیره
+            file_size_mb = len(file_data) / 1024 / 1024
+            if file_size_mb > 3:
+                failed_files.append({
+                    "filename": file.filename,
+                    "error": f"حجم فایل ({file_size_mb:.2f}MB) بیش از حد مجاز (3MB) است"
+                })
+                continue
+            
+            # Save file with MIME type validation
+            file_metadata = file_manager.save_property_image(
+                file_data=file_data,
+                filename=file.filename,
+                tenant_id=tenant_id,
+                property_id=property_id,
+                content_type=file.content_type
+            )
+            uploaded_files.append(file_metadata)
+            
+        except ValueError as e:
+            # Validation error (size, type, etc.)
+            failed_files.append({
+                "filename": file.filename,
+                "error": str(e)
+            })
+        except Exception as e:
+            logger.error(f"Failed to upload {file.filename}: {e}")
+            failed_files.append({
+                "filename": file.filename,
+                "error": f"خطا در آپلود فایل: {str(e)}"
+            })
+    
+    # اگر هیچ فایلی آپلود نشد
+    if len(uploaded_files) == 0:
+        error_messages = [f"{f['filename']}: {f['error']}" for f in failed_files]
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "آپلود فایل‌ها با خطا مواجه شد",
+                "failed_files": failed_files,
+                "messages": error_messages
+            }
+        )
+    
+    # Update property with new images
+    all_images = current_images + uploaded_files
+    property_obj.image_files = all_images
+    property_obj.image_urls = [img["url"] for img in all_images]
+    property_obj.images = property_obj.image_urls  # Legacy field
+    
+    # Set first image as primary if not set
+    if not property_obj.primary_image and uploaded_files:
+        property_obj.primary_image = uploaded_files[0]["url"]
+    
+    property_obj.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(property_obj)
+    
+    # پاسخ با جزئیات کامل
+    response = {
+        "status": "success",
+        "message": f"{len(uploaded_files)} عکس با موفقیت آپلود شد",
+        "uploaded": len(uploaded_files),
+        "files": uploaded_files,
+        "total_images": len(all_images),
+        "max_allowed": MAX_IMAGES_PER_PROPERTY,
+        "remaining_slots": MAX_IMAGES_PER_PROPERTY - len(all_images)
+    }
+    
+    # اگر برخی فایل‌ها با خطا مواجه شدند
+    if failed_files:
+        response["warnings"] = {
+            "message": f"{len(failed_files)} فایل آپلود نشد",
+            "failed_files": failed_files
+        }
+    
+    return response
+
+
+@app.delete("/api/tenants/{tenant_id}/properties/{property_id}/images/{filename}")
+async def delete_property_image(
+    tenant_id: int,
+    property_id: int,
+    filename: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a specific image from a property."""
+    from file_manager import file_manager
+    
+    # Get property
+    result = await db.execute(
+        select(TenantProperty).where(
+            TenantProperty.tenant_id == tenant_id,
+            TenantProperty.id == property_id
+        )
+    )
+    property_obj = result.scalar_one_or_none()
+    
+    if not property_obj:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Find image in metadata
+    image_files = property_obj.image_files or []
+    image_to_delete = None
+    remaining_images = []
+    
+    for img in image_files:
+        if img.get("filename") == filename:
+            image_to_delete = img
+        else:
+            remaining_images.append(img)
+    
+    if not image_to_delete:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Delete file from filesystem
+    file_manager.delete_property_image(image_to_delete.get("path", ""))
+    
+    # Update property
+    property_obj.image_files = remaining_images
+    property_obj.image_urls = [img["url"] for img in remaining_images]
+    property_obj.images = property_obj.image_urls
+    
+    # Update primary image if deleted
+    if property_obj.primary_image == image_to_delete.get("url"):
+        property_obj.primary_image = remaining_images[0]["url"] if remaining_images else None
+    
+    property_obj.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    return {"status": "deleted", "filename": filename, "remaining": len(remaining_images)}
 
 
 # --- Projects ---
