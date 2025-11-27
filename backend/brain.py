@@ -877,10 +877,35 @@ AGENT'S FAQ & POLICIES:
         Main entry point for processing user messages.
         Implements the Turbo Qualification State Machine.
         """
-        lang = lead.language or self.detect_language(message)
+        # Detect language from message (always check for language change)
+        detected_lang = self.detect_language(message)
         current_state = lead.conversation_state or ConversationState.START
         
-        # Update lead language if detected differently
+        # Check if user is explicitly requesting language change mid-conversation
+        lang_change_patterns = {
+            Language.FA: r'فارسی|persian|farsi',
+            Language.AR: r'عربي|عربی|arabic',
+            Language.RU: r'русский|russian',
+            Language.EN: r'english|انگلیسی'
+        }
+        
+        requested_lang = None
+        if message and not callback_data:
+            message_lower = message.lower()
+            for lang, pattern in lang_change_patterns.items():
+                if re.search(pattern, message_lower, re.IGNORECASE):
+                    requested_lang = lang
+                    break
+        
+        # Prioritize: 1) Explicit language request, 2) Lead's saved language, 3) Detected language
+        if requested_lang:
+            lang = requested_lang
+        elif lead.language:
+            lang = lead.language
+        else:
+            lang = detected_lang
+        
+        # Update lead language if changed
         lead_updates = {"language": lang}
         
         # State Machine Logic
@@ -900,6 +925,25 @@ AGENT'S FAQ & POLICIES:
             return await self._handle_phone_gate(lang, message, lead_updates)
         
         elif current_state == ConversationState.PAIN_DISCOVERY:
+            # If text message instead of button, use AI to respond + remind about buttons
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n👆 Please select one of the options above.",
+                    Language.FA: "\n\n👆 لطفاً یکی از گزینه‌های بالا را انتخاب کنید.",
+                    Language.AR: "\n\n👆 يرجى اختيار أحد الخيارات أعلاه.",
+                    Language.RU: "\n\n👆 Выберите один из вариантов выше."
+                }
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.PAIN_DISCOVERY,
+                    buttons=[
+                        {"text": self.get_text("btn_inflation", lang), "callback_data": "pain_inflation"},
+                        {"text": self.get_text("btn_visa", lang), "callback_data": "pain_visa"},
+                        {"text": self.get_text("btn_income", lang), "callback_data": "pain_income"},
+                        {"text": self.get_text("btn_tax", lang), "callback_data": "pain_tax"}
+                    ]
+                )
             return self._handle_pain_discovery(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.TRANSACTION_TYPE:
@@ -915,12 +959,56 @@ AGENT'S FAQ & POLICIES:
             return self._handle_payment_method(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.PURPOSE:
+            # If text message instead of button, use AI to respond + remind about buttons
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n👆 Please select one of the options above to continue.",
+                    Language.FA: "\n\n👆 لطفاً یکی از گزینه‌های بالا را برای ادامه انتخاب کنید.",
+                    Language.AR: "\n\n👆 يرجى اختيار أحد الخيارات أعلاه للمتابعة.",
+                    Language.RU: "\n\n👆 Пожалуйста, выберите один из вариантов выше, чтобы продолжить."
+                }
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.PURPOSE,
+                    buttons=[
+                        {"text": self.get_text("btn_investment", lang), "callback_data": "purp_invest"},
+                        {"text": self.get_text("btn_living", lang), "callback_data": "purp_living"},
+                        {"text": self.get_text("btn_residency", lang), "callback_data": "purp_residency"}
+                    ]
+                )
             return self._handle_purpose(lang, callback_data, lead_updates)
         
         elif current_state == ConversationState.SOLUTION_BRIDGE:
             return await self._handle_solution_bridge(lang, callback_data, lead, lead_updates)
         
         elif current_state == ConversationState.SCHEDULE:
+            # If text message instead of button, use AI to respond + remind about slots
+            if not callback_data and message:
+                ai_response = await self.generate_ai_response(message, lead)
+                reminder = {
+                    Language.EN: "\n\n👆 Please select an available time slot above to schedule your consultation.",
+                    Language.FA: "\n\n👆 لطفاً یک زمان موجود را برای مشاوره انتخاب کنید.",
+                    Language.AR: "\n\n👆 يرجى اختيار وقت متاح لحجز استشارتك.",
+                    Language.RU: "\n\n👆 Выберите доступное время для консультации."
+                }
+                # Re-fetch slots to show buttons
+                slots = await get_available_slots(lead.tenant_id)
+                slot_buttons = []
+                if slots:
+                    limited_slots = slots[:4]
+                    for slot in limited_slots:
+                        day = slot.day_of_week.value.capitalize()
+                        time_str = slot.start_time.strftime("%H:%M")
+                        slot_buttons.append({
+                            "text": f"🔥 {day} {time_str}",
+                            "callback_data": f"slot_{slot.id}"
+                        })
+                return BrainResponse(
+                    message=ai_response + reminder.get(lang, reminder[Language.EN]),
+                    next_state=ConversationState.SCHEDULE,
+                    buttons=slot_buttons
+                )
             return await self._handle_schedule(lang, callback_data, lead)
         
         elif current_state == ConversationState.COMPLETED:
