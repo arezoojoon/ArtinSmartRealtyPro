@@ -794,13 +794,15 @@ AGENT'S FAQ & POLICIES:
             {tenant_data_prompt}
             =============================================
             
-            LEAD PROFILE (USE THIS TO PERSONALIZE):
-            - Status: {lead.status.value if lead.status else 'new'}
-            - Budget: {f"{lead.budget_min:,.0f}" if lead.budget_min else 'Not set'} - {f"{lead.budget_max:,.0f}" if lead.budget_max else 'Not set'} {lead.budget_currency or 'AED'}
-            - Purpose: {lead.purpose.value if lead.purpose else 'not specified'}
-            - Property Type: {lead.property_type.value if lead.property_type else 'not specified'}
-            - Location: {lead.preferred_location or 'not specified'}
-            - Pain Point: {lead.pain_point or 'not identified'}
+            LEAD PROFILE (ONLY USE IF VALUES EXIST - DON'T HALLUCINATE!):
+            - Status: {lead.status.value if lead.status else 'new lead'}
+            - Budget: {f"{lead.budget_min:,.0f} - {lead.budget_max:,.0f} {lead.budget_currency or 'AED'}" if lead.budget_min and lead.budget_max else 'NOT YET ASKED - Do not assume!'}
+            - Purpose: {lead.purpose.value if lead.purpose else 'NOT YET ASKED - Do not assume!'}
+            - Property Type: {lead.property_type.value if lead.property_type else 'NOT YET ASKED - Do not assume!'}
+            - Location: {lead.preferred_location if lead.preferred_location else 'NOT YET ASKED - Do not assume!'}
+            - Pain Point: {lead.pain_point if lead.pain_point else 'NOT YET IDENTIFIED'}
+            
+            CRITICAL: If a field says "NOT YET ASKED", DO NOT make assumptions or invent data!
             
             CONVERSATION CONTEXT: {context}
             
@@ -810,6 +812,7 @@ AGENT'S FAQ & POLICIES:
             - Ask 1-2 follow-up questions per response to keep conversation flowing
             - Use emojis moderately for friendliness
             - Keep responses 2-4 sentences max unless explaining complex topic
+            - NEVER say "click on buttons above" - There are NO buttons in this engagement mode!
             """.strip()
             
             response = await asyncio.to_thread(
@@ -1260,17 +1263,19 @@ AGENT'S FAQ & POLICIES:
             )
     
     async def _handle_phone_gate(self, lang: Language, message: str, lead_updates: Dict) -> BrainResponse:
-        """Hard gate - collect phone number."""
-        # Extract phone number from message
-        phone_pattern = r'[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}'
-        phone_match = re.search(phone_pattern, message)
+        """Hard gate - collect phone number with strict validation."""
+        # Strict phone validation: Must start with + and have 10-15 digits
+        phone_pattern = r'^\+?[1-9]\d{9,14}$'
         
-        if phone_match:
-            phone = phone_match.group().strip()
-            lead_updates["phone"] = phone
+        # Clean message: remove spaces, dashes, parentheses
+        cleaned_message = re.sub(r'[\s\-\(\)]', '', message.strip())
+        
+        if re.match(phone_pattern, cleaned_message) and len(cleaned_message) >= 10:
+            # Valid phone number
+            lead_updates["phone"] = cleaned_message
             lead_updates["status"] = LeadStatus.CONTACTED
             
-            # NEW: Go to Pain Discovery first (Psychology technique)
+            # Go to Pain Discovery
             return BrainResponse(
                 message=self.get_text("pain_discovery", lang),
                 next_state=ConversationState.PAIN_DISCOVERY,
@@ -1283,9 +1288,15 @@ AGENT'S FAQ & POLICIES:
                 ]
             )
         else:
-            # Invalid phone - ask again
+            # Invalid phone - explain format and ask again
+            error_msgs = {
+                Language.EN: "⚠️ Please provide a valid phone number.\n\nExamples:\n• +971501234567\n• +989121234567\n• +79001234567",
+                Language.FA: "⚠️ لطفاً شماره تلفن معتبر وارد کنید.\n\nمثال:\n• +971501234567\n• +989121234567\n• +79001234567",
+                Language.AR: "⚠️ يرجى إدخال رقم هاتف صالح.\n\nأمثلة:\n• +971501234567\n• +989121234567\n• +79001234567",
+                Language.RU: "⚠️ Пожалуйста, укажите корректный номер.\n\nПримеры:\n• +971501234567\n• +989121234567\n• +79001234567"
+            }
             return BrainResponse(
-                message=self.get_text("phone_request", lang),
+                message=error_msgs.get(lang, error_msgs[Language.EN]),
                 next_state=ConversationState.PHONE_GATE
             )
     
@@ -1467,9 +1478,11 @@ AGENT'S FAQ & POLICIES:
         engagement_context = f"""
         ENGAGEMENT MODE - Lead is asking questions and exploring options.
         
+        CRITICAL RULE: You are "{self.agent_name}" - Do NOT introduce yourself again! They already know who you are.
+        
         YOUR OBJECTIVES:
         1. Answer their questions honestly and helpfully
-        2. Build trust and rapport
+        2. Build trust and rapport (WITHOUT repeating your name every message)
         3. Identify if they're ready to schedule consultation
         4. If they express strong interest or ask to speak with agent → Offer scheduling
         5. If they're still unsure → Keep nurturing, ask clarifying questions
