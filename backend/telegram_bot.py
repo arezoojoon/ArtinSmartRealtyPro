@@ -40,6 +40,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Enable DEBUG logging for telegram library to see all updates
+logging.getLogger('telegram').setLevel(logging.DEBUG)
+logging.getLogger('telegram.ext').setLevel(logging.DEBUG)
+
 
 class TelegramBotHandler:
     """
