@@ -818,7 +818,15 @@ AGENT'S FAQ & POLICIES:
             - Ask 1-2 follow-up questions per response to keep conversation flowing
             - Use emojis moderately for friendliness
             - Keep responses 2-4 sentences max unless explaining complex topic
-            - NEVER say "click on buttons above" - There are NO buttons in this engagement mode!
+            - NEVER say "click on buttons above" or "select one of the options" - This is FREE conversation mode!
+            - NEVER repeat the same message - Always respond uniquely to each question
+            
+            SCHEDULING TRIGGERS (when to suggest meeting):
+            - User asks: "وقت مشاوره", "schedule", "meeting", "appointment", "call me", "تماس", "موعد"
+            - User shows strong buying intent: "I want to buy", "میخوام بخرم", "ready to invest"
+            - User asks for viewing: "can I see", "می‌تونم ببینم", "visit"
+            
+            When you detect these triggers, offer to schedule immediately!
             """.strip()
             
             response = await asyncio.to_thread(
@@ -1351,30 +1359,64 @@ AGENT'S FAQ & POLICIES:
             )
     
     async def _handle_phone_gate(self, lang: Language, message: str, lead_updates: Dict) -> BrainResponse:
-        """Hard gate - collect phone number with international validation."""
+        """Hard gate - collect phone number with STRICT international validation."""
         # Clean message: remove spaces, dashes, parentheses, dots
         cleaned_message = re.sub(r'[\s\-\(\)\.]', '', message.strip())
         
-        # International phone validation:
-        # - Optional + at start
-        # - Country code: 1-4 digits (covers all countries including USA=1, Iran=98, UAE=971, Russia=7, etc.)
-        # - Total length after country code: 7-14 digits (accommodates different countries)
-        # - Must not be all same digit (e.g., 11111111111)
-        phone_pattern = r'^\+?\d{8,18}$'
+        # STRICT validation: Must start with + for international format
+        if not cleaned_message.startswith('+'):
+            # Try adding + if looks like phone number
+            if cleaned_message.isdigit() and len(cleaned_message) >= 10:
+                cleaned_message = '+' + cleaned_message
+            else:
+                valid = False
+                if re.match(phone_pattern, cleaned_message):
+                    # Check additional rules
+                    digits_only = cleaned_message.lstrip('+')
+                    
+                    # Reject if all same digit (e.g., 655444444, 11111111111)
+                    if len(set(digits_only)) <= 2:  # Max 2 unique digits is suspicious
+                        valid = False
+                    # Reject if too short (minimum 10 digits total including country code)
+                    elif len(digits_only) < 10:
+                        valid = False
+                    # Reject obvious fake patterns
+                    elif digits_only in ['12345678', '123456789', '1234567890', '0123456789', 
+                                        '111111111', '000000000', '1111111111', '0000000000',
+                                        '987654321', '9876543210']:
+                        valid = False
+                    # Reject repeating patterns like 555444444
+                    elif re.match(r'^(\d)\1+$', digits_only) or re.match(r'^(\d{2,})\1+$', digits_only):
+                        valid = False
+                    # Must have country code (can't start with 0 except some countries)
+                    elif not cleaned_message.startswith(('+1', '+2', '+3', '+4', '+5', '+6', '+7', '+8', '+9')):
+                        valid = False
+                    else:
+                        valid = True
+                else:
+                    valid = False
         
-        # Additional validation: Check if it's a reasonable phone number
+        # International phone pattern
+        phone_pattern = r'^\+\d{10,15}$'
+        
+        valid = False
         if re.match(phone_pattern, cleaned_message):
-            # Remove + for further checks
             digits_only = cleaned_message.lstrip('+')
             
-            # Reject if all same digit (e.g., 11111111111, 00000000000)
-            if len(set(digits_only)) == 1:
+            # Enhanced validation
+            unique_digits = len(set(digits_only))
+            
+            # Reject if too few unique digits (likely fake)
+            if unique_digits <= 2:
                 valid = False
-            # Reject if too short (minimum 8 digits after country code)
-            elif len(digits_only) < 8:
+            # Reject sequential numbers
+            elif '0123456789' in digits_only or '9876543210' in digits_only:
                 valid = False
-            # Reject obvious fake patterns
-            elif digits_only in ['12345678', '123456789', '1234567890', '11111111', '00000000']:
+            # Reject repeating patterns
+            elif re.match(r'^(\d{1,3})\1+$', digits_only):
+                valid = False
+            # Must be at least 10 digits
+            elif len(digits_only) < 10:
                 valid = False
             else:
                 valid = True
@@ -1398,12 +1440,12 @@ AGENT'S FAQ & POLICIES:
                     ]
                 )
         
-        # Invalid phone - explain format and ask again
+        # Invalid phone - short error message with ONE example
         error_msgs = {
-            Language.EN: "⚠️ Please provide a valid phone number.\n\nExamples:\n• +971501234567 (UAE)\n• +989121234567 (Iran)\n• +12025551234 (USA)\n• +447911123456 (UK)",
-            Language.FA: "⚠️ لطفاً شماره تلفن معتبر وارد کنید.\n\nمثال:\n• +971501234567 (امارات)\n• +989121234567 (ایران)\n• +12025551234 (آمریکا)\n• +447911123456 (انگلیس)",
-            Language.AR: "⚠️ يرجى إدخال رقم هاتف صالح.\n\nأمثلة:\n• +971501234567 (الإمارات)\n• +989121234567 (إيران)\n• +12025551234 (أمريكا)\n• +447911123456 (بريطانيا)",
-            Language.RU: "⚠️ Пожалуйста, укажите корректный номер.\n\nПримеры:\n• +971501234567 (ОАЭ)\n• +989121234567 (Иран)\n• +12025551234 (США)\n• +447911123456 (Великобритания)"
+            Language.EN: "⚠️ Please provide a valid international phone number.\n\nExample: +971501234567",
+            Language.FA: "⚠️ لطفاً شماره تلفن بین‌المللی معتبر وارد کنید.\n\nمثال: +971501234567",
+            Language.AR: "⚠️ يرجى إدخال رقم هاتف دولي صالح.\n\nمثال: +971501234567",
+            Language.RU: "⚠️ Пожалуйста, укажите корректный международный номер.\n\nПример: +971501234567"
         }
         return BrainResponse(
             message=error_msgs.get(lang, error_msgs[Language.EN]),
@@ -1628,32 +1670,50 @@ AGENT'S FAQ & POLICIES:
         # Generate AI response
         ai_response = await self.generate_ai_response(message, lead, context=engagement_context)
         
-        # Detect if AI suggests scheduling or user explicitly asks
-        schedule_triggers = [
-            "schedule", "meeting", "appointment", "viewing", "see properties",
-            "وقت", "قرار", "بازدید", "ببینم", "مشاور",
-            "موعد", "مقابلة", "عرض",
-            "встреча", "показ", "консультация"
+        # Enhanced scheduling detection - check BEFORE AI response
+        schedule_triggers_explicit = [
+            "وقت مشاوره", "تایم مشاوره", "زمان مشاوره", "appointment", "meeting time",
+            "schedule", "book", "reservation", "تماس بگیر", "call me", "speak with agent",
+            "مشاور", "consultant", "viewing", "بازدید", "visit"
         ]
         
         user_message_lower = message.lower() if message else ""
+        
+        # Check for explicit scheduling request
+        explicit_schedule_request = any(trigger in user_message_lower for trigger in schedule_triggers_explicit)
+        
+        if explicit_schedule_request:
+            # User explicitly wants to schedule - go directly to SCHEDULE state
+            confirming_msgs = {
+                Language.EN: "Great! Let me check available consultation times with {agent_name}. When works best for you?",
+                Language.FA: "عالی! بذارید زمان‌های مشاوره با {agent_name} را چک کنم. چه زمانی براتون مناسبه؟",
+                Language.AR: "رائع! دعني أتحقق من أوقات الاستشارة مع {agent_name}. متى يناسبك؟",
+                Language.RU: "Отлично! Давайте проверим доступное время консультации с {agent_name}. Когда вам удобно?"
+            }
+            
+            return await self._handle_schedule(lang, None, lead)
+        
+        # Otherwise detect from AI response too
+        schedule_triggers_soft = [
+            "بذار وقت بذاریم", "let's schedule", "would you like to meet",
+            "می‌تونم وقت بذارم", "can arrange", "available slots"
+        ]
+        
         ai_response_lower = ai_response.lower()
+        soft_schedule_suggestion = any(trigger in ai_response_lower for trigger in schedule_triggers_soft)
         
-        schedule_ready = any(trigger in user_message_lower for trigger in schedule_triggers) or \
-                        any(trigger in ai_response_lower for trigger in schedule_triggers)
-        
-        # If ready to schedule, add scheduling button
-        if schedule_ready:
+        # If AI suggested scheduling OR user hinted at it, show scheduling button
+        if soft_schedule_suggestion:
             schedule_btn_text = {
-                Language.EN: "📅 Schedule Consultation",
-                Language.FA: "📅 وقت مشاوره بگیرم",
-                Language.AR: "📅 حدد موعد الاستشارة",
-                Language.RU: "📅 Назначить консультацию"
+                Language.EN: "📅 Yes, Schedule Consultation",
+                Language.FA: "📅 بله، وقت مشاوره بذار",
+                Language.AR: "📅 نعم، حدد موعد الاستشارة",
+                Language.RU: "📅 Да, назначить консультацию"
             }
             
             return BrainResponse(
                 message=ai_response,
-                next_state=ConversationState.ENGAGEMENT,  # Stay in engagement
+                next_state=ConversationState.ENGAGEMENT,
                 buttons=[
                     {"text": schedule_btn_text.get(lang, schedule_btn_text[Language.EN]), "callback_data": "ready_schedule"}
                 ]

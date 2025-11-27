@@ -177,7 +177,8 @@ class ROIEngine:
     def __init__(self, tenant: Tenant, lead: Lead):
         self.tenant = tenant
         self.lead = lead
-        self.lang = lead.language or Language.EN
+        # ALWAYS use English for PDF (better font support and readability)
+        self.lang = Language.EN
         self.styles = getSampleStyleSheet()
         self._setup_styles()
     
