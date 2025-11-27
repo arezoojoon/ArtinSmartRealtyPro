@@ -916,12 +916,41 @@ AGENT'S FAQ & POLICIES:
             return self._handle_language_select(lang, callback_data, lead_updates, message)
         
         elif current_state == ConversationState.WELCOME:
+            # If language changed, update and repeat welcome in new language
+            if requested_lang and requested_lang != lead.language:
+                return BrainResponse(
+                    message=self.get_text("welcome", lang).format(agent_name=self.agent_name),
+                    next_state=ConversationState.WELCOME,
+                    lead_updates=lead_updates,
+                    buttons=[
+                        {"text": self.get_text("btn_yes", lang), "callback_data": "start_yes"},
+                        {"text": self.get_text("btn_no", lang), "callback_data": "start_no"}
+                    ]
+                )
             return self._handle_welcome_response(lang, callback_data)
         
         elif current_state == ConversationState.HOOK:
+            # If language changed, update and repeat hook in new language
+            if requested_lang and requested_lang != lead.language:
+                return BrainResponse(
+                    message=self.get_text("hook_roi", lang),
+                    next_state=ConversationState.HOOK,
+                    lead_updates=lead_updates,
+                    buttons=[
+                        {"text": self.get_text("btn_yes", lang), "callback_data": "roi_yes"},
+                        {"text": self.get_text("btn_no", lang), "callback_data": "roi_no"}
+                    ]
+                )
             return self._handle_hook_response(lang, callback_data)
         
         elif current_state == ConversationState.PHONE_GATE:
+            # If language changed, update and repeat phone request in new language
+            if requested_lang and requested_lang != lead.language:
+                return BrainResponse(
+                    message=self.get_text("phone_request", lang),
+                    next_state=ConversationState.PHONE_GATE,
+                    lead_updates=lead_updates
+                )
             return await self._handle_phone_gate(lang, message, lead_updates)
         
         elif current_state == ConversationState.PAIN_DISCOVERY:
