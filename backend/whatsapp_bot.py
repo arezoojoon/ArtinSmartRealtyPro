@@ -1,7 +1,7 @@
 """
 ArtinSmartRealty V2 - WhatsApp Bot Interface
 Handles WhatsApp Business API calls and passes everything to brain.py
-Uses Meta (Facebook) WhatsApp Cloud API
+Supports both Meta WhatsApp Cloud API and Twilio WhatsApp API
 """
 
 import os
@@ -16,6 +16,7 @@ from database import (
     AppointmentType, async_session
 )
 from brain import Brain, BrainResponse
+from whatsapp_providers import get_whatsapp_provider, WhatsAppProvider
 
 # Configure logging
 logging.basicConfig(
@@ -24,21 +25,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# WhatsApp Cloud API Base URL
-WHATSAPP_API_BASE = "https://graph.facebook.com/v18.0"
-
 
 class WhatsAppBotHandler:
     """
     WhatsApp Bot Handler - Strict Interface to Brain
-    This class ONLY handles WhatsApp API calls and delegates ALL logic to Brain.
-    Uses Meta WhatsApp Cloud API.
+    Auto-detects and uses either Meta WhatsApp Cloud API or Twilio WhatsApp API.
     """
     
     def __init__(self, tenant: Tenant):
         self.tenant = tenant
         self.brain = Brain(tenant)
-        self.api_base = WHATSAPP_API_BASE
+        self.provider = get_whatsapp_provider(tenant)
+        
+        if not self.provider:
+            logger.warning(f"No WhatsApp provider configured for tenant {tenant.id}")
     
     async def send_message(
         self,
@@ -46,116 +46,12 @@ class WhatsAppBotHandler:
         message: str,
         buttons: Optional[List[Dict[str, str]]] = None
     ) -> bool:
-        """Send a message via WhatsApp API."""
-        if not self.tenant.whatsapp_phone_number_id or not self.tenant.whatsapp_access_token:
+        """Send a message via WhatsApp (auto-routes to configured provider)."""
+        if not self.provider:
             logger.error(f"WhatsApp not configured for tenant {self.tenant.id}")
             return False
         
-        url = f"{self.api_base}/{self.tenant.whatsapp_phone_number_id}/messages"
-        headers = {
-            "Authorization": f"Bearer {self.tenant.whatsapp_access_token}",
-            "Content-Type": "application/json"
-        }
-        
-        # Build message payload
-        if buttons and len(buttons) <= 3:
-            # Use interactive buttons for up to 3 options
-            payload = self._build_interactive_buttons(to_phone, message, buttons)
-        elif buttons:
-            # Use interactive list for more than 3 options
-            payload = self._build_interactive_list(to_phone, message, buttons)
-        else:
-            # Simple text message
-            payload = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": to_phone,
-                "type": "text",
-                "text": {
-                    "preview_url": False,
-                    "body": message
-                }
-            }
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
-                logger.info(f"Message sent to {to_phone}")
-                return True
-        except httpx.HTTPError as e:
-            logger.error(f"Failed to send WhatsApp message: {e}")
-            return False
-    
-    def _build_interactive_buttons(
-        self,
-        to_phone: str,
-        body_text: str,
-        buttons: List[Dict[str, str]]
-    ) -> Dict[str, Any]:
-        """Build interactive button message payload."""
-        button_rows = []
-        for btn in buttons[:3]:  # Max 3 buttons
-            button_rows.append({
-                "type": "reply",
-                "reply": {
-                    "id": btn["callback_data"],
-                    "title": btn["text"][:20]  # WhatsApp has 20 char limit
-                }
-            })
-        
-        return {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": to_phone,
-            "type": "interactive",
-            "interactive": {
-                "type": "button",
-                "body": {
-                    "text": body_text
-                },
-                "action": {
-                    "buttons": button_rows
-                }
-            }
-        }
-    
-    def _build_interactive_list(
-        self,
-        to_phone: str,
-        body_text: str,
-        buttons: List[Dict[str, str]]
-    ) -> Dict[str, Any]:
-        """Build interactive list message payload for many options."""
-        rows = []
-        for btn in buttons[:10]:  # Max 10 items in list
-            rows.append({
-                "id": btn["callback_data"],
-                "title": btn["text"][:24],  # WhatsApp has 24 char limit
-                "description": ""
-            })
-        
-        return {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": to_phone,
-            "type": "interactive",
-            "interactive": {
-                "type": "list",
-                "body": {
-                    "text": body_text
-                },
-                "action": {
-                    "button": "Select Option",
-                    "sections": [
-                        {
-                            "title": "Options",
-                            "rows": rows
-                        }
-                    ]
-                }
-            }
-        }
+        return await self.provider.send_message(to_phone, message, buttons)
     
     async def _get_or_create_lead(self, from_phone: str, profile_name: Optional[str] = None) -> Lead:
         """Get or create lead from WhatsApp phone number."""
@@ -212,60 +108,39 @@ class WhatsAppBotHandler:
     
     async def handle_webhook(self, payload: Dict[str, Any]) -> bool:
         """
-        Handle incoming WhatsApp webhook.
+        Handle incoming WhatsApp webhook (supports both Meta and Twilio).
         Returns True if handled successfully.
         """
+        if not self.provider:
+            logger.error("No WhatsApp provider configured")
+            return False
+        
         try:
-            # Extract message data from webhook payload
-            entry = payload.get("entry", [])
-            if not entry:
+            # Parse webhook using provider
+            parsed = self.provider.parse_webhook(payload)
+            if not parsed:
                 return False
             
-            changes = entry[0].get("changes", [])
-            if not changes:
-                return False
-            
-            value = changes[0].get("value", {})
-            messages = value.get("messages", [])
-            
-            if not messages:
-                # Could be a status update, not a message
-                return True
-            
-            message = messages[0]
-            from_phone = message.get("from")
-            message_type = message.get("type")
-            
-            # Get profile name if available
-            contacts = value.get("contacts", [])
-            profile_name = None
-            if contacts:
-                profile = contacts[0].get("profile", {})
-                profile_name = profile.get("name")
+            from_phone = parsed.get("from_phone")
+            profile_name = parsed.get("profile_name")
+            message_type = parsed.get("message_type")
+            text = parsed.get("text")
             
             # Get or create lead
             lead = await self._get_or_create_lead(from_phone, profile_name)
             
-            # Process based on message type
-            if message_type == "text":
-                text = message.get("text", {}).get("body", "")
-                response = await self.brain.process_message(lead, text)
+            # Process text message
+            if text:
+                response = await self.brain.process_message(lead, text, "")
                 await self._send_response(from_phone, response, lead)
             
-            elif message_type == "interactive":
-                # Handle button/list selection
-                interactive = message.get("interactive", {})
-                
-                if interactive.get("type") == "button_reply":
-                    callback_data = interactive.get("button_reply", {}).get("id", "")
-                elif interactive.get("type") == "list_reply":
-                    callback_data = interactive.get("list_reply", {}).get("id", "")
-                else:
-                    callback_data = ""
-                
-                if callback_data:
-                    response = await self.brain.process_message(lead, "", callback_data)
-                    await self._send_response(from_phone, response, lead)
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to handle webhook: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
             
             elif message_type == "image":
                 # Handle image - find similar properties
