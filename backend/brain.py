@@ -194,6 +194,12 @@ TRANSLATIONS = {
         Language.AR: "❌ لا",
         Language.RU: "❌ Нет"
     },
+    "btn_need_help": {
+        Language.EN: "Would you like details on any of these?",
+        Language.FA: "می‌خواهید جزئیات بیشتری ببینید؟",
+        Language.AR: "هل تريد المزيد من التفاصيل؟",
+        Language.RU: "Хотите больше информации?"
+    },
     "btn_buy": {
         Language.EN: "🏠 Buy",
         Language.FA: "🏠 خرید",
@@ -808,6 +814,8 @@ AGENT'S FAQ & POLICIES:
         """
         Generate a contextual AI response using Gemini.
         Uses tenant-specific data (properties, projects, knowledge) for personalized responses.
+        
+        FIX #10d: Track questions and suggest consultation after 3+ questions
         """
         if not self.model:
             return self.get_text("welcome", lead.language or Language.EN)
@@ -819,6 +827,17 @@ AGENT'S FAQ & POLICIES:
             
             # Build tenant data context
             tenant_data_prompt = self._build_tenant_context_prompt()
+            
+            # FIX #10d: Increment question counter
+            conversation_data = lead.conversation_data or {}
+            question_count = conversation_data.get("question_count", 0)
+            
+            # Check if this is likely a question
+            is_question = any(char in user_message for char in ['؟', '?', 'چطور', 'چه', 'کی', 'کجا', 'چرا', 'how', 'what', 'when', 'where', 'why', 'هل', 'اين', 'ما', 'что', 'как', 'когда', 'где', 'почему'])
+            if is_question:
+                question_count += 1
+                conversation_data["question_count"] = question_count
+                logger.info(f"❓ Question #{question_count} from lead {lead.id}")
             
             system_prompt = f"""
             You are an expert AI real estate consultant representing {self.agent_name} from Dubai real estate market.
@@ -901,9 +920,24 @@ AGENT'S FAQ & POLICIES:
                 [system_prompt, f"User says: {user_message}"]
             )
             
-            return response.text.strip()
+            # FIX #10d: If user has asked 3+ questions, append consultation suggestion
+            final_response = response.text.strip()
+            if question_count >= 3 and "📞" not in final_response:
+                lang = lead.language or Language.EN
+                consultation_offers = {
+                    Language.EN: "\n\n📞 By the way, I can answer these questions better in a live consultation! Would you like to speak with {agent_name} directly?",
+                    Language.FA: "\n\n📞 راستی، این سوالات رو بهتره در یک جلسه مشاوره جواب بدم! می‌خواهید با {agent_name} صحبت کنید؟",
+                    Language.AR: "\n\n📞 بالمناسبة، يمكنني الإجابة على هذه الأسئلة بشكل أفضل في استشارة حية! هل تريد التحدث مع {agent_name} مباشرة؟",
+                    Language.RU: "\n\n📞 Кстати, я смогу лучше ответить на эти вопросы на живой консультации! Хотите поговорить с {agent_name} напрямую?"
+                }
+                final_response += consultation_offers.get(lang, consultation_offers[Language.EN]).format(agent_name=self.agent_name)
+                logger.info(f"💡 FIX #10d: Added consultation CTA after {question_count} questions")
+            
+            return final_response
         except Exception as e:
-            print(f"AI response error: {e}")
+            logger.error(f"❌ AI response error: {e}")
+            import traceback
+            logger.error(f"Stack trace: {traceback.format_exc()}")
             return self.get_text("welcome", lead.language or Language.EN)
     
     async def get_property_recommendations(self, lead: Lead) -> str:
@@ -1620,7 +1654,32 @@ AGENT'S FAQ & POLICIES:
         """
         VALUE_PROPOSITION Phase: Show matching properties from inventory.
         Goal: Demonstrate value BEFORE asking for contact info.
+        
+        CRITICAL FIX #10a: If user sends TEXT message (question), answer it via AI
+        instead of looping the same property list response!
         """
+        # ===== FIX #10a: HANDLE TEXT MESSAGES IN VALUE_PROPOSITION =====
+        if message and not callback_data:
+            # User typed a message instead of clicking button
+            # This might be a question, objection, or request for info
+            
+            logger.info(f"📝 VALUE_PROPOSITION text input from lead {lead.id}: '{message}'")
+            
+            # Use AI to answer the question
+            ai_response = await self.generate_ai_response(message, lead)
+            
+            # After answering, still show the property buttons (don't break the flow)
+            return BrainResponse(
+                message=ai_response + "\n\n" + self.get_text("btn_need_help", lang),
+                next_state=ConversationState.VALUE_PROPOSITION,
+                lead_updates=lead_updates,
+                buttons=[
+                    {"text": self.get_text("btn_yes", lang), "callback_data": "details_yes"},
+                    {"text": self.get_text("btn_no", lang), "callback_data": "details_no"},
+                    {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
+                ]
+            )
+        
         # Handle user responses to property details
         if callback_data == "details_yes" or callback_data == "analysis_yes":
             # User wants details - move to HARD_GATE for PDF
