@@ -400,6 +400,15 @@ class Brain:
         if GEMINI_API_KEY:
             self.model = genai.GenerativeModel('gemini-1.5-flash')
             logger.info("✅ Initialized Gemini model: gemini-1.5-flash (stable)")
+            
+            # FIX #11: Validate API access at startup
+            try:
+                # Test simple generation to ensure API is working
+                test_response = self.model.generate_content("Test connection")
+                logger.info("✅ Gemini API validation successful - model is accessible")
+            except Exception as e:
+                logger.error(f"❌ GEMINI API VALIDATION FAILED: {type(e).__name__}: {str(e)}")
+                logger.error("⚠️ Bot will fail to generate AI responses - check API key and quotas!")
         else:
             self.model = None
             logger.error("❌ GEMINI_API_KEY not set!")
@@ -938,7 +947,17 @@ AGENT'S FAQ & POLICIES:
             logger.error(f"❌ AI response error: {e}")
             import traceback
             logger.error(f"Stack trace: {traceback.format_exc()}")
-            return self.get_text("welcome", lead.language or Language.EN)
+            
+            # FIX #11: Don't return welcome message on error - breaks conversation flow
+            # Return user-friendly error message instead
+            lang = lead.language or Language.EN
+            error_messages = {
+                Language.EN: "I apologize, I'm having trouble processing that right now. Could you rephrase your question?",
+                Language.FA: "متاسفم، الان نمی‌تونم این رو پردازش کنم. می‌تونید سوالتون رو دوباره بپرسید؟",
+                Language.AR: "أعتذر، أواجه مشكلة في معالجة ذلك الآن. هل يمكنك إعادة صياغة سؤالك؟",
+                Language.RU: "Извините, у меня проблемы с обработкой. Можете перефразировать вопрос?"
+            }
+            return error_messages.get(lang, error_messages[Language.EN])
     
     async def get_property_recommendations(self, lead: Lead) -> str:
         """
