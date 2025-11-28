@@ -69,10 +69,57 @@ class TimeoutScheduler:
         """Background task that checks for timeouts every minute."""
         while self.running:
             try:
-                await asyncio.sleep(60)  # Check every minute
-                # Note: This is a simple implementation
-                # In production, use Redis SCAN to find expired timeout trackers
-                logger.debug("Timeout scheduler tick")
+                await asyncio.sleep(300)  # Check every 5 minutes (FIX #6: Ghost Protocol)
+                
+                # FIX #6: Ghost Protocol - Check for inactive users and send follow-ups
+                logger.info("🔍 Ghost Protocol: Checking for inactive users...")
+                
+                # Get all leads from database with ongoing conversations
+                from database import async_session, Lead
+                from sqlalchemy.future import select
+                
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(Lead).where(Lead.conversation_state != ConversationState.COMPLETED)
+                    )
+                    leads = result.scalars().all()
+                    
+                    for lead in leads:
+                        try:
+                            # Get last_interaction from Redis
+                            last_interaction_str = await redis_manager.get(f"user:{lead.id}:last_interaction")
+                            
+                            if last_interaction_str:
+                                last_interaction = datetime.fromisoformat(last_interaction_str)
+                                now = datetime.now()
+                                time_elapsed = now - last_interaction
+                                
+                                # If inactive for 15+ minutes, send follow-up
+                                if time_elapsed > timedelta(minutes=15):
+                                    logger.info(f"📧 Sending follow-up to lead {lead.id} (inactive for {time_elapsed.total_seconds()/60:.0f} min)")
+                                    
+                                    # Get follow-up message for current state
+                                    if lead.conversation_state in FOLLOWUP_MESSAGES:
+                                        followup_msg = FOLLOWUP_MESSAGES[lead.conversation_state].get(
+                                            lead.language or Language.EN,
+                                            FOLLOWUP_MESSAGES[lead.conversation_state][Language.EN]
+                                        )
+                                        
+                                        # Send message
+                                        try:
+                                            await self.bot.send_message(
+                                                chat_id=lead.telegram_id,
+                                                text=followup_msg
+                                            )
+                                            logger.info(f"✅ Follow-up sent to {lead.telegram_id}")
+                                            
+                                            # Reset timer after sending follow-up
+                                            await redis_manager.set(f"user:{lead.id}:last_interaction", now.isoformat())
+                                        except Exception as e:
+                                            logger.warning(f"⚠️ Failed to send follow-up to {lead.telegram_id}: {e}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Ghost Protocol error for lead {lead.id}: {e}")
+                            
             except asyncio.CancelledError:
                 break
             except Exception as e:

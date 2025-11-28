@@ -43,6 +43,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: artinrealty-backend
+    env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD:-postgres}@db:5432/artinrealty
       REDIS_HOST: redis

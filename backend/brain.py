@@ -1101,14 +1101,20 @@ AGENT'S FAQ & POLICIES:
         elif current_state == ConversationState.ENGAGEMENT:
             return await self._handle_engagement(lang, message, lead, lead_updates)
         
-        elif current_state == ConversationState.SCHEDULE:
+        elif current_state == ConversationState.SCHEDULE or current_state == ConversationState.HANDOFF_SCHEDULE:
             return await self._handle_schedule(lang, callback_data, lead)
         
         elif current_state == ConversationState.HANDOFF_URGENT:
             return await self._handle_handoff_urgent(lang, message, callback_data, lead, lead_updates)
         
-        # Default: restart flow if unknown state
-        return self._handle_start(lang)
+        elif current_state == ConversationState.COMPLETED:
+            # Lead has completed the flow - stay in engagement for follow-ups
+            return await self._handle_engagement(lang, message, lead, lead_updates)
+        
+        # CRITICAL FIX: If state is unknown, do NOT restart conversation!
+        # Instead, treat as free-form question in ENGAGEMENT mode
+        logger.warning(f"⚠️ Unknown state '{current_state}' for lead {lead.id}. Defaulting to ENGAGEMENT.")
+        return await self._handle_engagement(lang, message, lead, lead_updates)
     
     def _handle_start(self, lang: Language) -> BrainResponse:
         """Initial state - show language selection."""
@@ -1611,38 +1617,92 @@ AGENT'S FAQ & POLICIES:
         VALUE_PROPOSITION Phase: Show matching properties from inventory.
         Goal: Demonstrate value BEFORE asking for contact info.
         """
+        # Handle user responses to property details
+        if callback_data == "details_yes" or callback_data == "analysis_yes":
+            # User wants details - move to HARD_GATE for PDF
+            pdf_offer = {
+                Language.EN: "Perfect! 📊 I'll prepare a comprehensive PDF report with:\n  • Property details & images\n  • ROI projections\n  • Market analysis\n  • Investment highlights\n\nTo send it to you, may I have your phone number?",
+                Language.FA: "عالی! 📊 من یک گزارش PDF جامع با موارد زیر آماده خواهم کرد:\n  • جزئیات و تصاویر ملک\n  • پیش‌بینی ROI\n  • تحلیل بازار\n  • نکات سرمایه‌گذاری\n\nبرای ارسال آن به شما، شماره تلفن شما را می‌دهید؟",
+                Language.AR: "رائع! 📊 سأعد تقريرًا شاملاً يتضمن:\n  • تفاصيل ممتلكات وصور\n  • توقعات العائد على الاستثمار\n  • تحليل السوق\n  • نقاط الاستثمار\n\nللإرسال إليك، هل أستطيع الحصول على رقم هاتفك؟",
+                Language.RU: "Отлично! 📊 Я подготовлю полный PDF-отчет с:\n  • Детали объектов и фото\n  • Прогнозы ROI\n  • Анализ рынка\n  • Ключевые моменты инвестиций\n\nДля отправки вам, могу ли я получить ваш номер телефона?"
+            }
+            
+            return BrainResponse(
+                message=pdf_offer.get(lang, pdf_offer[Language.EN]),
+                next_state=ConversationState.HARD_GATE,
+                lead_updates=lead_updates
+            )
+        
+        elif callback_data == "details_no" or callback_data == "analysis_no":
+            # User not interested yet - go to engagement for more questions
+            engagement_msg = {
+                Language.EN: "No problem! Do you have any questions about these properties or Dubai real estate in general? I'm here to help! 😊",
+                Language.FA: "مشکلی نیست! سوالی درباره این ملک‌ها یا املاک دبی به‌طور کلی دارید؟ من اینجا هستم تا کمکتان کنم! 😊",
+                Language.AR: "لا مشكلة! هل لديك أي أسئلة حول هذه الممتلكات أو العقارات في دبي بشكل عام؟ أنا هنا لمساعدتك! 😊",
+                Language.RU: "Без проблем! У вас есть вопросы об этих объектах или недвижимости в Дубае в целом? Я здесь, чтобы помочь! 😊"
+            }
+            
+            return BrainResponse(
+                message=engagement_msg.get(lang, engagement_msg[Language.EN]),
+                next_state=ConversationState.ENGAGEMENT,
+                lead_updates=lead_updates
+            )
+        
+        elif callback_data == "schedule_consultation":
+            # FIX #5: User wants to book consultation - proactive CTA
+            consultation_msg = {
+                Language.EN: "Excellent! 📅 I'd like to connect you with our expert consultant.\n\nWhat's your phone number so they can reach you?",
+                Language.FA: "عالی! 📅 من می‌خواهم شما را با مشاور متخصص خود متصل کنم.\n\nشماره تلفن شما چیست تا به شما تماس بگیرم؟",
+                Language.AR: "ممتاز! 📅 أود أن أتواصل معك مع استشاريتنا الخبيرة.\n\nما رقم هاتفك ليتمكنوا من الاتصال بك؟",
+                Language.RU: "Отлично! 📅 Я хотел бы связать вас с нашим экспертом.\n\nКакой ваш номер телефона, чтобы они могли с вами связаться?"
+            }
+            
+            lead_updates["consultation_requested"] = True
+            return BrainResponse(
+                message=consultation_msg.get(lang, consultation_msg[Language.EN]),
+                next_state=ConversationState.HARD_GATE,
+                lead_updates=lead_updates
+            )
+        
         # Get property recommendations
         property_recs = await self.get_property_recommendations(lead)
         
         # Parse recommendations (simplified)
         if property_recs and "no properties" not in property_recs.lower():
+            # CRITICAL FIX: Show value FIRST, don't ask for phone immediately!
+            # Instead, show properties and ask if they want details/more info
             value_message = {
-                Language.EN: f"Here are some perfect matches for you:\n\n{property_recs}\n\nWould you like to receive a detailed PDF report with ROI projections?",
-                Language.FA: f"اینها چند تا ملک عالی برای شما هستند:\n\n{property_recs}\n\nمایل هستید یک گزارش کامل PDF با پیش‌بینی ROI دریافت کنید؟",
-                Language.AR: f"إليك بعض الخيارات المثالية لك:\n\n{property_recs}\n\nهل ترغب في تلقي تقرير PDF مفصل مع توقعات عائد الاستثمار؟",
-                Language.RU: f"Вот несколько идеальных вариантов для вас:\n\n{property_recs}\n\nХотите получить подробный PDF-отчет с прогнозами ROI?"
+                Language.EN: f"Perfect! Here are properties that match your criteria:\n\n{property_recs}\n\n📋 Would you like to see the full details and market analysis for any of these?",
+                Language.FA: f"عالی! اینها ملک‌هایی هستند که با معیارهای شما مطابقت دارند:\n\n{property_recs}\n\n📋 می‌خواهید جزئیات کامل و تحلیل بازار برای هر یک از اینها را ببینید؟",
+                Language.AR: f"رائع! إليك العقارات التي تطابق معاييرك:\n\n{property_recs}\n\n📋 هل تريد رؤية التفاصيل الكاملة وتحليل السوق لأي من هذه؟",
+                Language.RU: f"Отлично! Вот объекты, которые соответствуют вашим критериям:\n\n{property_recs}\n\n📋 Хотите увидеть полные детали и рыночный анализ для любого из них?"
             }
             
             return BrainResponse(
                 message=value_message.get(lang, value_message[Language.EN]),
-                next_state=ConversationState.HARD_GATE,
+                next_state=ConversationState.VALUE_PROPOSITION,
                 buttons=[
-                    {"text": self.get_text("btn_yes", lang), "callback_data": "pdf_yes"},
-                    {"text": self.get_text("btn_no", lang), "callback_data": "pdf_no"}
+                    {"text": self.get_text("btn_yes", lang), "callback_data": "details_yes"},
+                    {"text": self.get_text("btn_no", lang), "callback_data": "details_no"},
+                    {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
                 ]
             )
         else:
             # No matching properties
             no_match_message = {
-                Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Share your contact?",
-                Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. شماره‌تون رو به اشتراک می‌گذارید؟",
-                Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تشارك معلومات الاتصال الخاصة بك؟",
-                Language.RU: "У меня нет точных совпадений прямо сейчас, но я могу отправить вам подробный анализ рынка. Поделитесь контактом?"
+                Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Would you like that?",
+                Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. می‌خواهید؟",
+                Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تريد ذلك؟",
+                Language.RU: "У меня нет точных совпадений прямо сейчас, но я могу отправить подробный анализ рынка. Хотите это?"
             }
             
             return BrainResponse(
                 message=no_match_message.get(lang, no_match_message[Language.EN]),
-                next_state=ConversationState.HARD_GATE
+                next_state=ConversationState.VALUE_PROPOSITION,
+                buttons=[
+                    {"text": self.get_text("btn_yes", lang), "callback_data": "analysis_yes"},
+                    {"text": self.get_text("btn_no", lang), "callback_data": "analysis_no"}
+                ]
             )
     
     async def _handle_hard_gate(

@@ -295,6 +295,10 @@ class TelegramBotHandler:
         telegram_id = str(update.effective_chat.id)
         callback_data = query.data
         
+        # FIX #6: Ghost Protocol - Update last interaction timestamp
+        await redis_manager.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
+        logger.info(f"⏰ Updated last_interaction for user {lead.id} (callback)")
+        
         # CRITICAL: Acquire lock to prevent race conditions
         if telegram_id not in user_locks:
             user_locks[telegram_id] = Lock()
@@ -373,6 +377,10 @@ class TelegramBotHandler:
         lead = await self._get_or_create_lead(update)
         message_text = update.message.text
         telegram_id = str(update.effective_chat.id)
+        
+        # FIX #6: Ghost Protocol - Update last interaction timestamp
+        await redis_manager.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
+        logger.info(f"⏰ Updated last_interaction for user {lead.id}")
         
         # CRITICAL: Acquire lock to prevent race conditions (2 messages in 1 second)
         if telegram_id not in user_locks:
