@@ -396,10 +396,10 @@ class Brain:
         self.agent_name = tenant.name or "ArtinSmartRealty"
         self.tenant_context = None  # Will be loaded on demand
         
-        # Initialize Gemini model - use STABLE gemini-1.5-flash (NOT unstable gemini-2.0-flash-exp)
+        # Initialize Gemini model - use gemini-2.5-flash (latest stable model)
         if GEMINI_API_KEY:
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
-            logger.info("✅ Initialized Gemini model: gemini-1.5-flash (stable)")
+            self.model = genai.GenerativeModel('gemini-2.5-flash')
+            logger.info("✅ Initialized Gemini model: gemini-2.5-flash (latest stable)")
             
             # FIX #11: Validate API access at startup
             try:
