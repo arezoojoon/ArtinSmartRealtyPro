@@ -835,6 +835,17 @@ AGENT'S FAQ & POLICIES:
                - You've identified their budget, purpose, and location preferences
                - They explicitly ask to speak with agent or need detailed property tour
             
+            VISA & RESIDENCY KNOWLEDGE BASE:
+            **CRITICAL**: When user asks about residency or visa options, provide these EXACT amounts:
+            - 🛂 GOLDEN VISA (10 years): Requires minimum 2,000,000 AED investment in real estate
+            - 👨‍💼 2-YEAR INVESTOR VISA: Requires minimum 750,000 AED investment in real estate (POPULAR for budget-conscious investors!)
+            - 💼 EMPLOYMENT VISA: Can come with residence sponsorship if user has job offer
+            - 👨‍💻 FREELANCER VISA: Available for independent professionals
+            - 📊 INVESTMENT PORTFOLIO: Mix of properties + stocks = easier approval path
+            
+            If user says "I have only 500K-1M AED for residency", respond with:
+            "Great! The 2-Year Investor Visa is perfect for you - it requires only 750,000 AED minimum. Plus, you'll earn rental income while building wealth!"
+            
             PROPERTY RECOMMENDATIONS:
             7. **Use ONLY actual properties from agent's inventory below**
             8. **Match recommendations to budget** - NEVER suggest 2M AED property to 500K budget lead
@@ -976,6 +987,46 @@ AGENT'S FAQ & POLICIES:
         detected_lang = self.detect_language(message)
         current_state = lead.conversation_state or ConversationState.START
         
+        # ===== SENTIMENT DETECTION - CHECK FOR NEGATIVE TONE =====
+        # If user expresses frustration/anger, immediately offer human support
+        if message and not callback_data:
+            negative_sentiment_keywords = {
+                Language.FA: r'کلافه|دیونه|خری|زیادی|اذیت|خسته|بدم|چقدر حرف|دور تا دور|حالم بد',
+                Language.AR: r'مسخوط|غاضب|زعلان|تعبت|ملل|بطيء|قاسي|سيئ',
+                Language.RU: r'раздосадовано|злой|устал|ужасно|помогите|недовольны|усталь',
+                Language.EN: r'annoyed|frustrated|angry|angry|stupid|terrible|help|tired|awful|enough|stop'
+            }
+            
+            # Check all possible languages for sentiment
+            is_negative_sentiment = False
+            for lang_key, pattern in negative_sentiment_keywords.items():
+                if re.search(pattern, message, re.IGNORECASE):
+                    is_negative_sentiment = True
+                    break
+            
+            if is_negative_sentiment:
+                # User is frustrated - offer immediate human handoff
+                lang = lead.language or Language.FA
+                
+                handoff_messages = {
+                    Language.EN: f"😔 I understand you're frustrated. Let me connect you with {self.agent_name} directly for personalized support.\n\nWould you like me to schedule a call with them right now?",
+                    Language.FA: f"😔 متوجه شدم که ناراحت هستید. بذار شما رو به طور مستقیم با {self.agent_name} متصل کنم.\n\nالآن می‌خواهید با اونها تماس بگیرید؟",
+                    Language.AR: f"😔 أفهم أنك محبط. دعني أتصل بك مباشرة مع {self.agent_name} للحصول على دعم شخصي.\n\nهل تريد أن أجدول مكالمة معهم الآن؟",
+                    Language.RU: f"😔 Я понимаю, что вы расстроены. Позвольте мне соединить вас напрямую с {self.agent_name}.\n\nХотели бы вы получить звонок от них сейчас?"
+                }
+                
+                logger.warning(f"⚠️ NEGATIVE SENTIMENT DETECTED from Lead {lead.id}: '{message}'")
+                
+                return BrainResponse(
+                    message=handoff_messages.get(lang, handoff_messages[Language.EN]),
+                    next_state=ConversationState.HANDOFF_URGENT,
+                    lead_updates={"status": LeadStatus.URGENT},
+                    buttons=[
+                        {"text": self.get_text("btn_yes", lang), "callback_data": "handoff_yes"},
+                        {"text": self.get_text("btn_no", lang), "callback_data": "handoff_no"}
+                    ]
+                )
+        
         # DEBUG LOGGING
         logger.info(f"🔍 process_message - Lead {lead.id}: state={current_state}, message='{message}', callback={callback_data}, lead.lang={lead.language}")
         
@@ -1046,6 +1097,15 @@ AGENT'S FAQ & POLICIES:
         
         elif current_state == ConversationState.HARD_GATE:
             return await self._handle_hard_gate(lang, message, callback_data, lead, lead_updates)
+        
+        elif current_state == ConversationState.ENGAGEMENT:
+            return await self._handle_engagement(lang, message, lead, lead_updates)
+        
+        elif current_state == ConversationState.SCHEDULE:
+            return await self._handle_schedule(lang, callback_data, lead)
+        
+        elif current_state == ConversationState.HANDOFF_URGENT:
+            return await self._handle_handoff_urgent(lang, message, callback_data, lead, lead_updates)
         
         # Default: restart flow if unknown state
         return self._handle_start(lang)
@@ -1182,21 +1242,47 @@ AGENT'S FAQ & POLICIES:
                 buttons=budget_buttons
             )
         
-        # If text message, use AI to answer FAQ but return to goal question
+        # If text message, use AI to answer FAQ - but DON'T re-ask the goal question
+        # They'll click the button when ready
         if message and not callback_data:
-            # Check if this is an FAQ or off-topic
-            ai_response = await self.generate_ai_response(message, lead)
+            # User sent a text message instead of clicking button
+            # Could be: FAQ question, changing language, expressing interest, etc.
             
-            # After answering, return to goal question
-            goal_question = {
-                Language.EN: "\n\nNow, are you looking for Investment, Living, or Residency?",
-                Language.FA: "\n\nخب، به دنبال سرمایه‌گذاری، زندگی یا اقامت هستید؟",
-                Language.AR: "\n\nحسنًا، هل تبحث عن الاستثمار أم العيش أم الإقامة؟",
-                Language.RU: "\n\nИтак، вы ищете инвестиции, проживание или резиденцию?"
+            # Check if this is actually a language change request
+            lang_change_patterns = {
+                Language.FA: r'فارسی|persian|farsi',
+                Language.AR: r'عربي|عربی|arabic',
+                Language.RU: r'русский|russian',
+                Language.EN: r'english|انگلیسی'
             }
             
+            for check_lang, pattern in lang_change_patterns.items():
+                if re.search(pattern, message, re.IGNORECASE):
+                    # User wants to change language - redirect to language select
+                    return self._handle_language_select(check_lang, None, {"language": check_lang}, message)
+            
+            # Check if message is a goal selection in text form (for voice users)
+            goal_keywords = {
+                "investment": ["سرمایه‌گذاری", "investment", "invest", "استثمار", "инвестиция"],
+                "living": ["زندگی", "living", "live", "سكن", "жилье"],
+                "residency": ["اقامت", "residency", "visa", "visa", "виза", "تأشيرة"]
+            }
+            
+            message_lower = message.lower()
+            for goal, keywords in goal_keywords.items():
+                if any(kw.lower() in message_lower or kw in message for kw in keywords):
+                    # User specified goal in text - treat as button click
+                    return await self._handle_warmup(lang, None, f"goal_{goal}", lead, lead_updates)
+            
+            # Otherwise: This is an FAQ or off-topic question in WARMUP
+            # Answer it, but DON'T append the goal question again
+            # Let them click the button when they're ready
+            ai_response = await self.generate_ai_response(message, lead)
+            
+            # Response stays in WARMUP but with NO buttons appended
+            # User will click goal buttons when ready
             return BrainResponse(
-                message=ai_response + goal_question.get(lang, goal_question[Language.EN]),
+                message=ai_response,
                 next_state=ConversationState.WARMUP,
                 buttons=[
                     {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
@@ -1697,6 +1783,75 @@ AGENT'S FAQ & POLICIES:
             next_state=ConversationState.HARD_GATE
         )
     
+    async def _handle_handoff_urgent(self, lang: Language, message: Optional[str], callback_data: Optional[str], lead: Lead, lead_updates: Dict) -> BrainResponse:
+        """
+        HANDOFF_URGENT state: User expressed frustration/negative sentiment.
+        Offer immediate human support and escalate to agent.
+        """
+        # If user clicked "Yes, connect me"
+        if callback_data == "handoff_yes":
+            confirmation_msg = {
+                Language.EN: f"✅ Perfect! {self.agent_name} will contact you shortly.\n\nIn the meantime, feel free to ask any questions. They'll call you within 5-10 minutes.",
+                Language.FA: f"✅ عالی! {self.agent_name} خیلی زود تماس میگیرند.\n\nتا آن موقع، می‌تونید سوالتون رو بپرسید. اونها تا ۵-۱۰ دقیقه بعد تماس می‌گیرند.",
+                Language.AR: f"✅ رائع! سيتصل بك {self.agent_name} قريبًا.\n\nفي الوقت الراهن، لا تتردد في طرح أي أسئلة. سيتصلون بك خلال 5-10 دقائق.",
+                Language.RU: f"✅ Отлично! {self.agent_name} вскоре свяжется с вами.\n\nА пока вы можете задать любые вопросы. Они позвонят вам в течение 5-10 минут."
+            }
+            
+            # Update lead status to URGENT for agent dashboard
+            lead_updates["status"] = LeadStatus.URGENT
+            
+            return BrainResponse(
+                message=confirmation_msg.get(lang, confirmation_msg[Language.EN]),
+                next_state=ConversationState.ENGAGEMENT,
+                lead_updates=lead_updates,
+                metadata={"urgent_escalation": True, "send_to_agent": True}
+            )
+        
+        # If user clicked "No, continue chatting"
+        if callback_data == "handoff_no":
+            continue_msg = {
+                Language.EN: f"No problem! I'm here to help. What else would you like to know?",
+                Language.FA: f"مشکلی نیست! من اینجا هستم تا کمکتون کنم. می‌خواهید چه بدونید؟",
+                Language.AR: f"لا مشكلة! أنا هنا للمساعدة. ماذا تود أن تعرف؟",
+                Language.RU: f"Без проблем! Я здесь, чтобы помочь. Что еще вы хотели бы узнать?"
+            }
+            
+            return BrainResponse(
+                message=continue_msg.get(lang, continue_msg[Language.EN]),
+                next_state=ConversationState.ENGAGEMENT,
+                lead_updates=lead_updates
+            )
+        
+        # If user provided phone number or message
+        if message:
+            # Try to capture phone if they provided it
+            phone_response = await self._validate_phone_number(lang, message, lead_updates)
+            if phone_response.next_state == ConversationState.ENGAGEMENT:
+                # Phone captured successfully
+                captured_msg = {
+                    Language.EN: f"✅ Got it! {self.agent_name} will call you on {message}.\n\nThey should reach you within 10 minutes. Sit tight!",
+                    Language.FA: f"✅ گرفتم! {self.agent_name} روی {message} تماس میگیرند.\n\nباید تا ۱۰ دقیقه بعد تماس بگیرند.",
+                    Language.AR: f"✅ حسنًا! سيتصل بك {self.agent_name} على {message}.\n\nسيحاولون الوصول إليك في غضون 10 دقائق.",
+                    Language.RU: f"✅ Получилось! {self.agent_name} позвонит вам на {message}.\n\nОни должны позвонить вам в течение 10 минут."
+                }
+                
+                lead_updates["status"] = LeadStatus.URGENT
+                
+                return BrainResponse(
+                    message=captured_msg.get(lang, captured_msg[Language.EN]),
+                    next_state=ConversationState.ENGAGEMENT,
+                    lead_updates=lead_updates,
+                    metadata={"urgent_escalation": True, "send_to_agent": True}
+                )
+            else:
+                # Invalid phone - ask again
+                return phone_response
+        
+        # Default - stay in HANDOFF_URGENT
+        return BrainResponse(
+            message=self.get_text("phone_request", lang),
+            next_state=ConversationState.HANDOFF_URGENT
+        )
     
     # ==================== UTILITY & HELPER METHODS ====================
     
