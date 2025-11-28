@@ -390,11 +390,13 @@ class Brain:
         self.agent_name = tenant.name or "ArtinSmartRealty"
         self.tenant_context = None  # Will be loaded on demand
         
-        # Initialize Gemini model
+        # Initialize Gemini model - use STABLE gemini-1.5-flash (NOT unstable gemini-2.0-flash-exp)
         if GEMINI_API_KEY:
-            self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            logger.info("✅ Initialized Gemini model: gemini-1.5-flash (stable)")
         else:
             self.model = None
+            logger.error("❌ GEMINI_API_KEY not set!")
     
     async def load_tenant_context(self, lead: Optional[Lead] = None):
         """Load tenant-specific data for AI context."""
@@ -611,9 +613,10 @@ AGENT'S FAQ & POLICIES:
                     pass
                     
         except Exception as e:
-            print(f"Voice processing error: {e}")
+            logger.error(f"❌ VOICE PROCESSING ERROR: {type(e).__name__}: {str(e)}")
             import traceback
             traceback.print_exc()
+            logger.error(f"Voice processing stack trace: {traceback.format_exc()}")
             return f"Error processing voice: {str(e)}", {}
     
     async def process_image(self, image_data: bytes, file_extension: str = "jpg") -> Tuple[str, List[Dict[str, Any]]]:
@@ -751,9 +754,10 @@ AGENT'S FAQ & POLICIES:
                     pass
                     
         except Exception as e:
-            print(f"Image processing error: {e}")
+            logger.error(f"❌ IMAGE PROCESSING ERROR: {type(e).__name__}: {str(e)}")
             import traceback
             traceback.print_exc()
+            logger.error(f"Image processing stack trace: {traceback.format_exc()}")
             return f"Error processing image: {str(e)}", []
     
     async def extract_entities_from_text(self, text: str, lang: Language) -> Dict[str, Any]:
