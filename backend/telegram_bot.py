@@ -304,8 +304,9 @@ class TelegramBotHandler:
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
         
         # FIX #6: Ghost Protocol - Update last interaction timestamp
-        await redis_manager.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
-        logger.info(f"⏰ Updated last_interaction for user {lead.id} (callback)")
+        if redis_manager.redis_client:
+            await redis_manager.redis_client.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
+            logger.info(f"⏰ Updated last_interaction for user {lead.id} (callback)")
         
         # CRITICAL: Acquire lock to prevent race conditions
         if telegram_id not in user_locks:
@@ -396,8 +397,9 @@ class TelegramBotHandler:
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
         
         # FIX #6: Ghost Protocol - Update last interaction timestamp
-        await redis_manager.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
-        logger.info(f"⏰ Updated last_interaction for user {lead.id}")
+        if redis_manager.redis_client:
+            await redis_manager.redis_client.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
+            logger.info(f"⏰ Updated last_interaction for user {lead.id}")
         
         # CRITICAL: Acquire lock to prevent race conditions (2 messages in 1 second)
         if telegram_id not in user_locks:
