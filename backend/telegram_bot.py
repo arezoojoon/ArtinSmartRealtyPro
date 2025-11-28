@@ -295,6 +295,14 @@ class TelegramBotHandler:
         telegram_id = str(update.effective_chat.id)
         callback_data = query.data
         
+        # CRITICAL FIX #7: Refresh lead to ensure latest state from database
+        async with async_session() as session:
+            result = await session.execute(select(Lead).where(Lead.id == lead.id))
+            fresh_lead = result.scalars().first()
+            if fresh_lead:
+                lead = fresh_lead
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
+        
         # FIX #6: Ghost Protocol - Update last interaction timestamp
         await redis_manager.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
         logger.info(f"⏰ Updated last_interaction for user {lead.id} (callback)")
@@ -378,6 +386,15 @@ class TelegramBotHandler:
         message_text = update.message.text
         telegram_id = str(update.effective_chat.id)
         
+        # CRITICAL FIX #7: Refresh lead to ensure latest state from database
+        # (prevents stale state from previous message's update)
+        async with async_session() as session:
+            result = await session.execute(select(Lead).where(Lead.id == lead.id))
+            fresh_lead = result.scalars().first()
+            if fresh_lead:
+                lead = fresh_lead
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
+        
         # FIX #6: Ghost Protocol - Update last interaction timestamp
         await redis_manager.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
         logger.info(f"⏰ Updated last_interaction for user {lead.id}")
@@ -407,6 +424,14 @@ class TelegramBotHandler:
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle voice messages with slot filling protection."""
         lead = await self._get_or_create_lead(update)
+        
+        # CRITICAL FIX #7: Refresh lead to ensure latest state from database
+        async with async_session() as session:
+            result = await session.execute(select(Lead).where(Lead.id == lead.id))
+            fresh_lead = result.scalars().first()
+            if fresh_lead:
+                lead = fresh_lead
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
         
         # ZOMBIE STATE PROTECTION: If in SLOT_FILLING with pending button selection, guide them
         if lead.conversation_state == ConversationState.SLOT_FILLING and lead.pending_slot:
@@ -522,6 +547,15 @@ class TelegramBotHandler:
     async def handle_contact(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle shared contact (phone number)."""
         lead = await self._get_or_create_lead(update)
+        
+        # CRITICAL FIX #7: Refresh lead to ensure latest state from database
+        async with async_session() as session:
+            result = await session.execute(select(Lead).where(Lead.id == lead.id))
+            fresh_lead = result.scalars().first()
+            if fresh_lead:
+                lead = fresh_lead
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
+        
         contact = update.message.contact
         
         # Update lead with phone number
