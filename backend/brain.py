@@ -1685,9 +1685,51 @@ AGENT'S FAQ & POLICIES:
                 next_state=ConversationState.ENGAGEMENT
             )
         
-        # If user provided phone number (text message)
+        # If user provided TEXT message (not button click)
         if message:
-            # Validate phone number using NEW validation method
+            # CRITICAL FIX: Before demanding phone, check if this is a question or photo request
+            
+            # Check if user wants to see photos/details
+            photo_keywords = {
+                Language.FA: r'عکس|تصویر|ببین|نشون|جزئیات|مشخصات|photo|picture|image|show|detail',
+                Language.AR: r'صور|صورة|تفاصيل|عرض|رؤية|أرنى',
+                Language.EN: r'photo|picture|image|show|detail|view|see',
+                Language.RU: r'фото|фотография|показать|детали|подробнее'
+            }
+            
+            wants_photos = False
+            for lang_key, pattern in photo_keywords.items():
+                if re.search(pattern, message, re.IGNORECASE):
+                    wants_photos = True
+                    break
+            
+            if wants_photos:
+                # User wants to see photos - go to engagement instead of demanding phone
+                photo_response = {
+                    Language.EN: "Great! I understand you'd like to see property photos first. That makes total sense!\n\nWould you like to see our featured properties with full details?",
+                    Language.FA: "عالی! متوجه شدم که می‌خواهید اول عکس‌ها رو ببینید.\n\nمی‌خواهید ملک‌های برجسته‌ی ما رو با جزئیات کامل ببینید؟",
+                    Language.AR: "رائع! أفهم أنك تريد رؤية الصور أولاً. هذا منطقي تماماً!\n\nهل تريد رؤية ممتلكاتنا المميزة بالتفاصيل الكاملة؟",
+                    Language.RU: "Отлично! Я понимаю, что вы хотите сначала увидеть фотографии.\n\nХотите увидеть наши лучшие объекты со всеми деталями?"
+                }
+                
+                return BrainResponse(
+                    message=photo_response.get(lang, photo_response[Language.EN]),
+                    next_state=ConversationState.ENGAGEMENT
+                )
+            
+            # Check if this looks like a question (not a phone number)
+            is_question = any(char in message for char in ['؟', '?', 'چطور', 'چه', 'کی', 'کجا', 'چرا', 'how', 'what', 'when', 'where', 'why'])
+            is_phone_attempt = re.match(r'^[\d\+\-\(\)\s]+$', message)
+            
+            if is_question and not is_phone_attempt:
+                # User asked a question instead of providing phone - send to AI
+                ai_response = await self.generate_ai_response(message, lead)
+                return BrainResponse(
+                    message=ai_response,
+                    next_state=ConversationState.ENGAGEMENT
+                )
+            
+            # Try to validate as phone number
             phone_response = await self._validate_phone_number(lang, message, lead_updates)
             
             # If validation successful, move to ENGAGEMENT with PDF flag
