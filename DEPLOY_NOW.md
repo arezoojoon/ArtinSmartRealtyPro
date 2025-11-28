@@ -16,8 +16,9 @@ You have **10 major fixes** ready but NOT deployed yet!
 | FIX #9 | Gemini model + error logging | ✅ Committed (0b6e2a9) |
 | FIX #10 | VALUE_PROPOSITION infinite loop + question counter | ✅ Committed (2c46f65) |
 | FIX #11 | WARMUP loop - exception handling + API validation | ✅ Committed (1a35c93) |
+| FIX #12 | Gemini SDK update (0.4.1 → 0.8.3) - fixes 404 error | ✅ Committed (ca79be7) |
 
-**All 11 fixes are in GitHub but YOUR VPS still has the OLD broken code!**
+**All 12 fixes are in GitHub but YOUR VPS still has the OLD broken code!**
 
 ---
 
