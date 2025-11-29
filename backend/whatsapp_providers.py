@@ -165,6 +165,9 @@ class MetaWhatsAppProvider(WhatsAppProvider):
             
             # Extract message content
             text_content = None
+            media_id = None
+            location = None
+            
             if message_type == "text":
                 text_content = message.get("text", {}).get("body")
             elif message_type == "interactive":
@@ -173,12 +176,22 @@ class MetaWhatsAppProvider(WhatsAppProvider):
                     text_content = interactive.get("button_reply", {}).get("id")
                 elif interactive.get("type") == "list_reply":
                     text_content = interactive.get("list_reply", {}).get("id")
+            elif message_type == "image":
+                image_info = message.get("image", {})
+                media_id = image_info.get("id")
+            elif message_type == "audio" or message_type == "voice":
+                audio_info = message.get("audio", {}) or message.get("voice", {})
+                media_id = audio_info.get("id")
+            elif message_type == "location":
+                location = message.get("location", {})
             
             return {
                 "from_phone": from_phone,
                 "profile_name": profile_name,
                 "message_type": message_type,
-                "text": text_content
+                "text": text_content,
+                "media_id": media_id,
+                "location": location
             }
         except Exception as e:
             logger.error(f"[Meta] Failed to parse webhook: {e}")

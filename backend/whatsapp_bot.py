@@ -130,22 +130,13 @@ class WhatsAppBotHandler:
             lead = await self._get_or_create_lead(from_phone, profile_name)
             
             # Process text message
-            if text:
+            if message_type == "text" and text:
                 response = await self.brain.process_message(lead, text, "")
                 await self._send_response(from_phone, response, lead)
             
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to handle webhook: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return False
-            
             elif message_type == "image":
                 # Handle image - find similar properties
-                image_info = message.get("image", {})
-                image_id = image_info.get("id")
+                image_id = parsed.get("media_id")
                 
                 if image_id:
                     try:
@@ -196,8 +187,7 @@ class WhatsAppBotHandler:
             
             elif message_type == "audio":
                 # Handle voice message
-                audio_info = message.get("audio", {})
-                audio_id = audio_info.get("id")
+                audio_id = parsed.get("media_id")
                 
                 if audio_id:
                     try:
@@ -248,19 +238,21 @@ class WhatsAppBotHandler:
             
             elif message_type == "location":
                 # Handle location sharing
-                location = message.get("location", {})
+                location = parsed.get("location", {})
                 lat = location.get("latitude")
                 lon = location.get("longitude")
                 
                 if lat and lon:
                     location_text = f"📍 Location: {lat}, {lon}"
-                    response = await self.brain.process_message(lead, location_text)
+                    response = await self.brain.process_message(lead, location_text, "")
                     await self._send_response(from_phone, response, lead)
             
             return True
             
         except Exception as e:
-            logger.error(f"Error handling WhatsApp webhook: {e}")
+            logger.error(f"Failed to handle webhook: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     async def _get_media_url(self, media_id: str) -> Optional[str]:
