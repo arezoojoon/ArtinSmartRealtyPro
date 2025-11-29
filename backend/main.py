@@ -1515,7 +1515,10 @@ async def whatsapp_webhook_verify(
     Called by Meta when registering the webhook.
     Verifies against any tenant's verify_token in the database.
     """
+    logger.info(f"🔍 Webhook verify request: mode={hub_mode}, token={hub_token[:20]}..., challenge={hub_challenge}")
+    
     if hub_mode != "subscribe":
+        logger.warning(f"❌ Invalid mode: {hub_mode}")
         raise HTTPException(status_code=403, detail="Invalid mode")
     
     # Check if any tenant has this verify token
@@ -1525,12 +1528,18 @@ async def whatsapp_webhook_verify(
     tenant = result.scalar_one_or_none()
     
     if tenant:
+        logger.info(f"✅ Token matched tenant {tenant.id}: {tenant.name}")
         return Response(content=hub_challenge, media_type="text/plain")
     
     # Fallback to environment variable for initial setup
     env_token = os.getenv("WHATSAPP_VERIFY_TOKEN")
+    logger.info(f"🔑 Checking env token: {env_token[:20] if env_token else 'None'}...")
+    
     if env_token and hub_token == env_token:
+        logger.info(f"✅ Token matched environment variable")
         return Response(content=hub_challenge, media_type="text/plain")
+    else:
+        logger.error(f"❌ Token mismatch! Received: {hub_token[:30]}..., Expected: {env_token[:30] if env_token else 'None'}...")
     
     raise HTTPException(status_code=403, detail="Verification failed")
 
