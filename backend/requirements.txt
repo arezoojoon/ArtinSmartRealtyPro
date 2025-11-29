@@ -31,6 +31,9 @@ pandas==2.1.4
 # Scheduling
 apscheduler==3.10.4
 
+# Audio Processing (Voice Messages)
+pydub==0.25.1
+
 # Validation & Serialization
 pydantic==2.5.3
 pydantic-settings==2.1.0
