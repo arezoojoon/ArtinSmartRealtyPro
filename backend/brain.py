@@ -2521,8 +2521,13 @@ async def process_voice_message(
     response = await brain.process_message(lead, transcript)
     
     # Prepend acknowledgment of what was heard
-    ack_msg = brain.get_text("voice_acknowledged", lang).format(transcript=transcript[:100])
-    response.message = f"{ack_msg}\n\n{response.message}"
+    try:
+        transcript_preview = str(transcript)[:100] if transcript else "..."
+        ack_msg = brain.get_text("voice_acknowledged", lang).format(transcript=transcript_preview)
+        response.message = f"{ack_msg}\n\n{response.message}"
+    except (KeyError, AttributeError) as e:
+        # If template formatting fails, just use transcript directly
+        logger.warning(f"Voice acknowledgment formatting failed: {e}")
     
     return transcript, response
 
