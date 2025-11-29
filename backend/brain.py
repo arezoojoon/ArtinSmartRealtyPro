@@ -64,10 +64,16 @@ TRANSLATIONS = {
         Language.RU: "🏠 Получите БЕСПЛАТНЫЙ анализ ROI!\n\nУзнайте, сколько вы можете заработать на недвижимости в Дубае.\n\nХотите получить персональный отчёт?"
     },
     "phone_request": {
-        Language.EN: "📱 Great! To send you the personalized ROI report, I'll need your phone number.\n\nPlease share your WhatsApp number:\n\nExample: +971501234567 or +989121234567",
-        Language.FA: "📱 عالی! برای ارسال گزارش ROI شخصی‌سازی شده، به شماره تلفن شما نیاز دارم.\n\nلطفاً شماره واتساپ خود را ارسال کنید:\n\nمثال: +971501234567 یا +989121234567",
-        Language.AR: "📱 رائع! لإرسال تقرير العائد على الاستثمار المخصص لك، أحتاج إلى رقم هاتفك.\n\nيرجى مشاركة رقم الواتساب الخاص بك:\n\nمثال: +971501234567 أو +989121234567",
-        Language.RU: "📱 Отлично! Чтобы отправить вам персональный отчёт ROI, мне нужен ваш номер телефона.\n\nПожалуйста, поделитесь вашим номером WhatsApp:\n\nПример: +971501234567 или +989121234567"
+        Language.EN: "📱 Perfect! To connect you with our consultant and send the detailed report, please share your phone number using the button below. 👇",
+        Language.FA: "📱 عالی! برای ارتباط با مشاور و ارسال گزارش کامل، لطفاً شماره تلفن خود را با دکمه زیر به اشتراک بگذارید. 👇",
+        Language.AR: "📱 ممتاز! للتواصل مع استشاريتنا وإرسال التقرير المفصل، يرجى مشاركة رقم هاتفك باستخدام الزر أدناه. 👇",
+        Language.RU: "📱 Отлично! Чтобы связаться с консультантом и отправить подробный отчёт, поделитесь номером телефона кнопкой ниже. 👇"
+    },
+    "phone_request_button": {
+        Language.EN: "📱 Share Phone Number",
+        Language.FA: "📱 اشتراک‌گذاری شماره تلفن",
+        Language.AR: "📱 شارك رقم الهاتف",
+        Language.RU: "📱 Поделиться номером"
     },
     "transaction_type": {
         Language.EN: "🏘️ Are you looking to Buy or Rent?",
@@ -378,6 +384,7 @@ class BrainResponse:
     should_generate_roi: bool = False
     schedule_slots: Optional[List[Dict]] = None
     metadata: Optional[Dict[str, Any]] = None  # For PDF delivery, etc.
+    request_contact: bool = False  # NEW: Request phone number with contact button (Telegram)
 
 
 # ==================== BRAIN CLASS ====================
@@ -1731,19 +1738,15 @@ AGENT'S FAQ & POLICIES:
             )
         
         elif callback_data == "schedule_consultation":
-            # FIX #5: User wants to book consultation - proactive CTA
-            consultation_msg = {
-                Language.EN: "Excellent! 📅 I'd like to connect you with our expert consultant.\n\nWhat's your phone number so they can reach you?",
-                Language.FA: "عالی! 📅 من می‌خواهم شما را با مشاور متخصص خود متصل کنم.\n\nشماره تلفن شما چیست تا به شما تماس بگیرم؟",
-                Language.AR: "ممتاز! 📅 أود أن أتواصل معك مع استشاريتنا الخبيرة.\n\nما رقم هاتفك ليتمكنوا من الاتصال بك؟",
-                Language.RU: "Отлично! 📅 Я хотел бы связать вас с нашим экспертом.\n\nКакой ваш номер телефона, чтобы они могли с вами связаться?"
-            }
+            # FIX #5: User wants to book consultation - request phone
+            consultation_msg = MESSAGES["phone_request"]
             
             lead_updates["consultation_requested"] = True
             return BrainResponse(
                 message=consultation_msg.get(lang, consultation_msg[Language.EN]),
                 next_state=ConversationState.HARD_GATE,
-                lead_updates=lead_updates
+                lead_updates=lead_updates,
+                request_contact=True  # NEW: Show contact button
             )
         
         # Get property recommendations
@@ -1801,16 +1804,12 @@ AGENT'S FAQ & POLICIES:
         """
         # If user clicked "Yes, send PDF"
         if callback_data == "pdf_yes":
-            phone_request = {
-                Language.EN: "Perfect! To send you the PDF report, I need your phone number.\n\nPlease share your contact or type your number:",
-                Language.FA: "عالی! برای ارسال گزارش PDF، به شماره تماس شما نیاز دارم.\n\nلطفاً شماره خود را به اشتراک بگذارید یا تایپ کنید:",
-                Language.AR: "رائع! لإرسال تقرير PDF لك، أحتاج رقم هاتفك.\n\nيرجى مشاركة جهة الاتصال الخاصة بك أو كتابة رقمك:",
-                Language.RU: "Отлично! Чтобы отправить вам PDF-отчет, мне нужен ваш номер телефона.\n\nПожалуйста, поделитесь контактом или введите номер:"
-            }
+            phone_request = MESSAGES["phone_request"]
             
             return BrainResponse(
                 message=phone_request.get(lang, phone_request[Language.EN]),
-                next_state=ConversationState.HARD_GATE
+                next_state=ConversationState.HARD_GATE,
+                request_contact=True  # NEW: Show contact button in Telegram
             )
         
         # If user clicked "No, thanks"

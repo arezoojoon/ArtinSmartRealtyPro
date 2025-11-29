@@ -146,14 +146,31 @@ class TelegramBotHandler:
         lead: Lead
     ):
         """Send Brain response to user via Telegram."""
+        from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+        
         chat_id = update.effective_chat.id
         
         # DEBUG: Log response details
-        logger.info(f"🔍 _send_response - Lead {lead.id}: buttons={len(response.buttons) if response.buttons else 0}, message_len={len(response.message)}")
+        logger.info(f"🔍 _send_response - Lead {lead.id}: buttons={len(response.buttons) if response.buttons else 0}, request_contact={response.request_contact}, message_len={len(response.message)}")
         
-        # Prepare keyboard if buttons exist
+        # Prepare keyboard
         reply_markup = None
-        if response.buttons:
+        
+        # Priority 1: Contact request button (ReplyKeyboard)
+        if response.request_contact:
+            button_text = {
+                Language.EN: "📱 Share Phone Number",
+                Language.FA: "📱 اشتراک‌گذاری شماره تلفن",
+                Language.AR: "📱 شارك رقم الهاتف",
+                Language.RU: "📱 Поделиться номером"
+            }.get(lead.language, "📱 Share Phone Number")
+            
+            contact_button = KeyboardButton(button_text, request_contact=True)
+            reply_markup = ReplyKeyboardMarkup([[contact_button]], resize_keyboard=True, one_time_keyboard=True)
+            logger.info(f"📱 Showing contact request button for lead {lead.id}")
+        
+        # Priority 2: Inline buttons
+        elif response.buttons:
             logger.info(f"🔘 Building keyboard with {len(response.buttons)} buttons: {[b['text'] for b in response.buttons]}")
             reply_markup = self._build_inline_keyboard(response.buttons)
         
@@ -163,9 +180,24 @@ class TelegramBotHandler:
             try:
                 await update.callback_query.edit_message_text(
                     text=response.message,
-                    reply_markup=reply_markup,
+                    reply_markup=reply_markup if not response.request_contact else None,  # Can't use ReplyKeyboard with edit
                     parse_mode='HTML'
                 )
+                # Send contact request as new message if needed
+                if response.request_contact:
+                    button_text = {
+                        Language.EN: "📱 Share Phone Number",
+                        Language.FA: "📱 اشتراک‌گذاری شماره تلفن",
+                        Language.AR: "📱 شارك رقم الهاتف",
+                        Language.RU: "📱 Поделиться номером"
+                    }.get(lead.language, "📱 Share Phone Number")
+                    contact_button = KeyboardButton(button_text, request_contact=True)
+                    reply_markup = ReplyKeyboardMarkup([[contact_button]], resize_keyboard=True, one_time_keyboard=True)
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="👇",
+                        reply_markup=reply_markup
+                    )
             except Exception:
                 # If edit fails, send new message
                 await context.bot.send_message(
