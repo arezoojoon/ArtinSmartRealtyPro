@@ -513,6 +513,9 @@ class TelegramBotHandler:
         await save_context_to_redis(lead)
         logger.info(f"💾 Saved voice context to Redis for lead {lead.id}")
         
+        # DEBUG: Log response before sending
+        logger.info(f"🎤 Voice response ready - message_len={len(response.message)}, has_buttons={bool(response.buttons)}")
+        
         await self._send_response(update, context, response, lead)
     
     async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
