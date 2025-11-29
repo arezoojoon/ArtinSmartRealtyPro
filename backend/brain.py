@@ -547,24 +547,26 @@ AGENT'S FAQ & POLICIES:
                 temp_audio_path = temp_audio.name
             
             try:
-                # Upload audio file to Gemini
-                audio_file = genai.upload_file(path=temp_audio_path)
+                # Upload audio file to Gemini (run in thread pool since it's blocking)
+                import asyncio
+                loop = asyncio.get_event_loop()
+                audio_file = await loop.run_in_executor(None, genai.upload_file, temp_audio_path)
                 
-                # Wait for processing with timeout
+                # Wait for processing with timeout (non-blocking)
                 import time
                 max_wait = 30  # 30 seconds timeout
                 elapsed = 0
                 while audio_file.state.name == "PROCESSING" and elapsed < max_wait:
-                    time.sleep(1)
+                    await asyncio.sleep(1)  # Non-blocking sleep
                     elapsed += 1
-                    audio_file = genai.get_file(audio_file.name)
+                    audio_file = await loop.run_in_executor(None, genai.get_file, audio_file.name)
                 
                 if audio_file.state.name == "PROCESSING":
-                    genai.delete_file(audio_file.name)
+                    await loop.run_in_executor(None, genai.delete_file, audio_file.name)
                     return "Audio processing timeout - file too large or complex", {}
                 
                 if audio_file.state.name == "FAILED":
-                    genai.delete_file(audio_file.name)
+                    await loop.run_in_executor(None, genai.delete_file, audio_file.name)
                     return "Could not process audio file", {}
                 
                 # Generate transcript and extract entities with retry logic
@@ -598,11 +600,11 @@ AGENT'S FAQ & POLICIES:
                     response = await retry_with_backoff(call_gemini_voice)
                 except Exception as e:
                     logger.error(f"❌ Gemini voice API failed after retries: {e}")
-                    genai.delete_file(audio_file.name)
+                    await loop.run_in_executor(None, genai.delete_file, audio_file.name)
                     return "Voice processing temporarily unavailable. Please try again or type your message.", {}
                 
                 # Clean up
-                genai.delete_file(audio_file.name)
+                await loop.run_in_executor(None, genai.delete_file, audio_file.name)
                 
                 # Parse JSON response
                 response_text = response.text.strip()
