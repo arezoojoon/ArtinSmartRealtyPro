@@ -546,11 +546,35 @@ AGENT'S FAQ & POLICIES:
                 temp_audio.write(audio_data)
                 temp_audio_path = temp_audio.name
             
+            # Convert audio to MP3 for Gemini (supports: mp3, wav, aiff, aac, ogg, flac)
+            # But Telegram's .oga format needs explicit MIME type, so convert to MP3
+            converted_path = None
+            try:
+                from pydub import AudioSegment
+                logger.info(f"🔄 Converting audio from {file_extension} to mp3 for Gemini compatibility")
+                
+                # Load audio file
+                audio = AudioSegment.from_file(temp_audio_path, format=file_extension)
+                
+                # Convert to MP3
+                converted_path = temp_audio_path.replace(f".{file_extension}", ".mp3")
+                audio.export(converted_path, format="mp3", bitrate="64k")
+                
+                # Use converted file for upload
+                upload_path = converted_path
+                logger.info(f"✅ Audio converted successfully to MP3")
+            except ImportError:
+                logger.warning("⚠️ pydub not available, uploading original audio (may fail)")
+                upload_path = temp_audio_path
+            except Exception as conv_error:
+                logger.error(f"⚠️ Audio conversion failed: {conv_error}, uploading original")
+                upload_path = temp_audio_path
+            
             try:
                 # Upload audio file to Gemini (run in thread pool since it's blocking)
                 import asyncio
                 loop = asyncio.get_event_loop()
-                audio_file = await loop.run_in_executor(None, genai.upload_file, temp_audio_path)
+                audio_file = await loop.run_in_executor(None, genai.upload_file, upload_path)
                 
                 # Wait for processing with timeout (non-blocking)
                 import time
@@ -629,12 +653,18 @@ AGENT'S FAQ & POLICIES:
                 return transcript, entities
                 
             finally:
-                # Clean up temp file
+                # Clean up temp files
                 import os
                 try:
                     os.unlink(temp_audio_path)
                 except:
                     pass
+                # Clean up converted file if it exists
+                if converted_path and os.path.exists(converted_path):
+                    try:
+                        os.unlink(converted_path)
+                    except:
+                        pass
                     
         except Exception as e:
             logger.error(f"❌ VOICE PROCESSING ERROR: {type(e).__name__}: {str(e)}")
