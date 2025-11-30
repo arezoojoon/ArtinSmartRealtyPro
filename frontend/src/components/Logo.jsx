@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Building2 } from 'lucide-react';
+import goldLogo from '../goldlogo.svg';
 
 const Logo = ({ size = 'md', variant = 'full' }) => {
   const sizes = {
@@ -15,8 +16,8 @@ const Logo = ({ size = 'md', variant = 'full' }) => {
 
   const currentSize = sizes[size];
 
-  // اگر لوگوی سفارشی دارید، مسیر آن را اینجا قرار دهید
-  const customLogoPath = null; // مثال: '/logo.png' یا import logo from '../assets/logo.svg'
+  // لوگوی سفارشی از پوشه src
+  const customLogoPath = goldLogo;
 
   if (variant === 'icon') {
     return (
