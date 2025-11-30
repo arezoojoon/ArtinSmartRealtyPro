@@ -606,10 +606,7 @@ AGENT'S FAQ & POLICIES:
                     await loop.run_in_executor(None, genai.delete_file, audio_file.name)
                     return "Could not process audio file", {}
                 
-                # Generate transcript and extract entities with retry logic
-                async def call_gemini_voice():
-                    return self.model.generate_content([audio_file, prompt])
-                
+                # Prepare prompt for transcript extraction
                 prompt = """
                 Please transcribe this audio message and extract any real estate-related information.
                 
@@ -632,6 +629,10 @@ AGENT'S FAQ & POLICIES:
                 Extract any mentioned budget, location, property preferences, or contact information.
                 Return ONLY valid JSON.
                 """
+                
+                # Generate transcript and extract entities with retry logic
+                async def call_gemini_voice():
+                    return self.model.generate_content([audio_file, prompt])
                 
                 try:
                     response = await retry_with_backoff(call_gemini_voice)
