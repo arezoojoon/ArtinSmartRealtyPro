@@ -1713,22 +1713,74 @@ AGENT'S FAQ & POLICIES:
         VALUE_PROPOSITION Phase: Show matching properties from inventory.
         Goal: Demonstrate value BEFORE asking for contact info.
         
-        CRITICAL FIX #10a: If user sends TEXT message (question), answer it via AI
-        instead of looping the same property list response!
+        FIXED: Properly route consultation/photo/question requests to avoid infinite loop.
         """
-        # ===== FIX #10a: HANDLE TEXT MESSAGES IN VALUE_PROPOSITION =====
+        # ===== CRITICAL: HANDLE TEXT MESSAGES IN VALUE_PROPOSITION =====
         if message and not callback_data:
-            # User typed a message instead of clicking button
-            # This might be a question, objection, or request for info
+            message_lower = message.lower()
             
             logger.info(f"📝 VALUE_PROPOSITION text input from lead {lead.id}: '{message}'")
             
-            # Use AI to answer the question
+            # 1. DETECT CONSULTATION REQUEST
+            consultation_keywords = ["consultation", "call", "مشاوره", "تماس", "speak", "agent", "مشاور"]
+            if any(kw in message_lower for kw in consultation_keywords):
+                logger.info(f"🔔 Consultation request detected from lead {lead.id}")
+                consultation_msg = MESSAGES["phone_request"]
+                lead_updates["consultation_requested"] = True
+                return BrainResponse(
+                    message=consultation_msg.get(lang, consultation_msg[Language.EN]),
+                    next_state=ConversationState.HARD_GATE,
+                    lead_updates=lead_updates,
+                    request_contact=True
+                )
+            
+            # 2. DETECT PHOTO/IMAGE REQUEST
+            photo_keywords = ["photo", "picture", "image", "عکس", "تصویر", "صورة", "фото"]
+            if any(kw in message_lower for kw in photo_keywords):
+                logger.info(f"📸 Photo request detected from lead {lead.id}")
+                # Get property recommendations and extract photos
+                property_recs = await self.get_property_recommendations(lead)
+                photo_msg = {
+                    Language.EN: f"Here are photos of matching properties:\n\n{property_recs}\n\nWould you like to schedule a viewing?",
+                    Language.FA: f"اینم عکس‌های املاک مچ شده:\n\n{property_recs}\n\nمی‌خواهید بازدید رزرو کنید؟",
+                    Language.AR: f"إليك صور العقارات المطابقة:\n\n{property_recs}\n\nهل تريد حجز معاينة؟",
+                    Language.RU: f"Вот фотографии подходящих объектов:\n\n{property_recs}\n\nХотите записаться на просмотр?"
+                }
+                return BrainResponse(
+                    message=photo_msg.get(lang, photo_msg[Language.EN]),
+                    next_state=ConversationState.VALUE_PROPOSITION,
+                    lead_updates=lead_updates,
+                    buttons=[
+                        {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
+                    ]
+                )
+            
+            # 3. DETECT QUESTION (contains "?")
+            if "?" in message:
+                logger.info(f"❓ Question detected from lead {lead.id}")
+                # Answer the specific question via AI - DO NOT resend property list
+                ai_context = f"""Answer this specific question about the property or real estate. 
+                DO NOT say 'Great! Here are properties...' - they already saw the list.
+                Answer their question directly and concisely (2-3 sentences max).
+                Question: {message}
+                """
+                ai_response = await self.generate_ai_response(message, lead, context=ai_context)
+                
+                return BrainResponse(
+                    message=ai_response,
+                    next_state=ConversationState.VALUE_PROPOSITION,
+                    lead_updates=lead_updates,
+                    buttons=[
+                        {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
+                    ]
+                )
+            
+            # 4. FALLBACK: General message/comment
+            logger.info(f"💬 General message in VALUE_PROPOSITION from lead {lead.id}")
             ai_response = await self.generate_ai_response(message, lead)
             
-            # After answering, still show the property buttons (don't break the flow)
             return BrainResponse(
-                message=ai_response + "\n\n" + self.get_text("btn_need_help", lang),
+                message=ai_response,
                 next_state=ConversationState.VALUE_PROPOSITION,
                 lead_updates=lead_updates,
                 buttons=[
@@ -2258,10 +2310,17 @@ AGENT'S FAQ & POLICIES:
         """
         ENGAGEMENT state - Free conversation to nurture, answer questions, and build trust.
         AI responds naturally and decides when lead is ready to schedule consultation.
+        
+        FIXED: Add consultation booking nudge after 2+ questions.
         """
         # Load tenant context if not loaded
         if not self.tenant_context:
             await self.load_tenant_context(lead)
+        
+        # Track question count for consultation nudge
+        conversation_data = lead.conversation_data or {}
+        question_count = conversation_data.get("question_count", 0) + 1
+        lead_updates["conversation_data"] = {**conversation_data, "question_count": question_count}
         
         # Enhanced AI prompt to handle engagement intelligently
         engagement_context = f"""
@@ -2356,11 +2415,26 @@ AGENT'S FAQ & POLICIES:
                 ]
             )
         
-        # Otherwise, stay in engagement mode with no buttons (free conversation)
+        # Otherwise, stay in engagement mode
+        # Add consultation nudge button if user asked 2+ questions
+        buttons = []
+        if question_count >= 2:
+            consultation_btn = {
+                Language.EN: "📅 Book Free Consultation",
+                Language.FA: "📅 رزرو وقت مشاوره رایگان",
+                Language.AR: "📅 احجز استشارة مجانية",
+                Language.RU: "📅 Забронировать бесплатную консультацию"
+            }
+            buttons.append({
+                "text": consultation_btn.get(lang, consultation_btn[Language.EN]),
+                "callback_data": "schedule_consultation"
+            })
+        
         return BrainResponse(
             message=ai_response,
             next_state=ConversationState.ENGAGEMENT,
-            buttons=[]
+            buttons=buttons,
+            lead_updates=lead_updates
         )
     
     async def _handle_schedule(self, lang: Language, callback_data: Optional[str], lead: Lead) -> BrainResponse:

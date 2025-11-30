@@ -66,64 +66,151 @@ class TimeoutScheduler:
         logger.info("⏱️ Timeout scheduler stopped")
     
     async def _run_scheduler(self):
-        """Background task that checks for timeouts every minute."""
+        """Background task that runs ghost protocol and appointment reminders."""
         while self.running:
             try:
-                await asyncio.sleep(300)  # Check every 5 minutes (FIX #6: Ghost Protocol)
+                await asyncio.sleep(300)  # Check every 5 minutes
                 
-                # FIX #6: Ghost Protocol - Check for inactive users and send follow-ups
-                logger.info("🔍 Ghost Protocol: Checking for inactive users...")
+                # TASK 1: Ghost Protocol - Check for inactive users
+                logger.info("👻 Ghost Protocol: Checking for inactive users...")
+                await self._check_ghost_users()
                 
-                # Get all leads from database with ongoing conversations
-                from database import async_session, Lead
-                from sqlalchemy.future import select
-                
-                async with async_session() as session:
-                    result = await session.execute(
-                        select(Lead).where(Lead.conversation_state != ConversationState.COMPLETED)
-                    )
-                    leads = result.scalars().all()
-                    
-                    for lead in leads:
-                        try:
-                            # Get last_interaction from Redis
-                            last_interaction_str = await redis_manager.get(f"user:{lead.id}:last_interaction")
-                            
-                            if last_interaction_str:
-                                last_interaction = datetime.fromisoformat(last_interaction_str)
-                                now = datetime.now()
-                                time_elapsed = now - last_interaction
-                                
-                                # If inactive for 15+ minutes, send follow-up
-                                if time_elapsed > timedelta(minutes=15):
-                                    logger.info(f"📧 Sending follow-up to lead {lead.id} (inactive for {time_elapsed.total_seconds()/60:.0f} min)")
-                                    
-                                    # Get follow-up message for current state
-                                    if lead.conversation_state in FOLLOWUP_MESSAGES:
-                                        followup_msg = FOLLOWUP_MESSAGES[lead.conversation_state].get(
-                                            lead.language or Language.EN,
-                                            FOLLOWUP_MESSAGES[lead.conversation_state][Language.EN]
-                                        )
-                                        
-                                        # Send message
-                                        try:
-                                            await self.bot.send_message(
-                                                chat_id=lead.telegram_id,
-                                                text=followup_msg
-                                            )
-                                            logger.info(f"✅ Follow-up sent to {lead.telegram_id}")
-                                            
-                                            # Reset timer after sending follow-up
-                                            await redis_manager.set(f"user:{lead.id}:last_interaction", now.isoformat())
-                                        except Exception as e:
-                                            logger.warning(f"⚠️ Failed to send follow-up to {lead.telegram_id}: {e}")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Ghost Protocol error for lead {lead.id}: {e}")
+                # TASK 2: Appointment Reminders (every hour only)
+                current_minute = datetime.now().minute
+                if current_minute < 5:  # Run once per hour (first 5 minutes)
+                    logger.info("📅 Checking appointment reminders...")
+                    await self._check_appointment_reminders()
                             
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"❌ Timeout scheduler error: {e}")
+    
+    async def _check_ghost_users(self):
+        """Find leads inactive for 15+ minutes and send follow-up."""
+        try:
+            from database import async_session, Lead
+            from sqlalchemy.future import select
+            
+            async with async_session() as session:
+                # Get all leads not in COMPLETED state
+                result = await session.execute(
+                    select(Lead).where(Lead.conversation_state != ConversationState.COMPLETED)
+                )
+                leads = result.scalars().all()
+                
+                for lead in leads:
+                    if not lead.telegram_chat_id:
+                        continue
+                    
+                    try:
+                        # Get last_interaction from Redis
+                        if redis_manager.redis_client:
+                            last_interaction_str = await redis_manager.redis_client.get(
+                                f"user:{lead.id}:last_interaction"
+                            )
+                            
+                            if last_interaction_str:
+                                last_interaction = datetime.fromisoformat(last_interaction_str.decode() if isinstance(last_interaction_str, bytes) else last_interaction_str)
+                                now = datetime.now()
+                                time_elapsed = now - last_interaction
+                                
+                                # If inactive for 15+ minutes, send follow-up
+                                if time_elapsed > timedelta(minutes=15):
+                                    # Check if already sent follow-up recently
+                                    followup_sent_key = f"user:{lead.id}:followup_sent"
+                                    already_sent = await redis_manager.redis_client.get(followup_sent_key)
+                                    
+                                    if not already_sent:
+                                        logger.info(f"📧 Sending follow-up to lead {lead.id} (inactive for {time_elapsed.total_seconds()/60:.0f} min)")
+                                        
+                                        # Build follow-up message with new property hook
+                                        followup_msg = {
+                                            Language.EN: f"Are you still interested? I found a new unit matching your budget. Want to see it? 🏠",
+                                            Language.FA: f"هنوز علاقه‌مندی؟ من یک واحد جدید با بودجه‌ات پیدا کردم. می‌خوای ببینی؟ 🏠",
+                                            Language.AR: f"هل ما زلت مهتمًا؟ وجدت وحدة جديدة تناسب ميزانيتك. هل تريد أن تراها؟ 🏠",
+                                            Language.RU: f"Вы все еще заинтересованы? Я нашел новую квартиру по вашему бюджету. Хотите посмотреть? 🏠"
+                                        }
+                                        
+                                        msg = followup_msg.get(lead.language or Language.EN, followup_msg[Language.EN])
+                                        
+                                        # Send message
+                                        try:
+                                            await self.bot.send_message(
+                                                chat_id=lead.telegram_chat_id,
+                                                text=msg
+                                            )
+                                            logger.info(f"✅ Follow-up sent to {lead.telegram_chat_id}")
+                                            
+                                            # Mark as sent (expires in 24 hours)
+                                            await redis_manager.redis_client.setex(
+                                                followup_sent_key,
+                                                86400,  # 24 hours
+                                                "1"
+                                            )
+                                        except Exception as e:
+                                            logger.warning(f"⚠️ Failed to send follow-up to {lead.telegram_chat_id}: {e}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Ghost Protocol error for lead {lead.id}: {e}")
+        except Exception as e:
+            logger.error(f"❌ Ghost Protocol check failed: {e}")
+    
+    async def _check_appointment_reminders(self):
+        """Find appointments scheduled for Now + 24h and send reminder."""
+        try:
+            from database import async_session, Appointment, Lead
+            from sqlalchemy.future import select
+            
+            async with async_session() as session:
+                # Get appointments scheduled for tomorrow (24h from now)
+                tomorrow = datetime.now() + timedelta(hours=24)
+                tomorrow_start = tomorrow.replace(minute=0, second=0, microsecond=0)
+                tomorrow_end = tomorrow_start + timedelta(hours=1)
+                
+                result = await session.execute(
+                    select(Appointment).where(
+                        Appointment.scheduled_time >= tomorrow_start,
+                        Appointment.scheduled_time < tomorrow_end,
+                        Appointment.status == "confirmed"
+                    )
+                )
+                appointments = result.scalars().all()
+                
+                for appt in appointments:
+                    try:
+                        # Get lead
+                        lead_result = await session.execute(
+                            select(Lead).where(Lead.id == appt.lead_id)
+                        )
+                        lead = lead_result.scalars().first()
+                        
+                        if not lead or not lead.telegram_chat_id:
+                            continue
+                        
+                        # Format time
+                        time_str = appt.scheduled_time.strftime("%I:%M %p")
+                        
+                        # Build reminder message
+                        reminder_msg = {
+                            Language.EN: f"⏰ Reminder: Your consultation is tomorrow at {time_str}. Looking forward to meeting you!",
+                            Language.FA: f"⏰ یادآوری: مشاوره شما فردا ساعت {time_str} است. منتظر دیدارتان هستم!",
+                            Language.AR: f"⏰ تذكير: استشارتك غدًا في {time_str}. نتطلع للقائك!",
+                            Language.RU: f"⏰ Напоминание: Ваша консультация завтра в {time_str}. С нетерпением жду встречи!"
+                        }
+                        
+                        msg = reminder_msg.get(lead.language or Language.EN, reminder_msg[Language.EN])
+                        
+                        # Send reminder
+                        await self.bot.send_message(
+                            chat_id=lead.telegram_chat_id,
+                            text=msg
+                        )
+                        logger.info(f"✅ Appointment reminder sent to {lead.telegram_chat_id} for appt {appt.id}")
+                        
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to send appointment reminder: {e}")
+        except Exception as e:
+            logger.error(f"❌ Appointment reminder check failed: {e}")
     
     async def set_timeout(
         self,

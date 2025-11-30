@@ -428,10 +428,13 @@ class TelegramBotHandler:
                 lead = fresh_lead
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
         
-        # FIX #6: Ghost Protocol - Update last interaction timestamp
+        # CRITICAL: Ghost Protocol - Update last interaction timestamp on EVERY message
         if redis_manager.redis_client:
-            await redis_manager.redis_client.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
-            logger.info(f"⏰ Updated last_interaction for user {lead.id}")
+            timestamp = datetime.now().isoformat()
+            await redis_manager.redis_client.set(f"user:{lead.id}:last_interaction", timestamp)
+            logger.info(f"⏰ Updated last_interaction for user {lead.id} at {timestamp}")
+        else:
+            logger.warning(f"⚠️ Redis not available - cannot update last_interaction for user {lead.id}")
         
         # CRITICAL: Acquire lock to prevent race conditions (2 messages in 1 second)
         if telegram_id not in user_locks:
