@@ -702,27 +702,35 @@ AGENT'S FAQ & POLICIES:
                 temp_image_path = temp_image.name
             
             try:
-                # Upload image to Gemini
-                image_file = genai.upload_file(path=temp_image_path)
+                # Upload image to Gemini (run in thread pool since it's blocking)
+                loop = asyncio.get_event_loop()
                 
-                # Wait for processing with timeout
-                import time
+                # Set MIME type based on file extension
+                mime_type = f"image/{file_extension}"
+                logger.info(f"📤 Uploading image {temp_image_path} with MIME type: {mime_type}")
+                
+                image_file = await loop.run_in_executor(
+                    None,
+                    lambda: genai.upload_file(temp_image_path, mime_type=mime_type)
+                )
+                
+                # Wait for processing with timeout (non-blocking)
                 max_wait = 30  # 30 seconds timeout
                 elapsed = 0
                 while image_file.state.name == "PROCESSING" and elapsed < max_wait:
-                    time.sleep(1)
+                    await asyncio.sleep(1)  # Non-blocking sleep
                     elapsed += 1
-                    image_file = genai.get_file(image_file.name)
+                    image_file = await loop.run_in_executor(None, genai.get_file, image_file.name)
                 
                 if image_file.state.name == "PROCESSING":
-                    genai.delete_file(image_file.name)
+                    await loop.run_in_executor(None, genai.delete_file, image_file.name)
                     return "Image processing timeout - file too large or complex", []
                 
                 if image_file.state.name == "FAILED":
-                    genai.delete_file(image_file.name)
+                    await loop.run_in_executor(None, genai.delete_file, image_file.name)
                     return "Could not process image file", []
                 
-                # Analyze image and extract features
+                # Analyze image and extract features with retry logic
                 prompt = """
                 Analyze this property image and extract visual features.
                 
@@ -743,10 +751,18 @@ AGENT'S FAQ & POLICIES:
                 Return ONLY valid JSON.
                 """
                 
-                response = self.model.generate_content([image_file, prompt])
+                async def call_gemini_image():
+                    return self.model.generate_content([image_file, prompt])
+                
+                try:
+                    response = await retry_with_backoff(call_gemini_image)
+                except Exception as e:
+                    logger.error(f"❌ Gemini image API failed after retries: {e}")
+                    await loop.run_in_executor(None, genai.delete_file, image_file.name)
+                    return "Image processing temporarily unavailable. Please try again.", []
                 
                 # Clean up
-                genai.delete_file(image_file.name)
+                await loop.run_in_executor(None, genai.delete_file, image_file.name)
                 
                 # Parse JSON response
                 response_text = response.text.strip()
