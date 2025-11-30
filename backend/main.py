@@ -39,7 +39,8 @@ from database import (
     LeadStatus, TransactionType, PropertyType, PaymentMethod, Purpose,
     AppointmentType, DayOfWeek, Language, ConversationState, SubscriptionStatus,
     get_leads_needing_reminder, get_appointments_needing_reminder,
-    get_available_slots, book_slot, create_appointment, update_lead
+    get_available_slots, book_slot, create_appointment, update_lead,
+    get_db
 )
 from telegram_bot import bot_manager, handle_telegram_webhook
 from whatsapp_bot import whatsapp_bot_manager, verify_webhook as verify_whatsapp_webhook
@@ -534,14 +535,6 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(broadcast.router)
 app.include_router(catalogs.router)
 app.include_router(lotteries.router)
-
-
-# ==================== DEPENDENCY ====================
-
-async def get_db() -> AsyncSession:
-    """Get database session."""
-    async with async_session() as session:
-        yield session
 
 
 # ==================== HEALTH CHECK ====================

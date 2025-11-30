@@ -860,3 +860,11 @@ async def get_tenant_context_for_ai(tenant_id: int, lead: Optional["Lead"] = Non
         }
         
         return context
+
+
+# ==================== DEPENDENCY ====================
+
+async def get_db() -> AsyncSession:
+    """Get database session for FastAPI dependency injection."""
+    async with async_session() as session:
+        yield session
