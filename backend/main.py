@@ -45,6 +45,9 @@ from telegram_bot import bot_manager, handle_telegram_webhook
 from whatsapp_bot import whatsapp_bot_manager, verify_webhook as verify_whatsapp_webhook
 from roi_engine import generate_roi_pdf
 
+# Import API routers
+from api import broadcast, catalogs, lotteries
+
 
 # ==================== AUTH CONFIG ====================
 
@@ -526,6 +529,11 @@ app.add_middleware(
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# Include API routers
+app.include_router(broadcast.router)
+app.include_router(catalogs.router)
+app.include_router(lotteries.router)
 
 
 # ==================== DEPENDENCY ====================
