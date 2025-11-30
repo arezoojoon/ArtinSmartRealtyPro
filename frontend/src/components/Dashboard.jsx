@@ -663,6 +663,9 @@ const Dashboard = ({ user, onLogout }) => {
                         <WeeklyCalendar
                             slots={slots}
                             onAddSlot={handleAddSlot}
+                        />
+                    )}
+
                     {/* Properties Tab */}
                     {activeTab === 'properties' && (
                         <PropertiesManagement tenantId={tenantId} />
