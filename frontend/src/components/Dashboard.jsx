@@ -25,11 +25,20 @@ import {
     Home,
     X,
     Download,
-    LogOut
+    LogOut,
+    QrCode,
+    Send,
+    BookOpen,
+    Gift
 } from 'lucide-react';
 import Logo from './Logo';
 import SettingsPage from './Settings';
 import PropertiesManagement from './PropertiesManagement';
+import Analytics from './Analytics';
+import QRGenerator from './QRGenerator';
+import Broadcast from './Broadcast';
+import Catalogs from './Catalogs';
+import Lottery from './Lottery';
 
 // ==================== CONSTANTS ====================
 
@@ -469,6 +478,10 @@ const Dashboard = ({ user, onLogout }) => {
         { id: 'calendar', icon: CalendarDays, label: 'Calendar' },
         { id: 'properties', icon: Building2, label: 'Properties' },
         { id: 'analytics', icon: BarChart3, label: 'Analytics' },
+        { id: 'qr', icon: QrCode, label: 'QR Generator' },
+        { id: 'broadcast', icon: Send, label: 'Broadcast' },
+        { id: 'catalogs', icon: BookOpen, label: 'Catalogs' },
+        { id: 'lottery', icon: Gift, label: 'Lottery' },
         { id: 'settings', icon: Settings, label: 'Settings' },
     ];
 
@@ -650,10 +663,6 @@ const Dashboard = ({ user, onLogout }) => {
                         <WeeklyCalendar
                             slots={slots}
                             onAddSlot={handleAddSlot}
-                            onDeleteSlot={handleDeleteSlot}
-                        />
-                    )}
-
                     {/* Properties Tab */}
                     {activeTab === 'properties' && (
                         <PropertiesManagement tenantId={tenantId} />
@@ -664,13 +673,30 @@ const Dashboard = ({ user, onLogout }) => {
                         <SettingsPage tenantId={tenantId} token={token} />
                     )}
 
-                    {/* Placeholder for Analytics tab */}
+                    {/* Analytics Tab */}
                     {activeTab === 'analytics' && (
-                        <div className="glass-card rounded-xl h-96 flex items-center justify-center">
-                            <div className="text-center">
-                                <div className="text-5xl mb-4">📊</div>
-                                <p className="text-gray-400">
-                                    Analytics module coming soon!
+                        <Analytics tenantId={tenantId} />
+                    )}
+
+                    {/* QR Generator Tab */}
+                    {activeTab === 'qr' && (
+                        <QRGenerator tenantId={tenantId} />
+                    )}
+
+                    {/* Broadcast Tab */}
+                    {activeTab === 'broadcast' && (
+                        <Broadcast tenantId={tenantId} />
+                    )}
+
+                    {/* Catalogs Tab */}
+                    {activeTab === 'catalogs' && (
+                        <Catalogs tenantId={tenantId} />
+                    )}
+
+                    {/* Lottery Tab */}
+                    {activeTab === 'lottery' && (
+                        <Lottery tenantId={tenantId} />
+                    )}              Analytics module coming soon!
                                 </p>
                             </div>
                         </div>
