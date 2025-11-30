@@ -258,7 +258,13 @@ TRANSLATIONS = {
         Language.EN: "🛂 Residency/Visa",
         Language.FA: "🛂 اقامت/ویزا",
         Language.AR: "🛂 إقامة/تأشيرة",
-        Language.RU: "🛂 Резidency/Виза"
+        Language.RU: "🛂 Резидency/Виза"
+    },
+    "btn_schedule_consultation": {
+        Language.EN: "Schedule Consultation",
+        Language.FA: "رزرو مشاوره",
+        Language.AR: "حجز استشارة",
+        Language.RU: "Записаться на консультацию"
     },
     "voice_acknowledged": {
         Language.EN: "🎤 Got it! I heard you say:\n\"{transcript}\"\n\nLet me process that...",
