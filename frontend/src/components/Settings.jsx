@@ -1,5 +1,5 @@
 /**
- * ArtinSmartRealty V2 - Settings Page
+ * Artin Smart Realty V2 - Settings Page
  * Agent settings for Telegram/WhatsApp bot configuration
  */
 

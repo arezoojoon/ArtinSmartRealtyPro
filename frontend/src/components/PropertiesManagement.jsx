@@ -1,5 +1,5 @@
 /**
- * ArtinSmartRealty V2 - Properties Management Component
+ * Artin Smart Realty V2 - Properties Management Component
  * Manage tenant's property inventory
  */
 

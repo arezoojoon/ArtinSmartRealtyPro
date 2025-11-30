@@ -1,5 +1,5 @@
 /**
- * ArtinSmartRealty V2 - Super Admin Dashboard
+ * Artin Smart Realty V2 - Super Admin Dashboard
  * Platform owner dashboard for managing all tenants
  */
 

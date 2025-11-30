@@ -1,10 +1,11 @@
 /**
- * ArtinSmartRealty V2 - Login & Register Page
+ * Artin Smart Realty V2 - Login & Register Page
  * Authentication for Tenant (Agent) Dashboard
  */
 
 import React, { useState } from 'react';
 import { Building2, Eye, EyeOff, ArrowRight, UserPlus, LogIn } from 'lucide-react';
+import Logo from './Logo';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -136,8 +137,8 @@ const Login = ({ onLogin }) => {
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-gold-500 to-gold-600 rounded-xl mb-4">
                         <Building2 className="text-navy-900" size={32} />
                     </div>
-                    <h1 className="text-2xl font-bold text-white">ArtinSmartRealty</h1>
-                    <p className="text-gray-400 text-sm mt-1">Real Estate SaaS Platform</p>
+                    <h1 className="text-2xl font-bold text-white">Artin Smart Realty</h1>
+                    <p className="text-gray-400 text-sm mt-1">Enterprise Real Estate Management Platform</p>
                 </div>
                 
                 {/* Card */}
@@ -378,12 +379,25 @@ const Login = ({ onLogin }) => {
                             </button>
                         </form>
                     )}
+
+                    {/* Footer */}
+                    <div className="mt-6 pt-6 border-t border-white/10 text-center">
+                      <p className="text-sm text-white/50">
+                        Real Estate Platform v2.0
+                      </p>
+                      <p className="text-xs text-white/30 mt-1">
+                        Powered by Artin Smart Agent
+                      </p>
+                    </div>
                 </div>
                 
-                {/* Footer */}
-                <p className="text-center text-gray-600 text-xs mt-8">
-                    © 2024 ArtinSmartRealty. All rights reserved.
-                </p>
+                {/* Demo Credentials */}
+                <div className="mt-6 glass-card rounded-xl p-4 text-center">
+                  <p className="text-sm text-white/50 mb-2">Registered in Dubai as AMHR Marketing Management LLC.</p>
+                  <p className="text-xs text-gold-400 font-mono">
+                    Serving businesses in UAE, Canada and beyond.
+                  </p>
+                </div>
             </div>
         </div>
     );

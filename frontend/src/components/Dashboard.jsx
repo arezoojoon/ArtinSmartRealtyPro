@@ -1,5 +1,5 @@
 /**
- * ArtinSmartRealty V2 - Super Dashboard
+ * Artin Smart Realty V2 - Super Dashboard
  * Modern B2B SaaS Dashboard for Real Estate Agents
  * Dark Mode Theme with Luxury Aesthetics & Glassmorphism
  */
@@ -488,8 +488,8 @@ const Dashboard = ({ user, onLogout }) => {
             <aside className="w-64 bg-navy-900 border-r border-white/10 p-4 flex flex-col">
                 {/* Logo */}
                 <div className="mb-8 pb-6 border-b border-white/10">
-                    <h1 className="text-gold-500 text-xl font-bold">ArtinSmartRealty</h1>
-                    <p className="text-gray-500 text-xs mt-1">Real Estate SaaS v2.0</p>
+                    <h1 className="text-gold-500 text-xl font-bold">Artin Smart Realty</h1>
+                    <p className="text-gray-500 text-xs mt-1">Real Estate Platform v2.0</p>
                 </div>
 
                 {/* Navigation */}
