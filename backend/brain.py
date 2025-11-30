@@ -1766,7 +1766,7 @@ AGENT'S FAQ & POLICIES:
             consultation_keywords = ["consultation", "call", "مشاوره", "تماس", "speak", "agent", "مشاور"]
             if any(kw in message_lower for kw in consultation_keywords):
                 logger.info(f"🔔 Consultation request detected from lead {lead.id}")
-                consultation_msg = MESSAGES["phone_request"]
+                consultation_msg = TRANSLATIONS["phone_request"]
                 lead_updates["consultation_requested"] = True
                 return BrainResponse(
                     message=consultation_msg.get(lang, consultation_msg[Language.EN]),
@@ -1864,7 +1864,7 @@ AGENT'S FAQ & POLICIES:
         
         elif callback_data == "schedule_consultation":
             # FIX #5: User wants to book consultation - request phone
-            consultation_msg = MESSAGES["phone_request"]
+            consultation_msg = TRANSLATIONS["phone_request"]
             
             lead_updates["consultation_requested"] = True
             return BrainResponse(
@@ -1929,7 +1929,7 @@ AGENT'S FAQ & POLICIES:
         """
         # If user clicked "Yes, send PDF"
         if callback_data == "pdf_yes":
-            phone_request = MESSAGES["phone_request"]
+            phone_request = TRANSLATIONS["phone_request"]
             
             return BrainResponse(
                 message=phone_request.get(lang, phone_request[Language.EN]),

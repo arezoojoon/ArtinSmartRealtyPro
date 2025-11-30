@@ -699,10 +699,6 @@ const Dashboard = ({ user, onLogout }) => {
                     {/* Lottery Tab */}
                     {activeTab === 'lottery' && (
                         <Lottery tenantId={tenantId} />
-                    )}              Analytics module coming soon!
-                                </p>
-                            </div>
-                        </div>
                     )}
                 </main>
             </div>
