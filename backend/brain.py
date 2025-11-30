@@ -546,35 +546,48 @@ AGENT'S FAQ & POLICIES:
                 temp_audio.write(audio_data)
                 temp_audio_path = temp_audio.name
             
-            # Convert audio to MP3 for Gemini (supports: mp3, wav, aiff, aac, ogg, flac)
-            # But Telegram's .oga format needs explicit MIME type, so convert to MP3
+            # Convert audio to MP3 for Gemini (CRITICAL: OGA files need conversion)
+            # Gemini doesn't recognize .oga MIME type without explicit declaration
             converted_path = None
             try:
                 from pydub import AudioSegment
                 logger.info(f"🔄 Converting audio from {file_extension} to mp3 for Gemini compatibility")
                 
-                # Load audio file
-                audio = AudioSegment.from_file(temp_audio_path, format=file_extension)
+                # Load audio file (pydub auto-detects format for .oga/.ogg)
+                if file_extension in ['oga', 'ogg']:
+                    audio = AudioSegment.from_ogg(temp_audio_path)
+                else:
+                    audio = AudioSegment.from_file(temp_audio_path, format=file_extension)
                 
-                # Convert to MP3
+                # Convert to MP3 with good quality
                 converted_path = temp_audio_path.replace(f".{file_extension}", ".mp3")
-                audio.export(converted_path, format="mp3", bitrate="64k")
+                audio.export(converted_path, format="mp3", bitrate="128k", parameters=["-ac", "1"])  # Mono for smaller size
                 
                 # Use converted file for upload
                 upload_path = converted_path
-                logger.info(f"✅ Audio converted successfully to MP3")
-            except ImportError:
-                logger.warning("⚠️ pydub not available, uploading original audio (may fail)")
+                logger.info(f"✅ Audio converted successfully: {temp_audio_path} → {converted_path}")
+            except ImportError as imp_err:
+                logger.error(f"❌ pydub not installed: {imp_err}")
+                logger.error("Install with: pip install pydub")
                 upload_path = temp_audio_path
             except Exception as conv_error:
-                logger.error(f"⚠️ Audio conversion failed: {conv_error}, uploading original")
+                logger.error(f"❌ Audio conversion failed: {conv_error}")
+                logger.error(f"Original file: {temp_audio_path}, Extension: {file_extension}")
                 upload_path = temp_audio_path
             
             try:
-                # Upload audio file to Gemini (run in thread pool since it's blocking)
+                # Upload audio file to Gemini with explicit MIME type (run in thread pool since it's blocking)
                 import asyncio
                 loop = asyncio.get_event_loop()
-                audio_file = await loop.run_in_executor(None, genai.upload_file, upload_path)
+                
+                # Set MIME type based on file extension
+                mime_type = "audio/mpeg" if upload_path.endswith(".mp3") else f"audio/{file_extension}"
+                logger.info(f"📤 Uploading {upload_path} with MIME type: {mime_type}")
+                
+                audio_file = await loop.run_in_executor(
+                    None, 
+                    lambda: genai.upload_file(upload_path, mime_type=mime_type)
+                )
                 
                 # Wait for processing with timeout (non-blocking)
                 import time
