@@ -34,7 +34,7 @@ const Logo = ({ size = 'md', variant = 'full' }) => {
     return (
       <div>
         <h1 className={`${currentSize.text} font-bold text-gold-500`}>Artin Smart Realty</h1>
-        <p className="text-gray-400 text-xs mt-1">Powered by Artin Smart Agent</p>
+        <p className="text-gray-400 text-xs mt-1">Real Estate Platform v2.0</p>
       </div>
     );
   }

@@ -27,6 +27,7 @@ import {
     Download,
     LogOut
 } from 'lucide-react';
+import Logo from './Logo';
 import SettingsPage from './Settings';
 import PropertiesManagement from './PropertiesManagement';
 
@@ -488,8 +489,7 @@ const Dashboard = ({ user, onLogout }) => {
             <aside className="w-64 bg-navy-900 border-r border-white/10 p-4 flex flex-col">
                 {/* Logo */}
                 <div className="mb-8 pb-6 border-b border-white/10">
-                    <h1 className="text-gold-500 text-xl font-bold">Artin Smart Realty</h1>
-                    <p className="text-gray-500 text-xs mt-1">Real Estate Platform v2.0</p>
+                    <Logo size="sm" variant="text" />
                 </div>
 
                 {/* Navigation */}
