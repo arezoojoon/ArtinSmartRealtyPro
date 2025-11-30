@@ -403,19 +403,31 @@ class Brain:
         self.agent_name = tenant.name or "ArtinSmartRealty"
         self.tenant_context = None  # Will be loaded on demand
         
-        # Initialize Gemini model - use gemini-2.5-flash (latest stable model)
+        # Initialize Gemini model - use gemini-2.0-flash-exp (experimental but supports multimodal)
         if GEMINI_API_KEY:
-            self.model = genai.GenerativeModel('gemini-2.5-flash')
-            logger.info("✅ Initialized Gemini model: gemini-2.5-flash (latest stable)")
-            
-            # FIX #11: Validate API access at startup
             try:
-                # Test simple generation to ensure API is working
-                test_response = self.model.generate_content("Test connection")
-                logger.info("✅ Gemini API validation successful - model is accessible")
-            except Exception as e:
-                logger.error(f"❌ GEMINI API VALIDATION FAILED: {type(e).__name__}: {str(e)}")
-                logger.error("⚠️ Bot will fail to generate AI responses - check API key and quotas!")
+                self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                logger.info("✅ Initialized Gemini model: gemini-2.0-flash-exp (multimodal support)")
+            except Exception as model_init_error:
+                logger.error(f"❌ Failed to initialize gemini-2.0-flash-exp: {model_init_error}")
+                logger.info("🔄 Falling back to gemini-1.5-flash...")
+                try:
+                    self.model = genai.GenerativeModel('gemini-1.5-flash')
+                    logger.info("✅ Initialized fallback model: gemini-1.5-flash")
+                except Exception as fallback_error:
+                    logger.error(f"❌ Fallback model also failed: {fallback_error}")
+                    self.model = None
+            
+            # FIX #11: Validate API access at startup (only if model initialized)
+            if self.model:
+                try:
+                    # Test simple generation to ensure API is working
+                    test_response = self.model.generate_content("Test connection")
+                    logger.info("✅ Gemini API validation successful - model is accessible")
+                except Exception as e:
+                    logger.error(f"❌ GEMINI API VALIDATION FAILED: {type(e).__name__}: {str(e)}")
+                    logger.error("⚠️ Bot will fail to generate AI responses - check API key and quotas!")
+                    self.model = None
         else:
             self.model = None
             logger.error("❌ GEMINI_API_KEY not set!")
@@ -590,7 +602,6 @@ AGENT'S FAQ & POLICIES:
                 )
                 
                 # Wait for processing with timeout (non-blocking)
-                import time
                 max_wait = 30  # 30 seconds timeout
                 elapsed = 0
                 while audio_file.state.name == "PROCESSING" and elapsed < max_wait:
