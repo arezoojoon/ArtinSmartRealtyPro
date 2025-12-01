@@ -14,7 +14,7 @@ import jwt
 
 from database import (
     async_session, Tenant, Lead, ConversationState,
-    LeadStatus, get_tenant_by_id
+    LeadStatus, SubscriptionStatus
 )
 
 router = APIRouter(prefix="/admin", tags=["Admin - God Mode"])
@@ -90,11 +90,12 @@ async def get_tenant_details(
     current_admin: int = Depends(get_current_super_admin)
 ):
     """Get detailed tenant information"""
-    tenant = await get_tenant_by_id(tenant_id)
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    
     async with async_session() as session:
+        # Get tenant
+        result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
         # Get conversion stats
         total_leads = await session.execute(
             select(func.count(Lead.id)).where(Lead.tenant_id == tenant_id)
@@ -105,15 +106,18 @@ async def get_tenant_details(
             )
         )
         
+        total_leads_count = total_leads.scalar()
+        qualified_leads_count = qualified_leads.scalar()
+        
         return {
             "id": tenant.id,
-            "name": tenant.name,
-            "domain": tenant.domain,
-            "status": tenant.status,
-            "plan": tenant.plan,
-            "total_leads": total_leads.scalar(),
-            "qualified_leads": qualified_leads.scalar(),
-            "conversion_rate": (qualified_leads.scalar() / total_leads.scalar() * 100) if total_leads.scalar() > 0 else 0,
+            "name": tenant.name or tenant.company_name,
+            "email": tenant.email,
+            "company_name": tenant.company_name,
+            "subscription_status": tenant.subscription_status.value if tenant.subscription_status else "trial",
+            "total_leads": total_leads_count,
+            "qualified_leads": qualified_leads_count,
+            "conversion_rate": (qualified_leads_count / total_leads_count * 100) if total_leads_count > 0 else 0,
             "created_at": tenant.created_at.isoformat()
         }
 
@@ -131,10 +135,12 @@ async def suspend_tenant(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
         
-        tenant.status = "suspended"
+        tenant.subscription_status = SubscriptionStatus.SUSPENDED
+        tenant.is_active = False
         await session.commit()
         
-        return {"message": f"✅ Tenant {tenant.name} suspended", "tenant_id": tenant_id}
+        tenant_name = tenant.name or tenant.company_name
+        return {"message": f"✅ Tenant {tenant_name} suspended", "tenant_id": tenant_id}
 
 
 @router.post("/tenants/{tenant_id}/activate")
@@ -150,21 +156,24 @@ async def activate_tenant(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
         
-        tenant.status = "active"
+        tenant.subscription_status = SubscriptionStatus.ACTIVE
+        tenant.is_active = True
         await session.commit()
         
-        return {"message": f"✅ Tenant {tenant.name} activated", "tenant_id": tenant_id}
+        tenant_name = tenant.name or tenant.company_name
+        return {"message": f"✅ Tenant {tenant_name} activated", "tenant_id": tenant_id}
 
 
-@router.put("/tenants/{tenant_id}/plan")
-async def update_tenant_plan(
+@router.put("/tenants/{tenant_id}/subscription")
+async def update_tenant_subscription(
     tenant_id: int,
-    plan: str,
+    status: str,
     current_admin: int = Depends(get_current_super_admin)
 ):
-    """Update tenant subscription plan"""
-    if plan not in ["bronze", "silver", "gold", "platinum"]:
-        raise HTTPException(status_code=400, detail="Invalid plan")
+    """Update tenant subscription status"""
+    valid_statuses = ["trial", "active", "suspended", "expired"]
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
     
     async with async_session() as session:
         result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
@@ -173,10 +182,10 @@ async def update_tenant_plan(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
         
-        tenant.plan = plan
+        tenant.subscription_status = SubscriptionStatus[status.upper()]
         await session.commit()
         
-        return {"message": f"✅ Plan updated to {plan}", "tenant_id": tenant_id}
+        return {"message": f"✅ Subscription updated to {status}", "tenant_id": tenant_id}
 
 
 @router.post("/tenants/{tenant_id}/impersonate")
@@ -185,9 +194,14 @@ async def impersonate_tenant(
     current_admin: int = Depends(get_current_super_admin)
 ):
     """Impersonate tenant for debugging/support"""
-    tenant = await get_tenant_by_id(tenant_id)
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    async with async_session() as session:
+        result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Extract tenant data before session closes
+        tenant_name = tenant.name or tenant.company_name or tenant.email
     
     # Generate temporary impersonation token
     impersonate_token = secrets.token_urlsafe(32)
@@ -195,9 +209,9 @@ async def impersonate_tenant(
     # TODO: Store impersonation session in Redis with TTL
     
     return {
-        "message": f"✅ Impersonating {tenant.name}",
+        "message": f"✅ Impersonating {tenant_name}",
         "tenant_id": tenant_id,
-        "tenant_name": tenant.name,
+        "tenant_name": tenant_name,
         "impersonate_token": impersonate_token
     }
 
@@ -263,17 +277,17 @@ async def get_monthly_recurring_revenue(
 ):
     """Get MRR (Monthly Recurring Revenue) analytics"""
     async with async_session() as session:
-        # Count active tenants by plan
+        # Count active tenants by subscription status
         result = await session.execute(
-            select(Tenant.plan, func.count(Tenant.id))
-            .where(Tenant.status == "active")
-            .group_by(Tenant.plan)
+            select(Tenant.subscription_status, func.count(Tenant.id))
+            .where(Tenant.subscription_status == SubscriptionStatus.ACTIVE)
+            .group_by(Tenant.subscription_status)
         )
-        plan_counts = dict(result.fetchall())
+        status_counts = dict(result.fetchall())
         
-        # Calculate MRR (mock pricing)
-        plan_prices = {"bronze": 99, "silver": 299, "gold": 599, "platinum": 1299}
-        total_mrr = sum(plan_counts.get(plan, 0) * price for plan, price in plan_prices.items())
+        # Calculate MRR (mock pricing - $299/month per active tenant)
+        active_count = sum(status_counts.values())
+        total_mrr = active_count * 299
         
         # Mock monthly data for chart
         monthly_data = [
@@ -284,7 +298,7 @@ async def get_monthly_recurring_revenue(
         
         return {
             "total_mrr": total_mrr,
-            "plan_breakdown": {plan: count * plan_prices.get(plan, 0) for plan, count in plan_counts.items()},
+            "active_tenants": active_count,
             "monthly_data": monthly_data
         }
 
