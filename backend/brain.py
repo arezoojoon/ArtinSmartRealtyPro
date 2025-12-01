@@ -2594,8 +2594,7 @@ AGENT'S FAQ & POLICIES:
                 slot_texts.append(f"• {day} at {time_str}")
             
             # Use scarcity message instead of plain schedule
-            scarcity_msg = self.get_text("schedule_scarcity", lang).format(
-                agent_name=self.agent_name,
+            scarcity_msg = self.get_text("schedule_scarcity", lang, 
                 slot_count=slot_count,
                 slots="\n".join(slot_texts)
             )
