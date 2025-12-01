@@ -4,26 +4,54 @@ Requires super_admin role for all endpoints
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import func, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from datetime import datetime, timedelta
 import secrets
+import jwt
 
 from database import (
-    async_session, Tenant, Lead, User, ConversationState,
+    async_session, Tenant, Lead, ConversationState,
     LeadStatus, get_tenant_by_id
 )
-from auth import get_current_user, require_role
 
 router = APIRouter(prefix="/admin", tags=["Admin - God Mode"])
+security = HTTPBearer()
+
+# JWT Configuration
+SECRET_KEY = "your-secret-key-here-change-in-production"
+ALGORITHM = "HS256"
+
+def decode_jwt_token(token: str) -> dict:
+    """Decode and verify JWT token."""
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_super_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> int:
+    """Verify that the current user is a Super Admin (tenant_id=0)."""
+    payload = decode_jwt_token(credentials.credentials)
+    tenant_id = payload.get("tenant_id")
+    
+    if tenant_id != 0:
+        raise HTTPException(
+            status_code=403, 
+            detail="Super Admin access required"
+        )
+    
+    return tenant_id
 
 
 # ==================== TENANT MANAGEMENT ====================
 
 @router.get("/tenants")
 async def get_all_tenants(
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Get list of all tenants with stats"""
     async with async_session() as session:
@@ -39,16 +67,8 @@ async def get_all_tenants(
             )
             leads_count = leads_result.scalar()
             
-            # Count agents
-            agents_result = await session.execute(
-                select(func.count(User.id)).where(
-                    and_(User.tenant_id == tenant.id, User.role == "agent")
-                )
-            )
-            agents_count = agents_result.scalar()
-            
-            # Token usage (mock - implement actual tracking)
-            token_usage = 0  # TODO: Implement from usage tracking table
+            # Agents count - simplified (no User table, set to 0 for now)
+            agents_count = 0  # TODO: Implement agents table if needed
             
             tenant_list.append({
                 "id": tenant.id,
@@ -67,7 +87,7 @@ async def get_all_tenants(
 @router.get("/tenants/{tenant_id}")
 async def get_tenant_details(
     tenant_id: int,
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Get detailed tenant information"""
     tenant = await get_tenant_by_id(tenant_id)
@@ -101,7 +121,7 @@ async def get_tenant_details(
 @router.post("/tenants/{tenant_id}/suspend")
 async def suspend_tenant(
     tenant_id: int,
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """🔴 KILL SWITCH - Suspend a tenant immediately"""
     async with async_session() as session:
@@ -120,7 +140,7 @@ async def suspend_tenant(
 @router.post("/tenants/{tenant_id}/activate")
 async def activate_tenant(
     tenant_id: int,
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Activate a suspended tenant"""
     async with async_session() as session:
@@ -140,7 +160,7 @@ async def activate_tenant(
 async def update_tenant_plan(
     tenant_id: int,
     plan: str,
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Update tenant subscription plan"""
     if plan not in ["bronze", "silver", "gold", "platinum"]:
@@ -162,7 +182,7 @@ async def update_tenant_plan(
 @router.post("/tenants/{tenant_id}/impersonate")
 async def impersonate_tenant(
     tenant_id: int,
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Impersonate tenant for debugging/support"""
     tenant = await get_tenant_by_id(tenant_id)
@@ -188,7 +208,7 @@ async def impersonate_tenant(
 async def get_token_usage(
     tenant_id: int,
     period: str = "30d",
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Get AI token usage for a tenant"""
     # TODO: Implement actual token usage tracking
@@ -212,7 +232,7 @@ async def get_token_usage(
 @router.get("/monitoring/errors")
 async def get_system_errors(
     limit: int = 100,
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Get system errors and exceptions"""
     # TODO: Implement error logging table
@@ -221,7 +241,7 @@ async def get_system_errors(
 
 @router.get("/monitoring/servers")
 async def get_server_status(
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Get server health metrics"""
     # TODO: Implement actual server monitoring
@@ -239,7 +259,7 @@ async def get_server_status(
 
 @router.get("/billing/mrr")
 async def get_monthly_recurring_revenue(
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Get MRR (Monthly Recurring Revenue) analytics"""
     async with async_session() as session:
@@ -272,7 +292,7 @@ async def get_monthly_recurring_revenue(
 @router.get("/billing/invoices")
 async def get_invoices(
     page: int = 1,
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Get billing invoices"""
     # TODO: Implement Invoice table
@@ -283,7 +303,7 @@ async def get_invoices(
 async def generate_license_key(
     tenant_id: int,
     plan: str,
-    current_user: User = Depends(require_role("super_admin"))
+    current_admin: int = Depends(get_current_super_admin)
 ):
     """Generate lifetime license key for a tenant"""
     license_key = f"ARTIN-{plan.upper()}-{secrets.token_hex(8).upper()}"
