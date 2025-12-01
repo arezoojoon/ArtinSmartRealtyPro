@@ -1,37 +1,23 @@
 /**
  * Artin Smart Realty V2 - Super Dashboard
- * Modern B2B SaaS Dashboard for Real Estate Agents
- * Dark Mode Theme with Luxury Aesthetics & Glassmorphism
+ * Modern B2B SaaS Dashboard with Glassmorphism Design System
+ * Refactored with Layout, Sidebar, and Header Components
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    LayoutDashboard,
-    KanbanSquare,
-    CalendarDays,
-    Building2,
-    BarChart3,
-    Settings,
-    Search,
-    Bell,
     Users,
     Briefcase,
     Percent,
-    DollarSign,
+    Home,
     Plus,
-    MoreHorizontal,
     TrendingUp,
     TrendingDown,
-    Home,
     X,
     Download,
-    LogOut,
-    QrCode,
-    Send,
-    BookOpen,
-    Gift
+    CalendarDays
 } from 'lucide-react';
-import Logo from './Logo';
+import { Layout } from './Layout';
 import SettingsPage from './Settings';
 import PropertiesManagement from './PropertiesManagement';
 import Analytics from './Analytics';
@@ -123,50 +109,28 @@ const api = {
 
 // ==================== COMPONENTS ====================
 
-// کامپوننت کارت KPI شیشهای
-const KpiCard = ({ title, value, trend, icon: Icon, trendUp }) => (
-    <div className="glass-card rounded-xl p-6 relative overflow-hidden">
-        {/* نوار طلایی بالای کارت */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-gold-500 to-gold-400"></div>
-        
-        <div className="flex justify-between items-start">
-            <div>
-                <p className="text-gray-400 text-sm mb-1">{title}</p>
-                <h3 className="text-3xl font-bold text-white">{value}</h3>
-                {trend && (
-                    <div className={`flex items-center mt-2 text-xs ${trendUp ? 'text-green-400' : 'text-red-400'}`}>
-                        {trendUp ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
-                        <span>{trend}</span>
-                    </div>
-                )}
-            </div>
-            <div className="p-3 bg-navy-800/50 rounded-lg">
-                <Icon className="text-gold-500" size={28} />
-            </div>
+// KPI Card Component with Glassmorphism
+const KpiCard = ({ title, value, trend, icon: Icon, trendUp, color = 'gold' }) => (
+    <div className="glass-card glass-card-hover rounded-2xl p-6 relative overflow-hidden group">
+        <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity bg-${color}-500 rounded-bl-2xl`}>
+            <Icon size={48} />
         </div>
+        <p className="text-gray-400 text-sm uppercase tracking-wide mb-1">{title}</p>
+        <h3 className="text-3xl font-bold text-white mt-2">{value}</h3>
+        {trend && (
+            <div className={`flex items-center mt-3 text-xs ${trendUp ? 'text-green-400' : 'text-red-400'}`}>
+                {trendUp ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
+                <span>{trend}</span>
+            </div>
+        )}
     </div>
 );
 
-// کامپوننت آیتمهای سایدبار
-const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
-    <button
-        onClick={onClick}
-        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-            active 
-                ? 'bg-navy-800 text-gold-500 border-l-2 border-gold-500' 
-                : 'text-gray-400 hover:bg-navy-800/50 hover:text-white'
-        }`}
-    >
-        <Icon size={20} />
-        <span className="font-medium">{label}</span>
-    </button>
-);
-
-// کامپوننت کارت لید در پایپلاین
+// Lead Card Component with Glass Effect
 const LeadCard = ({ name, phone, budget, purpose, onClick }) => (
     <div 
         onClick={onClick}
-        className="bg-navy-900 rounded-lg p-4 cursor-pointer border border-white/5 hover:border-gold-500/30 transition-all hover:-translate-y-1"
+        className="glass-card glass-card-hover rounded-xl p-4 cursor-pointer"
     >
         <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-500 to-gold-600 flex items-center justify-center text-navy-900 font-bold">
@@ -188,16 +152,16 @@ const LeadCard = ({ name, phone, budget, purpose, onClick }) => (
     </div>
 );
 
-// Lead Pipeline Kanban Column
+// Lead Pipeline Kanban Column with Glass Design
 const PipelineColumn = ({ title, leads, colorClass, onLeadClick }) => (
-    <div className="flex-1 min-w-[260px] bg-navy-800/50 rounded-xl p-4">
+    <div className="flex-1 min-w-[280px] glass-card rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold text-sm">{title}</h3>
-            <span className={`${colorClass} text-white text-xs px-3 py-1 rounded-full font-semibold`}>
+            <h3 className="text-white font-semibold">{title}</h3>
+            <span className={`${colorClass} text-white text-xs px-3 py-1.5 rounded-full font-bold`}>
                 {leads.length}
             </span>
         </div>
-        <div className="space-y-3 max-h-[400px] overflow-y-auto">
+        <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2">
             {leads.map(lead => (
                 <LeadCard
                     key={lead.id}
@@ -215,7 +179,7 @@ const PipelineColumn = ({ title, leads, colorClass, onLeadClick }) => (
     </div>
 );
 
-// Weekly Calendar for Scheduling
+// Weekly Calendar Component with Glassmorphism
 const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot }) => {
     const [showModal, setShowModal] = useState(false);
     const [selectedDay, setSelectedDay] = useState(DAYS_OF_WEEK[0]);
@@ -232,15 +196,15 @@ const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot }) => {
     };
 
     return (
-        <div className="glass-card rounded-xl p-6">
+        <div className="glass-card rounded-2xl p-6">
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-white font-semibold flex items-center gap-2">
+                <h3 className="text-white font-semibold text-lg flex items-center gap-2">
                     <CalendarDays size={20} className="text-gold-500" />
                     Weekly Availability
                 </h3>
                 <button
                     onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 bg-gold-500 hover:bg-gold-400 text-navy-900 px-4 py-2 rounded-lg font-semibold text-sm transition-colors"
+                    className="btn-gold flex items-center gap-2"
                 >
                     <Plus size={16} />
                     Set Availability
@@ -251,14 +215,14 @@ const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot }) => {
                 {DAYS_OF_WEEK.map((day, index) => {
                     const daySlots = slots.filter(s => s.day_of_week === day);
                     return (
-                        <div key={day} className="bg-navy-900 rounded-lg p-3 min-h-[140px]">
-                            <p className="text-gold-500 text-xs font-semibold text-center mb-3">
+                        <div key={day} className="glass-card rounded-xl p-3 min-h-[140px]">
+                            <p className="text-gold-500 text-xs font-bold text-center mb-3 uppercase">
                                 {DAY_LABELS[index]}
                             </p>
                             {daySlots.map(slot => (
                                 <div
                                     key={slot.id}
-                                    className={`${slot.is_booked ? 'bg-red-500/20 text-red-400' : 'bg-gold-500 text-navy-900'} rounded px-2 py-1 text-xs mb-2 flex justify-between items-center`}
+                                    className={`${slot.is_booked ? 'badge-red' : 'bg-gold-500 text-navy-900'} rounded-lg px-2 py-1.5 text-xs mb-2 flex justify-between items-center font-medium`}
                                 >
                                     <span>{slot.start_time} - {slot.end_time}</span>
                                     {!slot.is_booked && (
@@ -278,15 +242,15 @@ const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot }) => {
 
             {/* Add Slot Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                    <div className="bg-navy-900 rounded-xl p-6 w-80 border border-gold-500/30">
-                        <h3 className="text-white font-semibold mb-4">Add Available Slot</h3>
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="glass-card rounded-2xl p-6 w-96 border-2 border-gold-500/30">
+                        <h3 className="text-white font-bold text-lg mb-4">Add Available Slot</h3>
                         
                         <label className="text-gray-400 text-sm block mb-2">Day of Week</label>
                         <select
                             value={selectedDay}
                             onChange={e => setSelectedDay(e.target.value)}
-                            className="w-full bg-navy-800 text-white rounded-lg px-3 py-2 mb-4 border border-white/10 focus:border-gold-500 outline-none"
+                            className="w-full bg-navy-800 text-white rounded-lg px-3 py-2.5 mb-4 border border-white/10 focus:border-gold-500 outline-none"
                         >
                             {DAYS_OF_WEEK.map((day, i) => (
                                 <option key={day} value={day}>{DAY_LABELS[i]}</option>
@@ -336,13 +300,14 @@ const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot }) => {
 };
 
 // Lead Table
+// Lead Table Component with Glassmorphism
 const LeadTable = ({ leads, onExport }) => (
-    <div className="glass-card rounded-xl overflow-hidden">
-        <div className="flex justify-between items-center p-4 border-b border-white/10">
-            <h3 className="text-white font-semibold">Lead Manager</h3>
+    <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="flex justify-between items-center p-6 border-b border-white/10">
+            <h3 className="text-white font-bold text-lg">Lead Manager</h3>
             <button
                 onClick={onExport}
-                className="flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors"
+                className="btn-gold flex items-center gap-2"
             >
                 <Download size={16} />
                 Export to Excel
@@ -352,9 +317,9 @@ const LeadTable = ({ leads, onExport }) => (
         <div className="overflow-x-auto">
             <table className="w-full">
                 <thead>
-                    <tr className="bg-navy-900">
+                    <tr className="bg-navy-900/50">
                         {['Name', 'Phone', 'Budget', 'Purpose', 'Payment', 'Status', 'Voice Transcript'].map(header => (
-                            <th key={header} className="text-gold-500 text-left px-4 py-3 text-sm font-semibold border-b border-white/10">
+                            <th key={header} className="text-gold-500 text-left px-6 py-4 text-sm font-bold border-b border-white/10 uppercase tracking-wide">
                                 {header}
                             </th>
                         ))}
@@ -363,27 +328,27 @@ const LeadTable = ({ leads, onExport }) => (
                 <tbody>
                     {leads.map(lead => (
                         <tr key={lead.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <td className="text-white px-4 py-3 text-sm">{lead.name || 'Anonymous'}</td>
-                            <td className="text-white px-4 py-3 text-sm">{lead.phone || '-'}</td>
-                            <td className="text-gold-500 px-4 py-3 text-sm">
+                            <td className="text-white px-6 py-4 text-sm font-medium">{lead.name || 'Anonymous'}</td>
+                            <td className="text-white px-6 py-4 text-sm">{lead.phone || '-'}</td>
+                            <td className="text-gold-500 px-6 py-4 text-sm font-semibold">
                                 {lead.budget_min || lead.budget_max 
                                     ? `${lead.budget_min ? `${(lead.budget_min/1000000).toFixed(1)}M` : ''} - ${lead.budget_max ? `${(lead.budget_max/1000000).toFixed(1)}M` : ''}`
                                     : '-'}
                             </td>
-                            <td className="px-4 py-3">
-                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                                    lead.purpose === 'residency' ? 'bg-gold-500 text-navy-900' : 'bg-navy-800 text-white'
+                            <td className="px-6 py-4">
+                                <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${
+                                    lead.purpose === 'residency' ? 'badge-gold' : 'badge-blue'
                                 }`}>
                                     {PURPOSE_LABELS[lead.purpose] || lead.purpose || '-'}
                                 </span>
                             </td>
-                            <td className="text-white px-4 py-3 text-sm capitalize">{lead.payment_method || '-'}</td>
-                            <td className="px-4 py-3">
-                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium text-white ${STATUS_COLORS[lead.status] || 'bg-gray-500'}`}>
+                            <td className="text-white px-6 py-4 text-sm capitalize">{lead.payment_method || '-'}</td>
+                            <td className="px-6 py-4">
+                                <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold text-white ${STATUS_COLORS[lead.status] || 'bg-gray-500'}`}>
                                     {lead.status?.replace('_', ' ') || 'new'}
                                 </span>
                             </td>
-                            <td className="text-gray-400 px-4 py-3 text-xs max-w-[200px] truncate">
+                            <td className="text-gray-400 px-6 py-4 text-xs max-w-[250px] truncate">
                                 {lead.voice_transcript || '-'}
                             </td>
                         </tr>
@@ -392,8 +357,8 @@ const LeadTable = ({ leads, onExport }) => (
             </table>
             
             {leads.length === 0 && (
-                <div className="text-center py-12">
-                    <p className="text-gray-500">No leads yet. Start your Telegram bot to capture leads!</p>
+                <div className="text-center py-16">
+                    <p className="text-gray-500 text-lg">No leads yet. Start your Telegram bot to capture leads!</p>
                 </div>
             )}
         </div>
@@ -472,152 +437,76 @@ const Dashboard = ({ user, onLogout }) => {
         closed: leads.filter(l => l.status === 'closed_won' || l.status === 'closed_lost'),
     };
 
-    const sidebarItems = [
-        { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { id: 'leads', icon: KanbanSquare, label: 'Lead Pipeline' },
-        { id: 'calendar', icon: CalendarDays, label: 'Calendar' },
-        { id: 'properties', icon: Building2, label: 'Properties' },
-        { id: 'analytics', icon: BarChart3, label: 'Analytics' },
-        { id: 'qr', icon: QrCode, label: 'QR Generator' },
-        { id: 'broadcast', icon: Send, label: 'Broadcast' },
-        { id: 'catalogs', icon: BookOpen, label: 'Catalogs' },
-        { id: 'lottery', icon: Gift, label: 'Lottery' },
-        { id: 'settings', icon: Settings, label: 'Settings' },
-    ];
-
     if (loading) {
         return (
             <div className="min-h-screen bg-navy-900 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-navy-800 border-t-gold-500 rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-400">Loading dashboard...</p>
+                    <div className="w-16 h-16 border-4 border-navy-800 border-t-gold-500 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-400 text-lg">Loading dashboard...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-navy-900 flex font-sans">
-            {/* Sidebar */}
-            <aside className="w-64 bg-navy-900 border-r border-white/10 p-4 flex flex-col">
-                {/* Logo */}
-                <div className="mb-8 pb-6 border-b border-white/10">
-                    <Logo size="sm" variant="text" />
+        <Layout activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLogout={onLogout}>
+            {error && (
+                <div className="glass-card border-2 border-red-500/50 bg-red-500/10 rounded-xl px-6 py-4 mb-6 text-red-400 animate-fade-in">
+                    ⚠️ {error}
                 </div>
+            )}
 
-                {/* Navigation */}
-                <nav className="flex-1 space-y-2">
-                    {sidebarItems.map(item => (
-                        <SidebarItem
-                            key={item.id}
-                            icon={item.icon}
-                            label={item.label}
-                            active={activeTab === item.id}
-                            onClick={() => setActiveTab(item.id)}
-                        />
-                    ))}
-                </nav>
-
-                {/* User Profile */}
-                <div className="pt-4 border-t border-white/10">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-500 to-gold-600 flex items-center justify-center text-navy-900 font-bold">
-                            {user?.name?.charAt(0).toUpperCase() || 'A'}
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-white text-sm font-medium truncate">{user?.name || 'Agent'}</p>
-                            <p className="text-green-400 text-xs flex items-center gap-1">
-                                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                                Online
-                            </p>
-                        </div>
+            {/* Dashboard Overview Tab */}
+            {activeTab === 'dashboard' && stats && (
+                <div className="space-y-8 animate-fade-in">
+                    {/* Header */}
+                    <div>
+                        <h1 className="text-3xl font-bold text-white mb-2">Dashboard Overview</h1>
+                        <p className="text-gray-400">Welcome back, {user?.name || 'Agent'}</p>
                     </div>
-                    {onLogout && (
-                        <button
-                            onClick={onLogout}
-                            className="w-full flex items-center justify-center gap-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 py-2 rounded-lg transition-colors text-sm"
-                        >
-                            <LogOut size={16} />
-                            Logout
-                        </button>
-                    )}
-                </div>
-            </aside>
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col">
-                {/* Header */}
-                <header className="bg-navy-900 border-b border-white/10 px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center bg-navy-800 rounded-lg px-4 py-2 w-80">
-                        <Search size={18} className="text-gray-400 mr-3" />
-                        <input
-                            type="text"
-                            placeholder="Search leads, properties..."
-                            className="bg-transparent text-white text-sm outline-none w-full placeholder-gray-500"
+                    {/* KPI Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <KpiCard
+                            title="Total Leads"
+                            value={stats.total_leads}
+                            icon={Users}
+                            trend="+12% from last month"
+                            trendUp={true}
+                            color="gold"
+                        />
+                        <KpiCard
+                            title="Active Deals"
+                            value={stats.active_deals}
+                            icon={Briefcase}
+                            trend="+5% from last week"
+                            trendUp={true}
+                            color="green"
+                        />
+                        <KpiCard
+                            title="Conversion Rate"
+                            value={`${stats.conversion_rate}%`}
+                            icon={Percent}
+                            trend="+2.3% improvement"
+                            trendUp={true}
+                            color="blue"
+                        />
+                        <KpiCard
+                            title="Scheduled Viewings"
+                            value={stats.scheduled_viewings}
+                            icon={Home}
+                            color="purple"
                         />
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <button className="relative p-2 text-gray-400 hover:text-white transition-colors">
-                            <Bell size={22} />
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-semibold">
-                                3
-                            </span>
-                        </button>
-                        <div className="w-10 h-10 rounded-full border-2 border-gold-500 overflow-hidden">
-                            <img
-                                src="https://ui-avatars.com/api/?name=Agent&background=D4AF37&color=0f1729&bold=true"
-                                alt="Profile"
-                                className="w-full h-full object-cover"
-                            />
-                        </div>
-                    </div>
-                </header>
-
-                {/* Main Area */}
-                <main className="flex-1 p-6 overflow-y-auto">
-                    {error && (
-                        <div className="bg-red-500/20 border border-red-500 rounded-lg px-4 py-3 mb-6 text-red-400">
-                            {error}
-                        </div>
-                    )}
-
-                    {/* Dashboard Tab */}
-                    {activeTab === 'dashboard' && stats && (
-                        <>
-                            {/* KPI Cards */}
-                            <div className="grid grid-cols-4 gap-6 mb-8">
-                                <KpiCard
-                                    title="Total Leads"
-                                    value={stats.total_leads}
-                                    icon={Users}
-                                    trend="+12% from last month"
-                                    trendUp={true}
-                                />
-                                <KpiCard
-                                    title="Active Deals"
-                                    value={stats.active_deals}
-                                    icon={Briefcase}
-                                    trend="+5% from last week"
-                                    trendUp={true}
-                                />
-                                <KpiCard
-                                    title="Conversion Rate"
-                                    value={`${stats.conversion_rate}%`}
-                                    icon={Percent}
-                                    trend="+2.3% improvement"
-                                    trendUp={true}
-                                />
-                                <KpiCard
-                                    title="Scheduled Viewings"
-                                    value={stats.scheduled_viewings}
-                                    icon={Home}
-                                />
-                            </div>
-
-                            {/* Pipeline View */}
-                            <h2 className="text-white text-lg font-semibold mb-4">Lead Pipeline</h2>
-                            <div className="flex gap-4 mb-8 overflow-x-auto pb-4">
+                    {/* Pipeline Kanban */}
+                    <div>
+                        <h2 className="text-white text-xl font-bold mb-6 flex items-center gap-2">
+                            <div className="w-1 h-6 bg-gold-500 rounded"></div>
+                            Lead Pipeline
+                        </h2>
+                        <div className="overflow-x-auto pb-4">
+                            <div className="flex gap-6 min-w-max">
                                 <PipelineColumn
                                     title="New Leads"
                                     leads={leadsByStatus.new}
@@ -643,66 +532,87 @@ const Dashboard = ({ user, onLogout }) => {
                                     onLeadClick={handleLeadClick}
                                 />
                             </div>
+                        </div>
+                    </div>
 
-                            {/* Calendar Widget */}
-                            <WeeklyCalendar
-                                slots={slots}
-                                onAddSlot={handleAddSlot}
-                                onDeleteSlot={handleDeleteSlot}
-                            />
-                        </>
-                    )}
+                    {/* Calendar Widget */}
+                    <WeeklyCalendar
+                        slots={slots}
+                        onAddSlot={handleAddSlot}
+                        onDeleteSlot={handleDeleteSlot}
+                    />
+                </div>
+            )}
 
-                    {/* Leads Tab */}
-                    {activeTab === 'leads' && (
-                        <LeadTable leads={leads} onExport={handleExportLeads} />
-                    )}
+            {/* Lead Pipeline Tab */}
+            {activeTab === 'leads' && (
+                <div className="animate-fade-in">
+                    <h1 className="text-3xl font-bold text-white mb-6">Lead Management</h1>
+                    <LeadTable leads={leads} onExport={handleExportLeads} />
+                </div>
+            )}
 
-                    {/* Calendar Tab */}
-                    {activeTab === 'calendar' && (
-                        <WeeklyCalendar
-                            slots={slots}
-                            onAddSlot={handleAddSlot}
-                        />
-                    )}
+            {/* Calendar Tab */}
+            {activeTab === 'calendar' && (
+                <div className="animate-fade-in">
+                    <h1 className="text-3xl font-bold text-white mb-6">Availability Calendar</h1>
+                    <WeeklyCalendar
+                        slots={slots}
+                        onAddSlot={handleAddSlot}
+                        onDeleteSlot={handleDeleteSlot}
+                    />
+                </div>
+            )}
 
-                    {/* Properties Tab */}
-                    {activeTab === 'properties' && (
-                        <PropertiesManagement tenantId={tenantId} />
-                    )}
+            {/* Properties Tab */}
+            {activeTab === 'properties' && (
+                <div className="animate-fade-in">
+                    <PropertiesManagement tenantId={tenantId} />
+                </div>
+            )}
 
-                    {/* Settings Tab */}
-                    {activeTab === 'settings' && (
-                        <SettingsPage tenantId={tenantId} token={token} />
-                    )}
+            {/* Analytics Tab */}
+            {activeTab === 'analytics' && (
+                <div className="animate-fade-in">
+                    <Analytics tenantId={tenantId} />
+                </div>
+            )}
 
-                    {/* Analytics Tab */}
-                    {activeTab === 'analytics' && (
-                        <Analytics tenantId={tenantId} />
-                    )}
+            {/* QR Generator Tab */}
+            {activeTab === 'qr' && (
+                <div className="animate-fade-in">
+                    <QRGenerator tenantId={tenantId} />
+                </div>
+            )}
 
-                    {/* QR Generator Tab */}
-                    {activeTab === 'qr' && (
-                        <QRGenerator tenantId={tenantId} />
-                    )}
+            {/* Broadcast Tab */}
+            {activeTab === 'broadcast' && (
+                <div className="animate-fade-in">
+                    <Broadcast tenantId={tenantId} />
+                </div>
+            )}
 
-                    {/* Broadcast Tab */}
-                    {activeTab === 'broadcast' && (
-                        <Broadcast tenantId={tenantId} />
-                    )}
+            {/* Catalogs Tab */}
+            {activeTab === 'catalogs' && (
+                <div className="animate-fade-in">
+                    <Catalogs tenantId={tenantId} />
+                </div>
+            )}
 
-                    {/* Catalogs Tab */}
-                    {activeTab === 'catalogs' && (
-                        <Catalogs tenantId={tenantId} />
-                    )}
+            {/* Lottery Tab */}
+            {activeTab === 'lottery' && (
+                <div className="animate-fade-in">
+                    <Lottery tenantId={tenantId} />
+                </div>
+            )}
 
-                    {/* Lottery Tab */}
-                    {activeTab === 'lottery' && (
-                        <Lottery tenantId={tenantId} />
-                    )}
-                </main>
-            </div>
-        </div>
+            {/* Settings Tab */}
+            {activeTab === 'settings' && (
+                <div className="animate-fade-in">
+                    <SettingsPage tenantId={tenantId} token={token} />
+                </div>
+            )}
+        </Layout>
     );
 };
 
