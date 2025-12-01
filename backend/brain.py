@@ -1163,7 +1163,7 @@ AGENT'S FAQ & POLICIES:
                 return BrainResponse(
                     message=handoff_messages.get(lang, handoff_messages[Language.EN]),
                     next_state=ConversationState.HANDOFF_URGENT,
-                    lead_updates={"status": LeadStatus.URGENT},
+                    lead_updates={"status": LeadStatus.QUALIFIED},
                     buttons=[
                         {"text": self.get_text("btn_yes", lang), "callback_data": "handoff_yes"},
                         {"text": self.get_text("btn_no", lang), "callback_data": "handoff_no"}
@@ -2111,8 +2111,8 @@ AGENT'S FAQ & POLICIES:
                 Language.RU: f"✅ Отлично! {self.agent_name} вскоре свяжется с вами.\n\nА пока вы можете задать любые вопросы. Они позвонят вам в течение 5-10 минут."
             }
             
-            # Update lead status to URGENT for agent dashboard
-            lead_updates["status"] = LeadStatus.URGENT
+            # Update lead status to QUALIFIED for agent dashboard
+            lead_updates["status"] = LeadStatus.QUALIFIED
             
             return BrainResponse(
                 message=confirmation_msg.get(lang, confirmation_msg[Language.EN]),
@@ -2149,7 +2149,7 @@ AGENT'S FAQ & POLICIES:
                     Language.RU: f"✅ Получилось! {self.agent_name} позвонит вам на {message}.\n\nОни должны позвонить вам в течение 10 минут."
                 }
                 
-                lead_updates["status"] = LeadStatus.URGENT
+                lead_updates["status"] = LeadStatus.QUALIFIED
                 
                 return BrainResponse(
                     message=captured_msg.get(lang, captured_msg[Language.EN]),
@@ -2666,6 +2666,9 @@ async def process_image_message(
     """
     brain = Brain(tenant)
     lang = lead.language or Language.EN
+    
+    # Load tenant context (properties, projects) for matching
+    await brain.load_tenant_context(lead)
     
     # Process image to get description and matches
     description, matching_properties = await brain.process_image(image_data, file_extension)
