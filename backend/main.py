@@ -47,7 +47,7 @@ from whatsapp_bot import whatsapp_bot_manager, verify_webhook as verify_whatsapp
 from roi_engine import generate_roi_pdf
 
 # Import API routers
-from api import broadcast, catalogs, lotteries
+from api import broadcast, catalogs, lotteries, admin
 
 
 # ==================== AUTH CONFIG ====================
@@ -532,6 +532,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Include API routers
+app.include_router(admin.router)
 app.include_router(broadcast.router)
 app.include_router(catalogs.router)
 app.include_router(lotteries.router)

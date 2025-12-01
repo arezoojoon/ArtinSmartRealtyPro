@@ -52,13 +52,12 @@ async def get_all_tenants(
             
             tenant_list.append({
                 "id": tenant.id,
-                "name": tenant.name,
-                "domain": tenant.domain,
-                "status": tenant.status,
-                "plan": tenant.plan,
-                "leads_count": leads_count,
+                "name": tenant.name or tenant.company_name,
+                "email": tenant.email,
+                "company_name": tenant.company_name,
+                "subscription_status": tenant.subscription_status.value if tenant.subscription_status else "trial",
+                "total_leads": leads_count,
                 "agents_count": agents_count,
-                "token_usage": token_usage,
                 "created_at": tenant.created_at.isoformat()
             })
         

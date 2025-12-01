@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import Dashboard from './components/Dashboard'
 import Login from './components/Login'
 import SuperAdminDashboard from './components/SuperAdminDashboard'
+import ImpersonationBar from './components/ImpersonationBar'
 import './index.css'
 
 /**
@@ -63,7 +64,24 @@ function App() {
     setSelectedTenant(tenant);
   };
 
-  const handleBackToAdmin = () => {
+  const handleImpersonate = async (tenant) => {
+    // Impersonation logic already handled in SuperAdminDashboard
+    // Just redirect to main dashboard
+    setSelectedTenant(tenant);
+  };
+
+  const handleExitImpersonation = () => {
+    // Restore admin token from sessionStorage
+    const adminToken = sessionStorage.getItem('admin_fallback_token');
+    if (adminToken) {
+      localStorage.setItem('token', adminToken);
+    }
+    
+    // Clear impersonation data
+    sessionStorage.removeItem('admin_fallback_token');
+    sessionStorage.removeItem('impersonating_tenant');
+    
+    // Return to Super Admin dashboard
     setSelectedTenant(null);
   };
 
@@ -82,20 +100,11 @@ function App() {
   // Super Admin view
   if (user.is_super_admin && !selectedTenant) {
     return (
-      <div>
-        <div className="fixed top-4 right-4 z-50">
-          <button
-            onClick={handleLogout}
-            className="bg-red-500 hover:bg-red-400 text-white px-4 py-2 rounded-lg text-sm font-medium"
-          >
-            Logout
-          </button>
-        </div>
-        <SuperAdminDashboard 
-          token={user.token} 
-          onSelectTenant={handleSelectTenant}
-        />
-      </div>
+      <SuperAdminDashboard 
+        user={user}
+        onLogout={handleLogout}
+        onImpersonate={handleImpersonate}
+      />
     );
   }
 
@@ -108,21 +117,13 @@ function App() {
     };
     return (
       <div>
-        <div className="fixed top-4 right-4 z-50 flex gap-2">
-          <button
-            onClick={handleBackToAdmin}
-            className="bg-gold-500 hover:bg-gold-400 text-navy-900 px-4 py-2 rounded-lg text-sm font-medium"
-          >
-            ← Back to Admin
-          </button>
-          <button
-            onClick={handleLogout}
-            className="bg-red-500 hover:bg-red-400 text-white px-4 py-2 rounded-lg text-sm font-medium"
-          >
-            Logout
-          </button>
+        <ImpersonationBar 
+          tenantName={selectedTenant.name || selectedTenant.email}
+          onExit={handleExitImpersonation}
+        />
+        <div className="pt-16">
+          <Dashboard user={viewAsUser} onLogout={handleLogout} />
         </div>
-        <Dashboard user={viewAsUser} onLogout={handleLogout} />
       </div>
     );
   }
