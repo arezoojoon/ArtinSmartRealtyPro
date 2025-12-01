@@ -2551,7 +2551,7 @@ AGENT'S FAQ & POLICIES:
             
             return BrainResponse(
                 message=scarcity_msg,
-                next_state=ConversationState.SCHEDULE,
+                next_state=ConversationState.HANDOFF_SCHEDULE,
                 buttons=slot_buttons
             )
         else:
