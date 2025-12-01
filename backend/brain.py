@@ -1244,7 +1244,7 @@ AGENT'S FAQ & POLICIES:
         elif current_state == ConversationState.ENGAGEMENT:
             return await self._handle_engagement(lang, message, lead, lead_updates)
         
-        elif current_state == ConversationState.SCHEDULE or current_state == ConversationState.HANDOFF_SCHEDULE:
+        elif current_state == ConversationState.HANDOFF_SCHEDULE:
             return await self._handle_schedule(lang, callback_data, lead)
         
         elif current_state == ConversationState.HANDOFF_URGENT:
