@@ -2446,9 +2446,21 @@ AGENT'S FAQ & POLICIES:
         
         # Enhanced scheduling detection - check BEFORE AI response
         schedule_triggers_explicit = [
-            "وقت مشاوره", "تایم مشاوره", "زمان مشاوره", "appointment", "meeting time",
-            "schedule", "book", "reservation", "تماس بگیر", "call me", "speak with agent",
-            "مشاور", "consultant", "viewing", "بازدید", "visit"
+            # Persian/Farsi triggers
+            "وقت مشاوره", "تایم مشاوره", "زمان مشاوره", "ساعت مشاوره",
+            "وقت های خالی", "تایم های خالی", "زمان های خالی", "ساعت های خالی",
+            "اسلات", "وقت خالی", "تایم خالی", "زمان خالی",
+            "وقت بذار", "تایم بذه", "زمان بده",
+            "چه روزی", "چه تاریخی", "کی وقت", "کی تایم",
+            "نشون بده وقت", "نشون بده تایم", "بهم بگو وقت",
+            # English triggers
+            "appointment", "meeting time", "schedule", "book", "reservation", 
+            "available times", "available slots", "free times", "open slots",
+            "show me times", "tell me times", "what times", "when available",
+            "call me", "speak with agent", "talk to consultant",
+            # General triggers
+            "مشاور", "consultant", "viewing", "بازدید", "visit",
+            "تماس بگیر", "تماس بگیرید"
         ]
         
         user_message_lower = message.lower() if message else ""
@@ -2457,14 +2469,8 @@ AGENT'S FAQ & POLICIES:
         explicit_schedule_request = any(trigger in user_message_lower for trigger in schedule_triggers_explicit)
         
         if explicit_schedule_request:
-            # User explicitly wants to schedule - go directly to SCHEDULE state
-            confirming_msgs = {
-                Language.EN: "Great! Let me check available consultation times with {agent_name}. When works best for you?",
-                Language.FA: "عالی! بذارید زمان‌های مشاوره با {agent_name} را چک کنم. چه زمانی براتون مناسبه؟",
-                Language.AR: "رائع! دعني أتحقق من أوقات الاستشارة مع {agent_name}. متى يناسبك؟",
-                Language.RU: "Отлично! Давайте проверим доступное время консультации с {agent_name}. Когда вам удобно?"
-            }
-            
+            # User explicitly wants to schedule - show calendar directly
+            logger.info(f"📅 Explicit schedule request detected from lead {lead.id}: '{message}'")
             return await self._handle_schedule(lang, None, lead)
         
         # Otherwise detect from AI response too
