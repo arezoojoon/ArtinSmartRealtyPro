@@ -12,7 +12,9 @@ from datetime import datetime, timedelta
 from telegram import (
     Update, 
     InlineKeyboardButton, 
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup
 )
 from telegram.ext import (
     Application,
