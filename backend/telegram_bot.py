@@ -238,7 +238,6 @@ class TelegramBotHandler:
             try:
                 from roi_engine import generate_roi_pdf
                 from io import BytesIO
-                from brain import Language
                 
                 lang = lead.language or Language.EN
                 
