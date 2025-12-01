@@ -1898,16 +1898,18 @@ AGENT'S FAQ & POLICIES:
             )
         
         elif callback_data == "schedule_consultation":
-            # FIX #5: User wants to book consultation - request phone
-            consultation_msg = TRANSLATIONS["phone_request"]
-            
+            # User wants to book consultation - show calendar with available slots
             lead_updates["consultation_requested"] = True
-            return BrainResponse(
-                message=consultation_msg.get(lang, consultation_msg[Language.EN]),
-                next_state=ConversationState.HARD_GATE,
-                lead_updates=lead_updates,
-                request_contact=True  # NEW: Show contact button
-            )
+            
+            # Delegate to schedule handler to show calendar
+            schedule_response = await self._handle_schedule(lang, None, lead)
+            
+            # Merge lead updates
+            if schedule_response.lead_updates:
+                lead_updates.update(schedule_response.lead_updates)
+            schedule_response.lead_updates = lead_updates
+            
+            return schedule_response
         
         # Get property recommendations
         property_recs = await self.get_property_recommendations(lead)
@@ -2516,12 +2518,55 @@ AGENT'S FAQ & POLICIES:
     async def _handle_schedule(self, lang: Language, callback_data: Optional[str], lead: Lead) -> BrainResponse:
         """Handle scheduling selection with SCARCITY technique."""
         if callback_data and callback_data.startswith("slot_"):
-            # User selected a slot
-            return BrainResponse(
-                message=self.get_text("completed", lang),
-                next_state=ConversationState.COMPLETED,
-                lead_updates={"status": LeadStatus.VIEWING_SCHEDULED}
-            )
+            # User selected a slot - extract slot ID
+            try:
+                slot_id = int(callback_data.replace("slot_", ""))
+                
+                # Book the slot
+                from database import book_slot
+                booking_success = await book_slot(slot_id, lead.id)
+                
+                if booking_success:
+                    # Get slot details to show in confirmation
+                    slots = await get_available_slots(lead.tenant_id)
+                    selected_slot = None
+                    for slot in slots:
+                        if slot.id == slot_id:
+                            selected_slot = slot
+                            break
+                    
+                    if selected_slot:
+                        day = selected_slot.day_of_week.value.capitalize()
+                        time_str = selected_slot.start_time.strftime("%H:%M")
+                        
+                        # Enhanced completion message with actual date/time
+                        completion_msgs = {
+                            Language.EN: f"✅ Perfect! Your consultation is booked!\n\n📅 **{day} at {time_str}**\n\nOur agent {self.agent_name} will contact you at the scheduled time.\n\nSee you soon! 🏠",
+                            Language.FA: f"✅ عالی! جلسه مشاوره شما رزرو شد!\n\n📅 **{day} ساعت {time_str}**\n\nمشاور ما {self.agent_name} در زمان مقرر با شما تماس خواهد گرفت.\n\nتا دیدار بعدی! 🏠",
+                            Language.AR: f"✅ ممتاز! تم حجز استشارتك!\n\n📅 **{day} في {time_str}**\n\nسيتصل بك وكيلنا {self.agent_name} في الموعد المحدد.\n\nإلى اللقاء! 🏠",
+                            Language.RU: f"✅ Отлично! Ваша консультация забронирована!\n\n📅 **{day} в {time_str}**\n\nНаш агент {self.agent_name} свяжется с вами в назначенное время.\n\nДо скорой встречи! 🏠"
+                        }
+                        
+                        return BrainResponse(
+                            message=completion_msgs.get(lang, completion_msgs[Language.EN]),
+                            next_state=ConversationState.COMPLETED,
+                            lead_updates={"status": LeadStatus.VIEWING_SCHEDULED}
+                        )
+                
+                # Fallback if booking failed
+                return BrainResponse(
+                    message=self.get_text("completed", lang).format(agent_name=self.agent_name),
+                    next_state=ConversationState.COMPLETED,
+                    lead_updates={"status": LeadStatus.VIEWING_SCHEDULED}
+                )
+                
+            except (ValueError, Exception) as e:
+                logger.error(f"❌ Error booking slot: {e}")
+                return BrainResponse(
+                    message=self.get_text("completed", lang).format(agent_name=self.agent_name),
+                    next_state=ConversationState.COMPLETED,
+                    lead_updates={"status": LeadStatus.VIEWING_SCHEDULED}
+                )
         
         # Fetch available slots
         slots = await get_available_slots(lead.tenant_id)
