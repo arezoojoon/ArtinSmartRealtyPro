@@ -429,7 +429,6 @@ class ROIEngine:
             [self._get_text("property_value"), f"AED {property_value:,.0f}"],
             [self._get_text("down_payment"), f"AED {roi_data['down_payment']:,.0f}"],
             ["DLD Fee (4%)", f"AED {roi_data['dld_fee']:,.0f}"],
-            ["Agency Fee (2%)", f"AED {roi_data['agency_fee']:,.0f}"],
             [self._get_text("total_investment"), f"AED {roi_data['total_investment']:,.0f}"],
         ]
         

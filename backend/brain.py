@@ -1622,23 +1622,52 @@ AGENT'S FAQ & POLICIES:
                 all_filled = all(filled_slots.get(slot, False) for slot in required_slots)
                 
                 if all_filled:
-                    # Move to VALUE_PROPOSITION
-                    transition_message = {
-                        Language.EN: "Perfect! Let me show you some amazing properties that match your criteria...",
-                        Language.FA: "عالی! بذار چند ملک فوق‌العاده که با معیارهات مچ میشه رو نشونت بدم...",
-                        Language.AR: "رائع! دعني أريك بعض العقارات المذهلة التي تتناسب مع معاييرك...",
-                        Language.RU: "Отлично! Позвольте показать вам несколько потрясающих объектов..."
-                    }
+                    # Move to VALUE_PROPOSITION and SHOW PROPERTIES immediately
+                    lead_updates.update({
+                        "conversation_data": conversation_data,
+                        "filled_slots": filled_slots,
+                        "pending_slot": None
+                    })
                     
-                    return BrainResponse(
-                        message=transition_message.get(lang, transition_message[Language.EN]),
-                        next_state=ConversationState.VALUE_PROPOSITION,
-                        lead_updates=lead_updates | {
-                            "conversation_data": conversation_data,
-                            "filled_slots": filled_slots,
-                            "pending_slot": None
+                    # Get property recommendations RIGHT NOW
+                    property_recs = await self.get_property_recommendations(lead)
+                    
+                    if property_recs and "no properties" not in property_recs.lower():
+                        value_message = {
+                            Language.EN: f"Perfect! Here are properties that match your criteria:\n\n{property_recs}\n\n📋 Would you like to see the full details and market analysis for any of these?",
+                            Language.FA: f"عالی! اینها ملک‌هایی هستند که با معیارهای شما مطابقت دارند:\n\n{property_recs}\n\n📋 می‌خواهید جزئیات کامل و تحلیل بازار برای هر یک از اینها را ببینید؟",
+                            Language.AR: f"رائع! إليك العقارات التي تطابق معاييرك:\n\n{property_recs}\n\n📋 هل تريد رؤية التفاصيل الكاملة وتحليل السوق لأي من هذه؟",
+                            Language.RU: f"Отлично! Вот объекты, которые соответствуют вашим критериям:\n\n{property_recs}\n\n📋 Хотите увидеть полные детали и рыночный анализ для любого из них?"
                         }
-                    )
+                        
+                        return BrainResponse(
+                            message=value_message.get(lang, value_message[Language.EN]),
+                            next_state=ConversationState.VALUE_PROPOSITION,
+                            lead_updates=lead_updates,
+                            buttons=[
+                                {"text": self.get_text("btn_yes", lang), "callback_data": "details_yes"},
+                                {"text": self.get_text("btn_no", lang), "callback_data": "details_no"},
+                                {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
+                            ]
+                        )
+                    else:
+                        # No matching properties
+                        no_match_message = {
+                            Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Would you like that?",
+                            Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. می‌خواهید؟",
+                            Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تريد ذلك؟",
+                            Language.RU: "У меня нет точных совпадений прямо сейчас, но я могу отправить подробный анализ рынка. Хотите это?"
+                        }
+                        
+                        return BrainResponse(
+                            message=no_match_message.get(lang, no_match_message[Language.EN]),
+                            next_state=ConversationState.VALUE_PROPOSITION,
+                            lead_updates=lead_updates,
+                            buttons=[
+                                {"text": self.get_text("btn_yes", lang), "callback_data": "analysis_yes"},
+                                {"text": self.get_text("btn_no", lang), "callback_data": "analysis_no"}
+                            ]
+                        )
         
         # === HANDLE TEXT MESSAGES (FAQ Detection) ===
         if message and not callback_data:
