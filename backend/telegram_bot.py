@@ -29,7 +29,7 @@ from sqlalchemy.future import select
 from database import (
     Tenant, Lead, AgentAvailability, get_tenant_by_bot_token, get_or_create_lead,
     update_lead, ConversationState, book_slot, create_appointment,
-    AppointmentType, async_session, Language
+    AppointmentType, async_session, Language, get_available_slots, DayOfWeek
 )
 from brain import Brain, BrainResponse, process_telegram_message, process_voice_message
 from redis_manager import redis_manager, init_redis, close_redis
