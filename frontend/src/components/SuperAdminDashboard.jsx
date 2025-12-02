@@ -178,11 +178,14 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
               <Plus size={16} />
               Create New Tenant
             </button>
-          </div>lassName="glass-card border-2 border-red-500/50 bg-red-500/10 rounded-xl px-6 py-4 text-red-400">
-            <AlertTriangle className="inline mr-2" size={20} />
-            {error}
           </div>
-        )}
+
+          {error && (
+            <div className="glass-card border-2 border-red-500/50 bg-red-500/10 rounded-xl px-6 py-4 text-red-400">
+              <AlertTriangle className="inline mr-2" size={20} />
+              {error}
+            </div>
+          )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -221,13 +224,6 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
 
         {/* Tenants Table */}
         <div className="glass-card rounded-2xl overflow-hidden">
-          <div className="p-6 border-b border-white/10">
-            <h3 className="text-white font-bold text-lg flex items-center gap-2">
-              <Users size={20} className="text-gold-500" />
-              Tenant Management
-            </h3>
-          </div>
-
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -269,6 +265,7 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
                   </tr>
                 ))}
               </tbody>
+            </table>
           </div>
         </div>
 
@@ -373,10 +370,5 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
 };
 
 export default SuperAdminDashboard;
-        </div>
-      </div>
-    </Layout>
-  );
-};
 
 export default SuperAdminDashboard;
