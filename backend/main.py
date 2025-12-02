@@ -1238,6 +1238,54 @@ async def delete_schedule_slot(
     return {"status": "deleted", "slot_id": slot_id}
 
 
+@app.post("/api/tenants/{tenant_id}/schedule")
+async def create_schedule_slots(
+    tenant_id: int,
+    slots: dict,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create or replace all schedule slots for a tenant."""
+    await verify_tenant_access(credentials, tenant_id, db)
+    
+    # Delete existing unbooked slots
+    await db.execute(
+        delete(AgentAvailability).where(
+            AgentAvailability.tenant_id == tenant_id,
+            AgentAvailability.is_booked == False
+        )
+    )
+    
+    # Create new slots
+    slot_list = slots.get("slots", [])
+    created_slots = []
+    
+    for slot_data in slot_list:
+        # Parse time strings
+        from datetime import time as dt_time
+        start_hour, start_min = map(int, slot_data['start_time'].split(':'))
+        end_hour, end_min = map(int, slot_data['end_time'].split(':'))
+        
+        new_slot = AgentAvailability(
+            tenant_id=tenant_id,
+            day_of_week=DayOfWeek[slot_data['day_of_week'].upper()],
+            start_time=dt_time(start_hour, start_min),
+            end_time=dt_time(end_hour, end_min),
+            appointment_type=AppointmentType[slot_data.get('appointment_type', 'viewing').upper()],
+            is_booked=False
+        )
+        db.add(new_slot)
+        created_slots.append(new_slot)
+    
+    await db.commit()
+    
+    return {
+        "status": "success",
+        "created_count": len(created_slots),
+        "message": f"Created {len(created_slots)} time slots"
+    }
+
+
 # ==================== APPOINTMENT ENDPOINTS ====================
 
 @app.post("/api/tenants/{tenant_id}/appointments", response_model=AppointmentResponse)

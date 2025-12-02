@@ -18,7 +18,10 @@ import {
     Globe,
     ExternalLink,
     Eye,
-    EyeOff
+    EyeOff,
+    Clock,
+    Plus,
+    Trash2
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -33,6 +36,9 @@ const Settings = ({ tenantId, token }) => {
     const [showTelegramToken, setShowTelegramToken] = useState(false);
     const [currentWhatsAppToken, setCurrentWhatsAppToken] = useState('');
     const [currentTelegramToken, setCurrentTelegramToken] = useState('');
+    const [activeTab, setActiveTab] = useState('profile'); // profile, bots, schedule
+    const [schedule, setSchedule] = useState([]);
+    const [loadingSchedule, setLoadingSchedule] = useState(false);
     
     // Settings state
     const [settings, setSettings] = useState({
@@ -51,6 +57,7 @@ const Settings = ({ tenantId, token }) => {
 
     useEffect(() => {
         fetchSettings();
+        fetchSchedule();
     }, [tenantId]);
 
     const fetchSettings = async () => {
@@ -126,6 +133,69 @@ const Settings = ({ tenantId, token }) => {
         }
     };
 
+    const fetchSchedule = async () => {
+        try {
+            setLoadingSchedule(true);
+            const response = await fetch(`${API_BASE_URL}/api/tenants/${tenantId}/schedule`, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                setSchedule(data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch schedule:', err);
+        } finally {
+            setLoadingSchedule(false);
+        }
+    };
+
+    const addTimeSlot = () => {
+        setSchedule([...schedule, {
+            day_of_week: 'monday',
+            start_time: '09:00',
+            end_time: '10:00',
+            appointment_type: 'viewing',
+            is_booked: false
+        }]);
+    };
+
+    const removeTimeSlot = (index) => {
+        setSchedule(schedule.filter((_, i) => i !== index));
+    };
+
+    const updateTimeSlot = (index, field, value) => {
+        const updated = [...schedule];
+        updated[index] = { ...updated[index], [field]: value };
+        setSchedule(updated);
+    };
+
+    const saveSchedule = async () => {
+        try {
+            setSaving(true);
+            setError(null);
+            
+            const response = await fetch(`${API_BASE_URL}/api/tenants/${tenantId}/schedule`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ slots: schedule })
+            });
+
+            if (!response.ok) throw new Error('Failed to save schedule');
+            
+            setSuccess('Schedule saved successfully!');
+            await fetchSchedule();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const copyToClipboard = (text, field) => {
         navigator.clipboard.writeText(text);
         setCopied(field);
@@ -171,6 +241,43 @@ const Settings = ({ tenantId, token }) => {
                 </button>
             </div>
             
+            {/* Tabs */}
+            <div className="flex gap-2 border-b border-white/10 pb-0">
+                <button
+                    onClick={() => setActiveTab('profile')}
+                    className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+                        activeTab === 'profile' 
+                            ? 'text-gold-500 border-gold-500' 
+                            : 'text-gray-400 border-transparent hover:text-white'
+                    }`}
+                >
+                    <Building2 size={16} className="inline mr-2" />
+                    Profile
+                </button>
+                <button
+                    onClick={() => setActiveTab('bots')}
+                    className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+                        activeTab === 'bots' 
+                            ? 'text-gold-500 border-gold-500' 
+                            : 'text-gray-400 border-transparent hover:text-white'
+                    }`}
+                >
+                    <Bot size={16} className="inline mr-2" />
+                    Bots
+                </button>
+                <button
+                    onClick={() => setActiveTab('schedule')}
+                    className={`px-4 py-2 font-medium transition-colors border-b-2 ${
+                        activeTab === 'schedule' 
+                            ? 'text-gold-500 border-gold-500' 
+                            : 'text-gray-400 border-transparent hover:text-white'
+                    }`}
+                >
+                    <Clock size={16} className="inline mr-2" />
+                    Working Hours
+                </button>
+            </div>
+            
             {/* Messages */}
             {error && (
                 <div className="bg-red-500/20 border border-red-500 rounded-lg px-4 py-3 text-red-400">
@@ -183,7 +290,8 @@ const Settings = ({ tenantId, token }) => {
                 </div>
             )}
             
-            {/* Profile Section */}
+            {/* Profile Tab Content */}
+            {activeTab === 'profile' && (
             <div className="glass-card rounded-xl p-6">
                 <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
                     <Building2 size={20} className="text-gold-500" />
@@ -278,7 +386,11 @@ const Settings = ({ tenantId, token }) => {
                     </div>
                 </div>
             </div>
+            )}
             
+            {/* Bots Tab Content */}
+            {activeTab === 'bots' && (
+            <>
             {/* Telegram Bot Section */}
             <div className="glass-card rounded-xl p-6">
                 <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
@@ -443,8 +555,105 @@ const Settings = ({ tenantId, token }) => {
                     </div>
                 </div>
             </div>
+            </>
+            )}
+            
+            {/* Schedule Tab Content */}
+            {activeTab === 'schedule' && (
+            <div className="glass-card rounded-xl p-6">
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 className="text-white font-semibold flex items-center gap-2">
+                            <Clock size={20} className="text-gold-500" />
+                            Weekly Availability
+                        </h3>
+                        <p className="text-gray-400 text-sm mt-1">Set your consultation time slots</p>
+                    </div>
+                    <button
+                        onClick={addTimeSlot}
+                        className="flex items-center gap-2 bg-navy-800 hover:bg-navy-700 text-gold-500 px-4 py-2 rounded-lg transition-colors"
+                    >
+                        <Plus size={16} />
+                        Add Time Slot
+                    </button>
+                </div>
+
+                {loadingSchedule ? (
+                    <div className="text-center py-8">
+                        <div className="w-8 h-8 border-4 border-navy-800 border-t-gold-500 rounded-full animate-spin mx-auto"></div>
+                    </div>
+                ) : schedule.length === 0 ? (
+                    <div className="text-center py-12 bg-navy-800/50 rounded-lg">
+                        <Clock size={48} className="mx-auto text-gray-600 mb-3" />
+                        <p className="text-gray-400">No time slots configured yet</p>
+                        <p className="text-gray-500 text-sm mt-1">Click "Add Time Slot" to get started</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {schedule.map((slot, index) => (
+                            <div key={index} className="bg-navy-800 rounded-lg p-4 flex items-center gap-4">
+                                <select
+                                    value={slot.day_of_week}
+                                    onChange={(e) => updateTimeSlot(index, 'day_of_week', e.target.value)}
+                                    className="bg-navy-900 text-white rounded px-3 py-2 border border-white/10"
+                                >
+                                    <option value="monday">Monday</option>
+                                    <option value="tuesday">Tuesday</option>
+                                    <option value="wednesday">Wednesday</option>
+                                    <option value="thursday">Thursday</option>
+                                    <option value="friday">Friday</option>
+                                    <option value="saturday">Saturday</option>
+                                    <option value="sunday">Sunday</option>
+                                </select>
+
+                                <input
+                                    type="time"
+                                    value={slot.start_time}
+                                    onChange={(e) => updateTimeSlot(index, 'start_time', e.target.value)}
+                                    className="bg-navy-900 text-white rounded px-3 py-2 border border-white/10"
+                                />
+
+                                <span className="text-gray-400">to</span>
+
+                                <input
+                                    type="time"
+                                    value={slot.end_time}
+                                    onChange={(e) => updateTimeSlot(index, 'end_time', e.target.value)}
+                                    className="bg-navy-900 text-white rounded px-3 py-2 border border-white/10"
+                                />
+
+                                <select
+                                    value={slot.appointment_type || 'viewing'}
+                                    onChange={(e) => updateTimeSlot(index, 'appointment_type', e.target.value)}
+                                    className="bg-navy-900 text-white rounded px-3 py-2 border border-white/10"
+                                >
+                                    <option value="viewing">Viewing</option>
+                                    <option value="online">Online</option>
+                                    <option value="office">Office</option>
+                                </select>
+
+                                <button
+                                    onClick={() => removeTimeSlot(index)}
+                                    className="ml-auto p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                                    title="Remove slot"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <div className="mt-6 bg-navy-800/50 rounded-lg p-4">
+                    <p className="text-gray-400 text-sm">
+                        💡 <strong className="text-white">Tip:</strong> These time slots will be shown to leads when they request a consultation. Make sure to keep them updated!
+                    </p>
+                </div>
+            </div>
+            )}
         </div>
     );
+
 };
 
 export default Settings;
