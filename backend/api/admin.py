@@ -9,8 +9,11 @@ from sqlalchemy import func, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from datetime import datetime, timedelta
+from pydantic import BaseModel, EmailStr
 import secrets
 import jwt
+import hashlib
+import os
 
 from database import (
     async_session, Tenant, Lead, ConversationState,
@@ -23,6 +26,18 @@ security = HTTPBearer()
 # JWT Configuration
 SECRET_KEY = "your-secret-key-here-change-in-production"
 ALGORITHM = "HS256"
+
+# Pydantic models for request bodies
+class CreateTenantRequest(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    company_name: str
+
+def hash_password(password: str) -> str:
+    """Hash password using PBKDF2-HMAC-SHA256."""
+    salt = os.getenv("PASSWORD_SALT", "artinsmartrealty_salt_v2")
+    return hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
 
 def decode_jwt_token(token: str) -> dict:
     """Decode and verify JWT token."""
@@ -48,6 +63,49 @@ async def get_current_super_admin(
 
 
 # ==================== TENANT MANAGEMENT ====================
+
+@router.post("/tenants")
+async def create_tenant(
+    request: CreateTenantRequest,
+    current_admin: int = Depends(get_current_super_admin)
+):
+    """Create a new tenant (Super Admin only)"""
+    async with async_session() as session:
+        # Check if email already exists
+        result = await session.execute(select(Tenant).where(Tenant.email == request.email))
+        existing = result.scalar_one_or_none()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Hash password
+        password_hash = hash_password(request.password)
+        
+        # Create new tenant
+        new_tenant = Tenant(
+            name=request.name,
+            email=request.email,
+            password_hash=password_hash,
+            company_name=request.company_name,
+            subscription_status=SubscriptionStatus.TRIAL,
+            is_active=True,
+            created_at=datetime.utcnow()
+        )
+        
+        session.add(new_tenant)
+        await session.commit()
+        await session.refresh(new_tenant)
+        
+        return {
+            "message": "✅ Tenant created successfully",
+            "tenant": {
+                "id": new_tenant.id,
+                "name": new_tenant.name,
+                "email": new_tenant.email,
+                "company_name": new_tenant.company_name,
+                "subscription_status": new_tenant.subscription_status.value
+            }
+        }
+
 
 @router.get("/tenants")
 async def get_all_tenants(
