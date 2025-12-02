@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from './Layout';
-import { Eye, Users, Calendar, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Eye, Users, Calendar, TrendingUp, AlertTriangle, Plus, X } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -14,11 +14,20 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [stats, setStats] = useState({
     total_tenants: 0,
     active_tenants: 0,
     trial_tenants: 0,
     total_leads: 0
+  });
+  const [newTenant, setNewTenant] = useState({
+    name: '',
+    email: '',
+    password: '',
+    company_name: '',
+    subscription_status: 'trial'
   });
 
   useEffect(() => {
@@ -93,6 +102,54 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
     return status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
   };
 
+  const handleCreateTenant = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setCreating(true);
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: newTenant.name,
+          email: newTenant.email,
+          password: newTenant.password,
+          company_name: newTenant.company_name
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create tenant');
+      }
+
+      // Reset form and close modal
+      setNewTenant({
+        name: '',
+        email: '',
+        password: '',
+        company_name: '',
+        subscription_status: 'trial'
+      });
+      setShowCreateModal(false);
+      
+      // Refresh tenant list
+      await fetchTenants();
+      
+      alert('✅ Tenant created successfully!');
+    } catch (err) {
+      console.error('Failed to create tenant:', err);
+      alert(`❌ Failed to create tenant: ${err.message}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-navy-900 flex items-center justify-center">
@@ -107,14 +164,21 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLogout={onLogout}>
       <div className="space-y-8 animate-fade-in">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Super Admin Dashboard</h1>
-          <p className="text-gray-400">Manage tenants and access their dashboards</p>
-        </div>
-
-        {error && (
-          <div className="glass-card border-2 border-red-500/50 bg-red-500/10 rounded-xl px-6 py-4 text-red-400">
+        {/* Tenants Table */}
+        <div className="glass-card rounded-2xl overflow-hidden">
+          <div className="p-6 border-b border-white/10 flex items-center justify-between">
+            <h3 className="text-white font-bold text-lg flex items-center gap-2">
+              <Users size={20} className="text-gold-500" />
+              Tenant Management
+            </h3>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="btn-gold flex items-center gap-2 text-sm"
+            >
+              <Plus size={16} />
+              Create New Tenant
+            </button>
+          </div>lassName="glass-card border-2 border-red-500/50 bg-red-500/10 rounded-xl px-6 py-4 text-red-400">
             <AlertTriangle className="inline mr-2" size={20} />
             {error}
           </div>
@@ -205,14 +269,110 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
                   </tr>
                 ))}
               </tbody>
-            </table>
-
-            {tenants.length === 0 && (
-              <div className="text-center py-16">
-                <p className="text-gray-500 text-lg">No tenants found.</p>
-              </div>
-            )}
           </div>
+        </div>
+
+        {/* Create Tenant Modal */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="glass-card rounded-2xl w-full max-w-md p-8 relative animate-slide-in-up">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+
+              <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+                <Plus size={24} className="text-gold-500" />
+                Create New Tenant
+              </h2>
+
+              <form onSubmit={handleCreateTenant} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Agency Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newTenant.name}
+                    onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })}
+                    className="w-full px-4 py-3 bg-navy-900/50 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold-500 transition-colors"
+                    placeholder="Luxury Properties Dubai"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Company Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newTenant.company_name}
+                    onChange={(e) => setNewTenant({ ...newTenant, company_name: e.target.value })}
+                    className="w-full px-4 py-3 bg-navy-900/50 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold-500 transition-colors"
+                    placeholder="Luxury Properties LLC"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Admin Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={newTenant.email}
+                    onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })}
+                    className="w-full px-4 py-3 bg-navy-900/50 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold-500 transition-colors"
+                    placeholder="admin@agency.com"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Password *
+                  </label>
+                  <input
+                    type="password"
+                    value={newTenant.password}
+                    onChange={(e) => setNewTenant({ ...newTenant, password: e.target.value })}
+                    className="w-full px-4 py-3 bg-navy-900/50 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold-500 transition-colors"
+                    placeholder="Min 6 characters"
+                    minLength={6}
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl transition-colors"
+                    disabled={creating}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 btn-gold py-3"
+                    disabled={creating}
+                  >
+                    {creating ? 'Creating...' : 'Create Tenant'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+};
+
+export default SuperAdminDashboard;
         </div>
       </div>
     </Layout>
