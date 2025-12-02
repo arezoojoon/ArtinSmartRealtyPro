@@ -537,6 +537,65 @@ const Settings = ({ tenantId, token }) => {
                 </p>
             </div>
             
+            {/* WhatsApp Deep Link Section */}
+            <div className="glass-card rounded-xl p-6 border-2 border-green-500/30">
+                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                    <MessageCircle size={20} className="text-green-400" />
+                    WhatsApp Shared Number (Deep Link)
+                </h3>
+                
+                <div className="bg-navy-800 rounded-lg p-4 mb-4">
+                    <p className="text-gray-400 text-sm mb-3">
+                        💡 <strong className="text-white">Shared Number Mode:</strong> Use one WhatsApp number for all tenants. Users send messages to the shared number with a special link that identifies your agency.
+                    </p>
+                    
+                    <div className="space-y-3">
+                        <div>
+                            <label className="text-gray-400 text-sm block mb-2">Your Deep Link</label>
+                            <div className="flex items-center gap-2">
+                                <code className="flex-1 bg-navy-900 text-green-400 px-3 py-2 rounded text-sm overflow-x-auto">
+                                    https://wa.me/971501234567?text=TENANT_{tenantId}
+                                </code>
+                                <button
+                                    onClick={() => copyToClipboard(`https://wa.me/971501234567?text=TENANT_${tenantId}`, 'deeplink')}
+                                    className="p-2 bg-navy-900 rounded hover:bg-gold-500 hover:text-navy-900 transition-colors"
+                                >
+                                    {copied === 'deeplink' ? <Check size={16} /> : <Copy size={16} />}
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label className="text-gray-400 text-sm block mb-2">QR Code Link</label>
+                            <div className="flex items-center gap-2">
+                                <code className="flex-1 bg-navy-900 text-green-400 px-3 py-2 rounded text-sm overflow-x-auto">
+                                    https://api.qrserver.com/v1/create-qr-code/?data=https://wa.me/971501234567?text=TENANT_{tenantId}
+                                </code>
+                                <a
+                                    href={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://wa.me/971501234567?text=TENANT_${tenantId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 bg-navy-900 rounded hover:bg-gold-500 hover:text-navy-900 transition-colors"
+                                    title="Download QR Code"
+                                >
+                                    <ExternalLink size={16} />
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                    <h4 className="text-green-400 font-medium mb-2">📱 How to Use:</h4>
+                    <ol className="text-gray-400 text-sm space-y-2 list-decimal list-inside">
+                        <li>Share the deep link or QR code with your clients</li>
+                        <li>When they click it, WhatsApp opens with pre-filled text: <code className="text-green-400">TENANT_{tenantId}</code></li>
+                        <li>System automatically routes the conversation to your dashboard</li>
+                        <li>All leads are linked to your account (Tenant ID: {tenantId})</li>
+                    </ol>
+                </div>
+            </div>
+            
             {/* How It Works */}
             <div className="glass-card rounded-xl p-6">
                 <h3 className="text-white font-semibold mb-4">🤖 How Tenant Identification Works</h3>

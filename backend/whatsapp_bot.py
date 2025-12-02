@@ -82,6 +82,31 @@ class WhatsAppBotHandler:
         
         return lead
     
+    async def _get_or_create_lead_for_tenant(
+        self, 
+        from_phone: str, 
+        profile_name: Optional[str],
+        tenant_id: int
+    ) -> Lead:
+        """Get or create lead for a specific tenant (used in deep link routing)."""
+        lead = await get_or_create_lead(
+            tenant_id=tenant_id,
+            whatsapp_phone=from_phone,
+            source="whatsapp_deeplink"
+        )
+        
+        # Update name if available and not set
+        if profile_name and not lead.name:
+            await update_lead(lead.id, name=profile_name)
+            lead.name = profile_name
+        
+        # Set phone if not set
+        if not lead.phone:
+            await update_lead(lead.id, phone=from_phone)
+            lead.phone = from_phone
+        
+        return lead
+    
     async def _send_response(self, to_phone: str, response: BrainResponse, lead: Lead):
         """Send Brain response to user via WhatsApp."""
         await self.send_message(to_phone, response.message, response.buttons)
@@ -120,7 +145,7 @@ class WhatsAppBotHandler:
         Handle incoming WhatsApp webhook with multi-vertical routing.
         
         Routing Priority:
-        1. Deep link detection (start_expo, start_realty) → Set mode
+        1. Deep link detection (TENANT_XXX, start_expo, start_realty) → Set mode
         2. Existing Redis session → Route to stored mode
         3. Menu selection → Set mode
         4. No mode → Send main menu
@@ -141,6 +166,103 @@ class WhatsAppBotHandler:
             profile_name = parsed.get("profile_name")
             message_type = parsed.get("message_type")
             text = parsed.get("text")
+            
+            # ===== DEEP LINK TENANT ROUTING =====
+            # Check if message contains TENANT_XXX pattern
+            import re
+            if message_type == "text" and text:
+                tenant_match = re.search(r'TENANT_(\d+)', text)
+                if tenant_match:
+                    deep_link_tenant_id = int(tenant_match.group(1))
+                    logger.info(f"🔗 Deep link detected: Routing to Tenant ID {deep_link_tenant_id}")
+                    
+                    # Get the specific tenant
+                    from database import async_session, Tenant
+                    from sqlalchemy import select
+                    async with async_session() as session:
+                        result = await session.execute(
+                            select(Tenant).where(Tenant.id == deep_link_tenant_id)
+                        )
+                        target_tenant = result.scalar_one_or_none()
+                        
+                        if target_tenant:
+                            # Create handler for this tenant
+                            from brain import Brain
+                            tenant_brain = Brain(target_tenant)
+                            
+                            # Get or create lead for this tenant
+                            lead = await self._get_or_create_lead_for_tenant(
+                                from_phone, profile_name, deep_link_tenant_id
+                            )
+                            
+                            # Send welcome message
+                            welcome_msg = {
+                                Language.EN: f"👋 Welcome! You've connected with {target_tenant.name or target_tenant.company_name}.\n\nHow can we help you with Dubai Real Estate today?",
+                                Language.FA: f"👋 خوش آمدید! شما به {target_tenant.name or target_tenant.company_name} متصل شدید.\n\nچطور میتونیم در املاک دبی کمکتون کنیم؟",
+                                Language.AR: f"👋 مرحباً! تم توصيلك مع {target_tenant.name or target_tenant.company_name}.\n\nكيف يمكننا مساعدتك في عقارات دبي؟",
+                                Language.RU: f"👋 Добро пожаловать! Вы подключились к {target_tenant.name or target_tenant.company_name}.\n\nКак мы можем помочь вам с недвижимостью в Дубае?"
+                            }
+                            
+                            lang = lead.language or Language.EN
+                            await self.send_message(from_phone, welcome_msg.get(lang, welcome_msg[Language.EN]))
+                            
+                            # Store tenant mapping in Redis for future messages
+                            import redis.asyncio as redis
+                            redis_client = redis.from_url(
+                                os.getenv("REDIS_URL", "redis://localhost:6379"),
+                                decode_responses=True
+                            )
+                            await redis_client.set(
+                                f"whatsapp_tenant_map:{from_phone}",
+                                str(deep_link_tenant_id),
+                                ex=86400 * 30  # 30 days
+                            )
+                            await redis_client.aclose()
+                            
+                            return True
+            
+            # Check if this phone number has a mapped tenant from previous deep link
+            import redis.asyncio as redis
+            redis_client = redis.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379"),
+                decode_responses=True
+            )
+            mapped_tenant_id = await redis_client.get(f"whatsapp_tenant_map:{from_phone}")
+            await redis_client.aclose()
+            
+            if mapped_tenant_id:
+                # Route to the mapped tenant
+                logger.info(f"📍 Routing to previously mapped Tenant ID {mapped_tenant_id}")
+                
+                from database import async_session, Tenant
+                from sqlalchemy import select
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(Tenant).where(Tenant.id == int(mapped_tenant_id))
+                    )
+                    mapped_tenant = result.scalar_one_or_none()
+                    
+                    if mapped_tenant:
+                        from brain import Brain
+                        tenant_brain = Brain(mapped_tenant)
+                        
+                        lead = await self._get_or_create_lead_for_tenant(
+                            from_phone, profile_name, int(mapped_tenant_id)
+                        )
+                        
+                        # Process message with tenant's brain
+                        if message_type == "text" and text:
+                            response = await tenant_brain.process_message(lead, text, "")
+                            await self.send_message(from_phone, response.message, response.buttons)
+                            
+                            # Update lead
+                            updates = response.lead_updates or {}
+                            if response.next_state:
+                                updates["conversation_state"] = response.next_state
+                            if updates:
+                                await update_lead(lead.id, **updates)
+                        
+                        return True
             
             # Get or create lead
             lead = await self._get_or_create_lead(from_phone, profile_name)
