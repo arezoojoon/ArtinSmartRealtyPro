@@ -39,7 +39,7 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
       setLoading(true);
       const token = localStorage.getItem('token');
       
-      const response = await fetch(`${API_BASE_URL}/api/tenants`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/tenants`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
