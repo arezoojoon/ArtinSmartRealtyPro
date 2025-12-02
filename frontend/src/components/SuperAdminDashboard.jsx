@@ -370,5 +370,3 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
 };
 
 export default SuperAdminDashboard;
-
-export default SuperAdminDashboard;
