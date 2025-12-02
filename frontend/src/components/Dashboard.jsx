@@ -180,7 +180,7 @@ const PipelineColumn = ({ title, leads, colorClass, onLeadClick }) => (
 );
 
 // Weekly Calendar Component with Glassmorphism
-const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot }) => {
+const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot, compactMode = false, onOpenFullCalendar }) => {
     const [showModal, setShowModal] = useState(false);
     const [selectedDay, setSelectedDay] = useState(DAYS_OF_WEEK[0]);
     const [newSlot, setNewSlot] = useState({ start_time: '09:00', end_time: '10:00' });
@@ -195,19 +195,29 @@ const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot }) => {
         setNewSlot({ start_time: '09:00', end_time: '10:00' });
     };
 
+    const handleSetAvailability = () => {
+        if (compactMode && onOpenFullCalendar) {
+            // در حالت compact، به جای باز کردن modal، به تب Calendar برو
+            onOpenFullCalendar();
+        } else {
+            // در حالت عادی، modal را باز کن
+            setShowModal(true);
+        }
+    };
+
     return (
         <div className="glass-card rounded-2xl p-6">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-white font-semibold text-lg flex items-center gap-2">
                     <CalendarDays size={20} className="text-gold-500" />
-                    Weekly Availability
+                    {compactMode ? 'وقت‌های خالی شما' : 'Weekly Availability'}
                 </h3>
                 <button
-                    onClick={() => setShowModal(true)}
+                    onClick={handleSetAvailability}
                     className="btn-gold flex items-center gap-2"
                 >
                     <Plus size={16} />
-                    Set Availability
+                    {compactMode ? '🗓️ مدیریت تقویم' : 'Set Availability'}
                 </button>
             </div>
 
@@ -540,6 +550,8 @@ const Dashboard = ({ user, onLogout }) => {
                         slots={slots}
                         onAddSlot={handleAddSlot}
                         onDeleteSlot={handleDeleteSlot}
+                        compactMode={true}
+                        onOpenFullCalendar={() => setActiveTab('calendar')}
                     />
                 </div>
             )}
