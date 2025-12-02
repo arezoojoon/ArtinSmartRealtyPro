@@ -210,7 +210,9 @@ class TenantResponse(BaseModel):
     subscription_status: Optional[str]
     trial_ends_at: Optional[datetime]
     whatsapp_phone_number_id: Optional[str]
+    whatsapp_access_token: Optional[str]
     whatsapp_business_account_id: Optional[str]
+    whatsapp_verify_token: Optional[str]
     is_active: bool
     created_at: datetime
 

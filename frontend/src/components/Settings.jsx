@@ -16,7 +16,9 @@ import {
     Phone,
     Mail,
     Globe,
-    ExternalLink
+    ExternalLink,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -27,6 +29,10 @@ const Settings = ({ tenantId, token }) => {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
     const [copied, setCopied] = useState(null);
+    const [showWhatsAppToken, setShowWhatsAppToken] = useState(false);
+    const [showTelegramToken, setShowTelegramToken] = useState(false);
+    const [currentWhatsAppToken, setCurrentWhatsAppToken] = useState('');
+    const [currentTelegramToken, setCurrentTelegramToken] = useState('');
     
     // Settings state
     const [settings, setSettings] = useState({
@@ -70,6 +76,10 @@ const Settings = ({ tenantId, token }) => {
                 whatsapp_business_account_id: data.whatsapp_business_account_id || '',
                 whatsapp_verify_token: data.whatsapp_verify_token || '',
             });
+            
+            // Store current tokens for display
+            setCurrentTelegramToken(data.telegram_bot_token || '');
+            setCurrentWhatsAppToken(data.whatsapp_access_token || '');
         } catch (err) {
             setError(err.message);
         } finally {
@@ -279,16 +289,28 @@ const Settings = ({ tenantId, token }) => {
                 <div className="space-y-4">
                     <div>
                         <label className="text-gray-400 text-sm block mb-2">Bot Token</label>
-                        <input
-                            type="text"
-                            value={settings.telegram_bot_token}
-                            onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
-                            className="w-full bg-navy-800 text-white rounded-lg px-4 py-3 border border-white/10 focus:border-gold-500 outline-none font-mono text-sm"
-                            placeholder="123456789:ABCDefghIJKLmnopQRSTuvwxYZ"
-                        />
+                        <div className="relative">
+                            <input
+                                type={showTelegramToken ? "text" : "password"}
+                                value={settings.telegram_bot_token || currentTelegramToken}
+                                onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
+                                className="w-full bg-navy-800 text-white rounded-lg px-4 py-3 pr-12 border border-white/10 focus:border-gold-500 outline-none font-mono text-sm"
+                                placeholder="123456789:ABCDefghIJKLmnopQRSTuvwxYZ"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowTelegramToken(!showTelegramToken)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                            >
+                                {showTelegramToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
                         <p className="text-gray-500 text-xs mt-2">
                             Get your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:text-gold-400">@BotFather</a> on Telegram
                         </p>
+                        {currentTelegramToken && !settings.telegram_bot_token && (
+                            <p className="text-green-400 text-xs mt-1">✓ Token configured (hidden for security)</p>
+                        )}
                     </div>
                     
                     {settings.telegram_bot_token && (
@@ -342,13 +364,25 @@ const Settings = ({ tenantId, token }) => {
                     
                     <div>
                         <label className="text-gray-400 text-sm block mb-2">Access Token</label>
-                        <input
-                            type="password"
-                            value={settings.whatsapp_access_token}
-                            onChange={(e) => setSettings({ ...settings, whatsapp_access_token: e.target.value })}
-                            className="w-full bg-navy-800 text-white rounded-lg px-4 py-3 border border-white/10 focus:border-gold-500 outline-none font-mono text-sm"
-                            placeholder="EAABx..."
-                        />
+                        <div className="relative">
+                            <input
+                                type={showWhatsAppToken ? "text" : "password"}
+                                value={settings.whatsapp_access_token || currentWhatsAppToken}
+                                onChange={(e) => setSettings({ ...settings, whatsapp_access_token: e.target.value })}
+                                className="w-full bg-navy-800 text-white rounded-lg px-4 py-3 pr-12 border border-white/10 focus:border-gold-500 outline-none font-mono text-sm"
+                                placeholder="EAABx..."
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowWhatsAppToken(!showWhatsAppToken)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                            >
+                                {showWhatsAppToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                        {currentWhatsAppToken && !settings.whatsapp_access_token && (
+                            <p className="text-green-400 text-xs mt-1">✓ Token configured (hidden for security)</p>
+                        )}
                     </div>
                     
                     <div>
