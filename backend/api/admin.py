@@ -222,13 +222,17 @@ async def activate_tenant(
         return {"message": f"✅ Tenant {tenant_name} activated", "tenant_id": tenant_id}
 
 
+class UpdateSubscriptionRequest(BaseModel):
+    status: str
+
 @router.put("/tenants/{tenant_id}/subscription")
 async def update_tenant_subscription(
     tenant_id: int,
-    status: str,
+    request: UpdateSubscriptionRequest,
     current_admin: int = Depends(get_current_super_admin)
 ):
     """Update tenant subscription status"""
+    status = request.status
     valid_statuses = ["trial", "active", "suspended", "expired"]
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
