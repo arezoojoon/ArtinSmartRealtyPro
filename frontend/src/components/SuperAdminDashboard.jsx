@@ -88,6 +88,29 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
     }
   };
 
+  const handleChangeSubscription = async (tenantId, newStatus) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${API_BASE_URL}/api/admin/tenants/${tenantId}/subscription`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (!response.ok) throw new Error('Failed to update subscription');
+
+      await fetchTenants();
+      alert(`✅ Subscription updated to ${newStatus.toUpperCase()}`);
+    } catch (err) {
+      console.error('Failed to update subscription:', err);
+      alert(`❌ Failed: ${err.message}`);
+    }
+  };
+
   const getStatusBadge = (status) => {
     const badges = {
       active: 'badge-green',
@@ -245,9 +268,20 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
                     <td className="text-white px-6 py-4 text-sm font-semibold">{tenant.name || tenant.company_name || 'N/A'}</td>
                     <td className="text-gray-400 px-6 py-4 text-sm">{tenant.email}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${getStatusBadge(tenant.subscription_status)}`}>
-                        {getStatusText(tenant.subscription_status)}
-                      </span>
+                      <select
+                        value={tenant.subscription_status}
+                        onChange={(e) => handleChangeSubscription(tenant.id, e.target.value)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold bg-navy-900 border-2 cursor-pointer transition-colors ${
+                          tenant.subscription_status === 'active' ? 'border-green-500 text-green-400' :
+                          tenant.subscription_status === 'trial' ? 'border-yellow-500 text-yellow-400' :
+                          'border-red-500 text-red-400'
+                        }`}
+                      >
+                        <option value="trial">Trial</option>
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
                     </td>
                     <td className="text-gold-500 px-6 py-4 text-sm font-semibold">{tenant.total_leads || 0}</td>
                     <td className="text-gray-400 px-6 py-4 text-sm">
