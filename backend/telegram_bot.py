@@ -399,6 +399,90 @@ class TelegramBotHandler:
                             scheduled_date=appointment_date
                         )
         
+        # Handle schedule consultation request - Show available time slots
+        elif callback_data == "schedule_consultation":
+            # Get available slots from database
+            available_slots = await get_available_slots(self.tenant.id)
+            
+            if not available_slots:
+                # No slots available
+                no_slots_msg = {
+                    Language.EN: "⏰ Currently, we don't have available time slots. Please contact us directly or try again later.",
+                    Language.FA: "⏰ در حال حاضر وقت خالی نداریم. لطفاً مستقیماً با ما تماس بگیرید یا بعداً تلاش کنید.",
+                    Language.AR: "⏰ حالياً، ليس لدينا فترات زمنية متاحة. يرجى الاتصال بنا مباشرة أو المحاولة لاحقاً.",
+                    Language.RU: "⏰ В настоящее время у нас нет доступных временных слотов. Пожалуйста, свяжитесь с нами напрямую или попробуйте позже."
+                }
+                lang = lead.language or Language.FA
+                await query.edit_message_text(no_slots_msg.get(lang, no_slots_msg[Language.EN]))
+                return
+            
+            # Build calendar message with available slots
+            lang = lead.language or Language.FA
+            calendar_header = {
+                Language.EN: "📅 **Available Consultation Times**\n\nPlease select a time that works best for you:",
+                Language.FA: "📅 **وقت‌های خالی مشاوره**\n\nلطفاً زمانی که برایتان مناسب است انتخاب کنید:",
+                Language.AR: "📅 **أوقات الاستشارة المتاحة**\n\nيرجى اختيار الوقت الذي يناسبك:",
+                Language.RU: "📅 **Доступное время консультации**\n\nПожалуйста, выберите удобное для вас время:"
+            }
+            
+            # Group slots by day
+            from collections import defaultdict
+            slots_by_day = defaultdict(list)
+            for slot in available_slots:
+                day_name = slot.day_of_week.value.capitalize()
+                time_range = f"{slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}"
+                slots_by_day[day_name].append({
+                    'id': slot.id,
+                    'time': time_range,
+                    'start': slot.start_time
+                })
+            
+            # Build inline keyboard with slots
+            keyboard = []
+            day_translations = {
+                'Monday': {'en': '📅 Mon', 'fa': '📅 دوشنبه', 'ar': '📅 الاثنين', 'ru': '📅 Пн'},
+                'Tuesday': {'en': '📅 Tue', 'fa': '📅 سه‌شنبه', 'ar': '📅 الثلاثاء', 'ru': '📅 Вт'},
+                'Wednesday': {'en': '📅 Wed', 'fa': '📅 چهارشنبه', 'ar': '📅 الأربعاء', 'ru': '📅 Ср'},
+                'Thursday': {'en': '📅 Thu', 'fa': '📅 پنج‌شنبه', 'ar': '📅 الخميس', 'ru': '📅 Чт'},
+                'Friday': {'en': '📅 Fri', 'fa': '📅 جمعه', 'ar': '📅 الجمعة', 'ru': '📅 Пт'},
+                'Saturday': {'en': '📅 Sat', 'fa': '📅 شنبه', 'ar': '📅 السبت', 'ru': '📅 Сб'},
+                'Sunday': {'en': '📅 Sun', 'fa': '📅 یکشنبه', 'ar': '📅 الأحد', 'ru': '📅 Вс'}
+            }
+            
+            lang_key = {'en': 'en', 'fa': 'fa', 'ar': 'ar', 'ru': 'ru'}.get(lang.value, 'fa')
+            
+            for day_name in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']:
+                if day_name in slots_by_day:
+                    # Sort slots by start time
+                    sorted_slots = sorted(slots_by_day[day_name], key=lambda x: x['start'])
+                    
+                    # Add day header button (disabled)
+                    day_label = day_translations.get(day_name, {}).get(lang_key, day_name)
+                    keyboard.append([InlineKeyboardButton(day_label, callback_data="disabled")])
+                    
+                    # Add time slot buttons (2 per row)
+                    row = []
+                    for slot in sorted_slots:
+                        btn = InlineKeyboardButton(
+                            f"🕐 {slot['time']}", 
+                            callback_data=f"slot_{slot['id']}"
+                        )
+                        row.append(btn)
+                        if len(row) == 2:
+                            keyboard.append(row)
+                            row = []
+                    if row:  # Add remaining buttons
+                        keyboard.append(row)
+            
+            # Send calendar with slots
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                calendar_header.get(lang, calendar_header[Language.EN]),
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            return
+        
         # Process through Brain
         response = await self.brain.process_message(lead, "", callback_data)
         
