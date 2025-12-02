@@ -164,7 +164,7 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLogout={onLogout}>
       <div className="space-y-8 animate-fade-in">
-        {/* Tenants Table */}
+        {/* Header Section */}
         <div className="glass-card rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-white/10 flex items-center justify-between">
             <h3 className="text-white font-bold text-lg flex items-center gap-2">
@@ -179,13 +179,14 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
               Create New Tenant
             </button>
           </div>
+        </div>
 
-          {error && (
-            <div className="glass-card border-2 border-red-500/50 bg-red-500/10 rounded-xl px-6 py-4 text-red-400">
-              <AlertTriangle className="inline mr-2" size={20} />
-              {error}
-            </div>
-          )}
+        {error && (
+          <div className="glass-card border-2 border-red-500/50 bg-red-500/10 rounded-xl px-6 py-4 text-red-400">
+            <AlertTriangle className="inline mr-2" size={20} />
+            {error}
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
