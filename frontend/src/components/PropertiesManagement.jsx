@@ -312,7 +312,7 @@ const PropertiesManagement = ({ tenantId }) => {
                             )}
 
                             {/* Details */}
-                            <div className="grid grid-cols-3 gap-4 mb-4 text-center">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4 text-center">
                                 {property.bedrooms !== null && (
                                     <div>
                                         <Bed className="w-4 h-4 text-gray-400 mx-auto mb-1" />
@@ -392,7 +392,7 @@ const PropertiesManagement = ({ tenantId }) => {
                         }
                     }}
                 >
-                    <div className="glass-card max-w-2xl w-full p-6 my-8 max-h-[85vh] overflow-y-auto">
+                    <div className="glass-card max-w-2xl w-full p-4 sm:p-6 my-4 sm:my-8 max-h-[85vh] overflow-y-auto">
                         {/* Modal Header */}
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-2xl font-bold text-white">
@@ -425,7 +425,7 @@ const PropertiesManagement = ({ tenantId }) => {
                             </div>
 
                             {/* Type & Transaction */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Property Type *
@@ -492,7 +492,7 @@ const PropertiesManagement = ({ tenantId }) => {
                             </div>
 
                             {/* Price Details */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Price
@@ -523,7 +523,7 @@ const PropertiesManagement = ({ tenantId }) => {
                             </div>
 
                             {/* Bedrooms, Bathrooms, Area */}
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Bedrooms
@@ -652,7 +652,7 @@ const PropertiesManagement = ({ tenantId }) => {
                             </div>
 
                             {/* ROI & Rental Yield */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
                                         Expected ROI (%)

@@ -275,7 +275,7 @@ const Lottery = ({ tenantId }) => {
                             </div>
 
                             {/* Stats */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="bg-navy-800 rounded-lg p-3">
                                     <div className="flex items-center gap-2 mb-1">
                                         <Users size={16} className="text-gray-400" />
@@ -360,8 +360,8 @@ const Lottery = ({ tenantId }) => {
 
             {/* Create/Edit Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-navy-900 rounded-xl w-full max-w-2xl">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-4">
+                    <div className="bg-navy-900 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between p-6 border-b border-white/10">
                             <h3 className="text-white text-xl font-semibold">
                                 {editingLottery ? 'Edit Lottery' : 'Create Lottery'}
@@ -372,7 +372,7 @@ const Lottery = ({ tenantId }) => {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="col-span-2">
                                     <label className="text-gray-400 text-sm block mb-2">Campaign Title</label>
                                     <input

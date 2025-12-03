@@ -221,7 +221,7 @@ const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot, compactMode = false, o
                 </button>
             </div>
 
-            <div className="grid grid-cols-7 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-3">
                 {DAYS_OF_WEEK.map((day, index) => {
                     const daySlots = slots.filter(s => s.day_of_week === day);
                     return (

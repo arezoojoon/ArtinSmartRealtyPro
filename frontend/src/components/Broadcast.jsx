@@ -242,7 +242,7 @@ const Broadcast = ({ tenantId }) => {
                     {/* Message Templates */}
                     <div>
                         <label className="text-gray-400 text-sm block mb-2">Quick Templates</label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {messageTemplates.map((template, index) => (
                                 <button
                                     key={index}

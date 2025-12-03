@@ -1,6 +1,6 @@
 import { LayoutDashboard, Users, CalendarDays, Building2, BarChart3, Settings, LogOut, QrCode, Send, BookOpen, Gift } from 'lucide-react';
 
-export const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
+export const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) => {
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'leads', icon: Users, label: 'Lead Pipeline' },
@@ -15,7 +15,7 @@ export const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
   ];
 
   return (
-    <aside className="w-72 glass-sidebar fixed h-screen left-0 top-0 z-50 flex flex-col animate-slide-in-left">
+    <aside className={`w-72 glass-sidebar fixed h-screen left-0 top-0 z-50 flex flex-col animate-slide-in-left transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
       <div className="px-6 py-6 mb-4 flex items-center gap-3">
         <div className="w-10 h-10 bg-gold-500 rounded-lg flex items-center justify-center font-bold text-navy-900">AS</div>
         <div>

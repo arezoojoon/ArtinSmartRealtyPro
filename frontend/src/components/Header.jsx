@@ -1,16 +1,26 @@
 import { Search, Bell } from 'lucide-react';
 
-export const Header = ({ user }) => {
+import { Menu } from 'lucide-react';
+
+export const Header = ({ user, onMenuClick }) => {
   return (
-    <header className="h-20 glass-header fixed top-0 right-0 left-72 z-40 px-8">
-      <div className="h-full flex items-center justify-between">
-        <div className="flex-1 max-w-lg">
+    <header className="h-16 lg:h-20 glass-header fixed top-0 right-0 left-0 lg:left-72 z-40 px-4 lg:px-8">
+      <div className="h-full flex items-center justify-between gap-4">
+        {/* Hamburger Menu - Mobile Only */}
+        <button 
+          onClick={onMenuClick}
+          className="lg:hidden text-gray-400 hover:text-gold-500 transition-colors p-2 hover:bg-white/5 rounded-xl"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+
+        <div className="flex-1 max-w-lg hidden sm:block">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input 
               type="text" 
               placeholder="Search leads, properties..." 
-              className="w-full pl-12 pr-4 py-3 bg-navy-800/50 border border-white/10 rounded-xl text-gray-200 focus:outline-none focus:border-gold-500/50 transition-all" 
+              className="w-full pl-12 pr-4 py-2 lg:py-3 bg-navy-800/50 border border-white/10 rounded-xl text-gray-200 focus:outline-none focus:border-gold-500/50 transition-all text-sm" 
             />
           </div>
         </div>

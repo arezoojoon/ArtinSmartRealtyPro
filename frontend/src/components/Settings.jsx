@@ -298,7 +298,7 @@ const Settings = ({ tenantId, token }) => {
                     Profile Information
                 </h3>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="text-gray-400 text-sm block mb-2">Your Name</label>
                         <input
@@ -451,7 +451,7 @@ const Settings = ({ tenantId, token }) => {
                     WhatsApp Business API Configuration
                 </h3>
                 
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label className="text-gray-400 text-sm block mb-2">Phone Number ID</label>
                         <input
@@ -599,7 +599,7 @@ const Settings = ({ tenantId, token }) => {
             {/* How It Works */}
             <div className="glass-card rounded-xl p-6">
                 <h3 className="text-white font-semibold mb-4">🤖 How Tenant Identification Works</h3>
-                <div className="grid grid-cols-2 gap-6 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                     <div className="bg-navy-800 rounded-lg p-4">
                         <h4 className="text-blue-400 font-medium mb-2">Telegram</h4>
                         <p className="text-gray-400">

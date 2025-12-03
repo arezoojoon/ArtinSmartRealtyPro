@@ -121,7 +121,7 @@ const QRGenerator = ({ tenantId }) => {
                     {/* QR Type Selection */}
                     <div>
                         <label className="text-gray-400 text-sm block mb-3">QR Code Type</label>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <button
                                 onClick={() => setQrType('bot')}
                                 className={`p-4 rounded-lg border-2 transition-all ${
@@ -256,7 +256,7 @@ const QRGenerator = ({ tenantId }) => {
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <button
                                     onClick={downloadQR}
                                     className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-white font-semibold py-3 rounded-lg transition-colors"
