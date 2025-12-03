@@ -64,10 +64,10 @@ TRANSLATIONS = {
         Language.RU: "🏠 Получите БЕСПЛАТНЫЙ анализ ROI!\n\nУзнайте, сколько вы можете заработать на недвижимости в Дубае.\n\nХотите получить персональный отчёт?"
     },
     "phone_request": {
-        Language.EN: "📱 Perfect! To connect you with our consultant and send the detailed report, please share your phone number using the button below. 👇",
-        Language.FA: "📱 عالی! برای ارتباط با مشاور و ارسال گزارش کامل، لطفاً شماره تلفن خود را با دکمه زیر به اشتراک بگذارید. 👇",
-        Language.AR: "📱 ممتاز! للتواصل مع استشاريتنا وإرسال التقرير المفصل، يرجى مشاركة رقم هاتفك باستخدام الزر أدناه. 👇",
-        Language.RU: "📱 Отлично! Чтобы связаться с консультантом и отправить подробный отчёт, поделитесь номером телефона кнопкой ниже. 👇"
+        Language.EN: "📱 Perfect! To connect you with our consultant and send the detailed report, please share your phone number using the button below.\n(e.g., +971501234567 for UAE, +989123456789 for Iran) 👇",
+        Language.FA: "📱 عالی! برای ارتباط با مشاور و ارسال گزارش کامل، لطفاً شماره تلفن خود را با دکمه زیر به اشتراک بگذارید.\n(مثلاً +971501234567 برای امارات، +989123456789 برای ایران) 👇",
+        Language.AR: "📱 ممتاز! للتواصل مع استشاريتنا وإرسال التقرير المفصل، يرجى مشاركة رقم هاتفك باستخدام الزر أدناه.\n(مثلاً +971501234567 للإمارات، +989123456789 لإيران) 👇",
+        Language.RU: "📱 Отлично! Чтобы связаться с консультантом и отправить подробный отчёт, поделитесь номером телефона кнопкой ниже.\n(например, +971501234567 для ОАЭ, +989123456789 для Ирана) 👇"
     },
     "phone_request_button": {
         Language.EN: "📱 Share Phone Number",
@@ -163,7 +163,37 @@ TRANSLATIONS = {
         Language.AR: "📅 وكيلنا {agent_name} لديه مواعيد محدودة هذا الأسبوع!\n\n🔥 بقي فقط {slot_count} مواعيد:\n\n{slots}\n\n⏰ احجز الآن قبل امتلائها!",
         Language.RU: "📅 У нашего агента {agent_name} ограниченное время на этой неделе!\n\n🔥 Осталось только {slot_count} слотов:\n\n{slots}\n\n⏰ Забронируйте сейчас, пока не заняли!"
     },
-    # Pain point buttons
+    # Lottery messages
+    "lottery_offer": {
+        Language.EN: "🎁 **Exclusive Lottery!**\n\nWe're running a special lottery for our clients!\n\nPrize: {prize}\n📅 Draw Date: {end_date}\n\nWould you like to participate? It's FREE! 🎉",
+        Language.FA: "🎁 **قرعه‌کشی ویژه!**\n\nما برای مشتریانمان قرعه‌کشی ویژه داریم!\n\nجایزه: {prize}\n📅 تاریخ قرعه‌کشی: {end_date}\n\nمی‌خواهید شرکت کنید؟ کاملاً رایگان است! 🎉",
+        Language.AR: "🎁 **قرعة حصرية!**\n\nنجري قرعة خاصة لعملائنا!\n\nالجائزة: {prize}\n📅 تاريخ السحب: {end_date}\n\nهل تريد المشاركة؟ مجانية تماماً! 🎉",
+        Language.RU: "🎁 **Эксклюзивная лотерея!**\n\nМы проводим специальную лотерею для наших клиентов!\n\nПриз: {prize}\n📅 Дата розыгрыша: {end_date}\n\nХотите участвовать? Это БЕСПЛАТНО! 🎉"
+    },
+    "lottery_joined": {
+        Language.EN: "✅ Congratulations! You've been entered into the lottery!\n\nGood luck! 🍀 We'll notify you when the winner is announced on {end_date}.",
+        Language.FA: "✅ تبریک! شما در قرعه‌کشی ثبت‌نام شدید!\n\nموفق باشید! 🍀 در تاریخ {end_date} برنده را اعلام می‌کنیم.",
+        Language.AR: "✅ تهانينا! تم تسجيلك في القرعة!\n\nحظاً موفقاً! 🍀 سنخطرك عند الإعلان عن الفائز في {end_date}.",
+        Language.RU: "✅ Поздравляем! Вы зарегистрированы в лотерее!\n\nУдачи! 🍀 Мы сообщим победителя {end_date}."
+    },
+    "lottery_skip": {
+        Language.EN: "No problem! Let's continue exploring properties. 🏠",
+        Language.FA: "مشکلی نیست! بیایید به بررسی املاک ادامه دهیم. 🏠",
+        Language.AR: "لا مشكلة! لنواصل استكشاف العقارات. 🏠",
+        Language.RU: "Без проблем! Давайте продолжим просмотр объектов. 🏠"
+    },
+    "btn_join_lottery": {
+        Language.EN: "🎁 Join Lottery",
+        Language.FA: "🎁 شرکت در قرعه‌کشی",
+        Language.AR: "🎁 الانضمام للقرعة",
+        Language.RU: "🎁 Участвовать в лотерее"
+    },
+    "btn_skip_lottery": {
+        Language.EN: "❌ Not Now",
+        Language.FA: "❌ الان نه",
+        Language.AR: "❌ ليس الآن",
+        Language.RU: "❌ Не сейчас"
+    },
     "btn_inflation": {
         Language.EN: "💱 Currency Protection",
         Language.FA: "💱 حفاظت از ارزش پول",
@@ -388,12 +418,57 @@ class BrainResponse:
     next_state: Optional[ConversationState] = None
     lead_updates: Optional[Dict[str, Any]] = None
     should_generate_roi: bool = False
-    schedule_slots: Optional[List[Dict]] = None
-    metadata: Optional[Dict[str, Any]] = None  # For PDF delivery, etc.
     request_contact: bool = False  # NEW: Request phone number with contact button (Telegram)
 
 
-# ==================== BRAIN CLASS ====================
+# ==================== LOTTERY HELPERS ====================
+
+async def get_active_lotteries(tenant_id: int):
+    """Get active lotteries for a tenant from the API."""
+    import aiohttp
+    from datetime import datetime
+    
+    try:
+        # Import here to avoid circular import
+        from api.lotteries import LOTTERIES_DB
+        
+        active_lotteries = []
+        for lottery in LOTTERIES_DB.values():
+            if (lottery["tenant_id"] == tenant_id and 
+                lottery["status"] == "active" and 
+                lottery["end_date"] > datetime.utcnow()):
+                active_lotteries.append(lottery)
+        
+        return active_lotteries
+    except Exception as e:
+        logger.error(f"❌ Error fetching lotteries: {e}")
+        return []
+
+
+async def join_lottery(tenant_id: int, lottery_id: int, lead_id: int):
+    """Add a lead to lottery participants."""
+    try:
+        from api.lotteries import LOTTERIES_DB
+        
+        if lottery_id not in LOTTERIES_DB:
+            return False
+        
+        lottery = LOTTERIES_DB[lottery_id]
+        if lottery["tenant_id"] != tenant_id:
+            return False
+        
+        # Add lead to participants if not already there
+        if lead_id not in lottery["participants"]:
+            lottery["participants"].append(lead_id)
+            logger.info(f"✅ Lead {lead_id} joined lottery {lottery_id}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error joining lottery: {e}")
+        return False
+
+
+# ==================== MAIN BRAIN CLASS ====================
 
 class Brain:
     """
@@ -1086,10 +1161,19 @@ AGENT'S FAQ & POLICIES:
                 features_str = ", ".join(p['features'][:3]) if p['features'] else ""
                 golden_str = " 🛂 Golden Visa" if p['golden_visa'] else ""
                 
+                # Add ROI and Rental Yield to user message
+                roi_str = f"📊 Expected ROI: {p['roi']}% annually" if p.get('roi') else ""
+                yield_str = f"📈 Rental Yield: {p['rental_yield']}%" if p.get('rental_yield') else ""
+                financial_info = f"\n   {roi_str}" if roi_str else ""
+                if yield_str:
+                    financial_info += f"\n   {yield_str}"
+                if p.get('mortgage_available'):
+                    financial_info += "\n   🏦 Mortgage available (flexible payment plans)"
+                
                 rec_parts.append(
                     f"{i}. **{p['name']}** - {p['location']}\n"
                     f"   {p['bedrooms']}BR {p['type']} | {price_str}{golden_str}\n"
-                    f"   ✨ {features_str}\n"
+                    f"   ✨ {features_str}{financial_info}\n"
                 )
         
         # Recommend off-plan projects for investors
@@ -1188,6 +1272,33 @@ AGENT'S FAQ & POLICIES:
                 if re.search(pattern, message_lower, re.IGNORECASE):
                     requested_lang = lang
                     break
+        
+        # === HANDLE LOTTERY CALLBACKS (Global) ===
+        if callback_data and callback_data.startswith("join_lottery_"):
+            lottery_id = int(callback_data.split("_")[2])
+            success = await join_lottery(self.tenant.id, lottery_id, lead.id)
+            
+            if success:
+                from api.lotteries import LOTTERIES_DB
+                lottery = LOTTERIES_DB.get(lottery_id)
+                end_date = lottery["end_date"].strftime("%Y-%m-%d") if lottery else "soon"
+                
+                joined_msg = TRANSLATIONS["lottery_joined"]
+                message_text = joined_msg.get(lang, joined_msg[Language.EN]).format(end_date=end_date)
+                
+                return BrainResponse(
+                    message=message_text,
+                    next_state=current_state,  # Stay in same state
+                    lead_updates=lead_updates
+                )
+        
+        elif callback_data == "skip_lottery":
+            skip_msg = TRANSLATIONS["lottery_skip"]
+            return BrainResponse(
+                message=skip_msg.get(lang, skip_msg[Language.EN]),
+                next_state=current_state,  # Stay in same state
+                lead_updates=lead_updates
+            )
         
         # DEBUG LOGGING
         if requested_lang:
@@ -1639,6 +1750,37 @@ AGENT'S FAQ & POLICIES:
                             Language.AR: f"رائع! إليك العقارات التي تطابق معاييرك:\n\n{property_recs}\n\n📋 هل تريد رؤية التفاصيل الكاملة وتحليل السوق لأي من هذه؟",
                             Language.RU: f"Отлично! Вот объекты, которые соответствуют вашим критериям:\n\n{property_recs}\n\n📋 Хотите увидеть полные детали и рыночный анализ для любого из них?"
                         }
+                        
+                        # Check if there are active lotteries
+                        active_lotteries = await get_active_lotteries(self.tenant.id)
+                        if active_lotteries:
+                            # Add lottery offer to the message
+                            lottery = active_lotteries[0]  # Get first active lottery
+                            lottery_msg = TRANSLATIONS["lottery_offer"]
+                            end_date = lottery["end_date"].strftime("%Y-%m-%d")
+                            
+                            lottery_text = lottery_msg.get(lang, lottery_msg[Language.EN]).format(
+                                prize=lottery["prize"],
+                                end_date=end_date
+                            )
+                            
+                            full_message = value_message.get(lang, value_message[Language.EN]) + "\n\n" + lottery_text
+                            
+                            # Add lottery buttons
+                            join_btn = TRANSLATIONS["btn_join_lottery"]
+                            skip_btn = TRANSLATIONS["btn_skip_lottery"]
+                            
+                            buttons = [
+                                {"text": join_btn.get(lang, join_btn[Language.EN]), "callback_data": f"join_lottery_{lottery['id']}"},
+                                {"text": skip_btn.get(lang, skip_btn[Language.EN]), "callback_data": "skip_lottery"}
+                            ]
+                            
+                            return BrainResponse(
+                                message=full_message,
+                                buttons=buttons,
+                                next_state=ConversationState.VALUE_PROPOSITION,
+                                lead_updates=lead_updates,
+                            )
                         
                         return BrainResponse(
                             message=value_message.get(lang, value_message[Language.EN]),
