@@ -1133,12 +1133,12 @@ AGENT'S FAQ & POLICIES:
         projects = self.tenant_context.get("projects", [])
         
         if not properties and not projects:
-            # No inventory - generic message
+            # No inventory - offer to connect with agent directly
             messages = {
-                Language.EN: f"📋 Based on your requirements, {self.agent_name} will prepare a personalized selection of properties for you!",
-                Language.FA: f"📋 بر اساس نیازهای شما، {self.agent_name} یک لیست شخصی‌سازی شده از ملک‌ها برای شما آماده خواهد کرد!",
-                Language.AR: f"📋 بناءً على متطلباتك، سيقوم {self.agent_name} بإعداد مجموعة مخصصة من العقارات لك!",
-                Language.RU: f"📋 На основе ваших требований {self.agent_name} подготовит персональную подборку объектов для вас!"
+                Language.EN: f"📋 I don't have exact properties in my system right now, but {self.agent_name} specializes in finding off-market deals!\n\n💡 Would you like to schedule a call with {self.agent_name}? They can:\n✅ Find properties matching your exact needs\n✅ Access exclusive off-market listings\n✅ Negotiate better prices for you\n\nShall I show you available times?",
+                Language.FA: f"📋 الان ملک مشخصی در سیستم ندارم، اما {self.agent_name} متخصص پیدا کردن املاک خارج از بازاره!\n\n💡 می‌خواهید با {self.agent_name} تماس بگیرید؟ می‌تونه:\n✅ ملک‌های دقیقاً مطابق نیازتون رو پیدا کنه\n✅ به لیستینگ‌های اختصاصی خارج از بازار دسترسی داره\n✅ قیمت بهتری براتون چونه بزنه\n\nبرات زمان‌های خالی رو نشون بدم؟",
+                Language.AR: f"📋 ليس لدي عقارات محددة في النظام الآن، لكن {self.agent_name} متخصص في إيجاد صفقات خارج السوق!\n\n💡 هل تريد جدولة مكالمة مع {self.agent_name}؟ يمكنه:\n✅ إيجاد عقارات تطابق احتياجاتك بالضبط\n✅ الوصول إلى قوائم حصرية خارج السوق\n✅ التفاوض على أسعار أفضل لك\n\nهل أعرض لك الأوقات المتاحة؟",
+                Language.RU: f"📋 Сейчас нет конкретных объектов в системе, но {self.agent_name} специализируется на поиске внерыночных сделок!\n\n💡 Хотите назначить звонок с {self.agent_name}? Он может:\n✅ Найти объекты точно под ваши требования\n✅ Доступ к эксклюзивным внерыночным предложениям\n✅ Договориться о лучшей цене для вас\n\nПоказать доступное время?"
             }
             return messages.get(lang, messages[Language.EN])
         
@@ -1829,21 +1829,29 @@ AGENT'S FAQ & POLICIES:
                             ]
                         )
                     else:
-                        # No matching properties
-                        no_match_message = {
-                            Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Would you like that?",
-                            Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. می‌خواهید؟",
-                            Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تريد ذلك؟",
-                            Language.RU: "У меня нет точных совпадений прямо сейчас, но я могу отправить подробный анализ рынка. Хотите это?"
+                        # No matching properties - show the message from get_property_recommendations
+                        # which now asks if they want to schedule consultation
+                        schedule_btn_text = {
+                            Language.EN: "📅 Yes, Show Available Times",
+                            Language.FA: "📅 بله، زمان‌های خالی رو نشون بده",
+                            Language.AR: "📅 نعم، أظهر الأوقات المتاحة",
+                            Language.RU: "📅 Да, покажите доступное время"
+                        }
+                        
+                        no_thanks_btn = {
+                            Language.EN: "❌ No, I'll Contact Later",
+                            Language.FA: "❌ نه، بعداً تماس میگیرم",
+                            Language.AR: "❌ لا، سأتصل لاحقاً",
+                            Language.RU: "❌ Нет, свяжусь позже"
                         }
                         
                         return BrainResponse(
-                            message=no_match_message.get(lang, no_match_message[Language.EN]),
+                            message=property_recs,  # The message from get_property_recommendations
                             next_state=ConversationState.VALUE_PROPOSITION,
                             lead_updates=lead_updates,
                             buttons=[
-                                {"text": self.get_text("btn_yes", lang), "callback_data": "analysis_yes"},
-                                {"text": self.get_text("btn_no", lang), "callback_data": "analysis_no"}
+                                {"text": schedule_btn_text.get(lang, schedule_btn_text[Language.EN]), "callback_data": "schedule_consultation"},
+                                {"text": no_thanks_btn.get(lang, no_thanks_btn[Language.EN]), "callback_data": "details_no"}
                             ]
                         )
         
