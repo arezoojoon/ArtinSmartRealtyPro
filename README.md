@@ -1,8 +1,52 @@
-# ArtinSmartRealty V2 - Commercial SaaS Edition
+# 🏢 ArtinSmartRealty - AI Real Estate Assistant Platform
 
-A high-end, multi-tenant Real Estate SaaS platform with AI-powered lead qualification, sales psychology techniques, and dual-channel bot integration (Telegram + WhatsApp).
+> **"Your AI Real Estate Assistant - Never Sleep, Always Sell!"**  
+> **"دستیار هوشمند املاک شما - هیچ‌وقت نمی‌خوابد، همیشه می‌فروشد!"**
+
+---
+
+## 🎯 **ما چی هستیم؟**
+
+**ArtinSmartRealty** یک پلتفرم **SaaS چندزبانه** است که به مشاوران املاک یک **ربات هوش مصنوعی 24/7** می‌دهد تا:
+- ✅ با مشتریان چت کند (تلگرام + واتساپ)
+- ✅ نیازشان را بفهمد و کوالیفای کند
+- ✅ ملک پیشنهاد دهد (از املاک خود مشاور)
+- ✅ وقت ملاقات رزرو کند
+- ✅ به صورت خودکار Follow-up کند
 
 **Live Demo**: [realty.artinsmartagent.com](https://realty.artinsmartagent.com)
+
+---
+
+## 📚 **مستندات محصول**
+
+| فایل | توضیح |
+|------|--------|
+| 📖 [PRODUCT_PRESENTATION.md](PRODUCT_PRESENTATION.md) | **سناریوی کامل تجربه مشتری** - از اولین پیام تا خرید ملک |
+| 📄 [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | **خلاصه اجرایی 1 صفحه** - برای سرمایه‌گذاران |
+| 🎤 [PITCH_DECK_SCRIPT.md](PITCH_DECK_SCRIPT.md) | **اسکریپت ارائه 10 اسلایدی** - 7 دقیقه |
+| 📊 [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) | **مقایسه با رقبا** - چرا ما بهتریم؟ |
+| 🐛 [BUGS_FIXED.md](BUGS_FIXED.md) | **گزارش باگ‌های رفع شده** - Dec 2, 2025 |
+
+---
+
+## 🚀 **شروع سریع (برای دولوپرها)**
+
+```bash
+# Clone repository
+git clone https://github.com/arezoojoon/ArtinSmartRealty.git
+cd ArtinSmartRealty
+
+# Start with Docker
+docker-compose up -d
+
+# Dashboard: http://localhost:3000
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
+```
+
+**لاگین پیش‌فرض**:
+- Super Admin: `admin@artinsmartrealty.com` / `SuperAdmin123!`
 
 ## 🚀 Features
 
