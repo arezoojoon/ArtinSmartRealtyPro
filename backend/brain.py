@@ -1284,20 +1284,48 @@ AGENT'S FAQ & POLICIES:
                 end_date = lottery["end_date"].strftime("%Y-%m-%d") if lottery else "soon"
                 
                 joined_msg = TRANSLATIONS["lottery_joined"]
+                continue_msg = {
+                    Language.EN: "\n\n📋 Would you like to see the full details and market analysis for the properties I showed you?",
+                    Language.FA: "\n\n📋 می‌خواهید جزئیات کامل و تحلیل بازار برای املاکی که نشون دادم را ببینید؟",
+                    Language.AR: "\n\n📋 هل تريد رؤية التفاصيل الكاملة وتحليل السوق للعقارات التي عرضتها؟",
+                    Language.RU: "\n\n📋 Хотите увидеть полные детали и рыночный анализ показанных объектов?"
+                }
+                
                 message_text = joined_msg.get(lang, joined_msg[Language.EN]).format(end_date=end_date)
+                message_text += continue_msg.get(lang, continue_msg[Language.EN])
                 
                 return BrainResponse(
                     message=message_text,
-                    next_state=current_state,  # Stay in same state
-                    lead_updates=lead_updates
+                    next_state=ConversationState.VALUE_PROPOSITION,
+                    lead_updates=lead_updates,
+                    buttons=[
+                        {"text": self.get_text("btn_yes", lang), "callback_data": "details_yes"},
+                        {"text": self.get_text("btn_no", lang), "callback_data": "details_no"},
+                        {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
+                    ]
                 )
         
         elif callback_data == "skip_lottery":
             skip_msg = TRANSLATIONS["lottery_skip"]
+            continue_msg = {
+                Language.EN: "\n\n📋 Would you like to see the full details and market analysis for these properties?",
+                Language.FA: "\n\n📋 می‌خواهید جزئیات کامل و تحلیل بازار برای این املاک را ببینید؟",
+                Language.AR: "\n\n📋 هل تريد رؤية التفاصيل الكاملة وتحليل السوق لهذه العقارات؟",
+                Language.RU: "\n\n📋 Хотите увидеть полные детали и рыночный анализ этих объектов?"
+            }
+            
+            message_text = skip_msg.get(lang, skip_msg[Language.EN])
+            message_text += continue_msg.get(lang, continue_msg[Language.EN])
+            
             return BrainResponse(
-                message=skip_msg.get(lang, skip_msg[Language.EN]),
-                next_state=current_state,  # Stay in same state
-                lead_updates=lead_updates
+                message=message_text,
+                next_state=ConversationState.VALUE_PROPOSITION,
+                lead_updates=lead_updates,
+                buttons=[
+                    {"text": self.get_text("btn_yes", lang), "callback_data": "details_yes"},
+                    {"text": self.get_text("btn_no", lang), "callback_data": "details_no"},
+                    {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
+                ]
             )
         
         # DEBUG LOGGING
@@ -2196,10 +2224,12 @@ AGENT'S FAQ & POLICIES:
                 # Phone validation failed - return error
                 return phone_response
         
-        # Default
+        # Default - show phone request with format
+        phone_request = TRANSLATIONS["phone_request"]
         return BrainResponse(
-            message="Please provide your phone number",
-            next_state=ConversationState.HARD_GATE
+            message=phone_request.get(lang, phone_request[Language.EN]),
+            next_state=ConversationState.HARD_GATE,
+            request_contact=True
         )
     
     # ==================== PHONE VALIDATION (Used by HARD_GATE) ====================
@@ -2209,14 +2239,15 @@ AGENT'S FAQ & POLICIES:
         # DATA INTEGRITY: Sanitize input to prevent SQL injection
         if not message or len(message) > 50:
             error_msgs = {
-                Language.EN: "⚠️ Please provide a valid phone number (max 50 characters).",
-                Language.FA: "⚠️ لطفاً شماره تلفن معتبر وارد کنید (حداکثر 50 کاراکتر).",
-                Language.AR: "⚠️ يرجى إدخال رقم هاتف صالح (حد أقصى 50 حرفاً).",
-                Language.RU: "⚠️ Пожалуйста, укажите корректный номер (макс 50 символов)."
+                Language.EN: "⚠️ Please provide a valid phone number (max 50 characters).\n(e.g., +971501234567 for UAE, +989123456789 for Iran)",
+                Language.FA: "⚠️ لطفاً شماره تلفن معتبر وارد کنید (حداکثر 50 کاراکتر).\n(مثلاً +971501234567 برای امارات، +989123456789 برای ایران)",
+                Language.AR: "⚠️ يرجى إدخال رقم هاتف صالح (حد أقصى 50 حرفاً).\n(مثلاً +971501234567 للإمارات، +989123456789 لإيران)",
+                Language.RU: "⚠️ Пожалуйста, укажите корректный номер (макс 50 символов).\n(например, +971501234567 для ОАЭ, +989123456789 для Ирана)"
             }
             return BrainResponse(
                 message=error_msgs.get(lang, error_msgs[Language.EN]),
-                next_state=ConversationState.HARD_GATE
+                next_state=ConversationState.HARD_GATE,
+                request_contact=True
             )
         
         # Clean message: remove spaces, dashes, parentheses, dots
@@ -2260,14 +2291,15 @@ AGENT'S FAQ & POLICIES:
         
         # Invalid phone - ONE example only
         error_msgs = {
-            Language.EN: "⚠️ Please provide a valid international phone number.\n\nExample: +971501234567",
-            Language.FA: "⚠️ لطفاً شماره تلفن بین‌المللی معتبر وارد کنید.\n\nمثال: +971501234567",
-            Language.AR: "⚠️ يرجى إدخال رقم هاتف دولي صالح.\n\nمثال: +971501234567",
-            Language.RU: "⚠️ Пожалуйста, укажите корректный международный номер.\n\nПример: +971501234567"
+            Language.EN: "⚠️ Please provide a valid international phone number.\n\nExamples:\n+971501234567 (UAE)\n+989123456789 (Iran)\n+966501234567 (Saudi)",
+            Language.FA: "⚠️ لطفاً شماره تلفن بین‌المللی معتبر وارد کنید.\n\nمثال‌ها:\n+971501234567 (امارات)\n+989123456789 (ایران)\n+966501234567 (عربستان)",
+            Language.AR: "⚠️ يرجى إدخال رقم هاتف دولي صالح.\n\nأمثلة:\n+971501234567 (الإمارات)\n+989123456789 (إيران)\n+966501234567 (السعودية)",
+            Language.RU: "⚠️ Пожалуйста, укажите корректный международный номер.\n\nПримеры:\n+971501234567 (ОАЭ)\n+989123456789 (Иран)\n+966501234567 (Саудия)"
         }
         return BrainResponse(
             message=error_msgs.get(lang, error_msgs[Language.EN]),
-            next_state=ConversationState.HARD_GATE
+            next_state=ConversationState.HARD_GATE,
+            request_contact=True
         )
     
     async def _handle_handoff_urgent(self, lang: Language, message: Optional[str], callback_data: Optional[str], lead: Lead, lead_updates: Dict) -> BrainResponse:
@@ -2334,10 +2366,12 @@ AGENT'S FAQ & POLICIES:
                 # Invalid phone - ask again
                 return phone_response
         
-        # Default - stay in HANDOFF_URGENT
+        # Default - stay in HANDOFF_URGENT with format hint
+        phone_request = TRANSLATIONS["phone_request"]
         return BrainResponse(
-            message=self.get_text("phone_request", lang),
-            next_state=ConversationState.HANDOFF_URGENT
+            message=phone_request.get(lang, phone_request[Language.EN]),
+            next_state=ConversationState.HANDOFF_URGENT,
+            request_contact=True
         )
     
     # ==================== UTILITY & HELPER METHODS ====================
