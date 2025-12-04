@@ -1492,7 +1492,7 @@ AGENT'S FAQ & POLICIES:
         WARMUP Phase: Quick rapport building (1-2 questions max)
         Goal: Identify primary objective (Investment, Living, or Residency)
         """
-        # If button clicked, capture goal and move to SLOT_FILLING
+        # If button clicked, capture goal and ask buy/rent BEFORE budget
         if callback_data and callback_data.startswith("goal_"):
             goal = callback_data.replace("goal_", "")
             
@@ -1507,31 +1507,26 @@ AGENT'S FAQ & POLICIES:
             lead_updates["conversation_data"] = conversation_data
             lead_updates["filled_slots"] = filled_slots
             
-            # Move to SLOT_FILLING with first question
-            next_question = {
-                Language.EN: f"Great! Let's find the perfect property for {goal}.\n\nWhat's your budget range?",
-                Language.FA: f"عالی! بیایید بهترین ملک را برای {goal} پیدا کنیم.\n\nبودجه‌ات چقدر است؟",
-                Language.AR: f"رائع! دعنا نجد العقار المثالي لـ {goal}.\n\nما هو نطاق ميزانيتك؟",
-                Language.RU: f"Отлично! Давайте найдем идеальную недвижимость для {goal}.\n\nКаков ваш بюджет?"
+            # For investment goal, ask transaction type first (buy/rent)
+            # For living/residency, ALSO ask transaction type (not budget directly)
+            transaction_question = {
+                Language.EN: f"Perfect! Are you looking to buy or rent?",
+                Language.FA: f"عالی! می‌خواهید بخرید یا اجاره کنید؟",
+                Language.AR: f"ممتاز! هل تريد الشراء أم الإيجار؟",
+                Language.RU: f"Отлично! Вы хотите купить или арендовать?"
             }
             
-            # Show budget buttons
-            budget_buttons = []
-            for idx, (min_val, max_val) in BUDGET_RANGES.items():
-                if max_val:
-                    label = f"{min_val:,} - {max_val:,} AED"
-                else:
-                    label = f"{min_val:,}+ AED"
-                budget_buttons.append({
-                    "text": label,
-                    "callback_data": f"budget_{idx}"
-                })
+            # Show Buy/Rent buttons
+            transaction_buttons = [
+                {"text": "🏠 " + ("خرید" if lang == Language.FA else "Buy"), "callback_data": "transaction_buy"},
+                {"text": "🔑 " + ("اجاره" if lang == Language.FA else "Rent"), "callback_data": "transaction_rent"}
+            ]
             
             return BrainResponse(
-                message=next_question.get(lang, next_question[Language.EN]),
+                message=transaction_question.get(lang, transaction_question[Language.EN]),
                 next_state=ConversationState.SLOT_FILLING,
-                lead_updates=lead_updates | {"pending_slot": "budget"},
-                buttons=budget_buttons
+                lead_updates=lead_updates | {"pending_slot": "transaction_type"},
+                buttons=transaction_buttons
             )
         
         # If text message, use AI to answer FAQ - but DON'T re-ask the goal question
@@ -1748,9 +1743,15 @@ AGENT'S FAQ & POLICIES:
                     ]
                 )
             
-            # Transaction type selection
-            elif callback_data.startswith("tx_"):
-                transaction_type_str = callback_data.replace("tx_", "")
+            # Transaction type selection (from either WARMUP goal flow or SLOT_FILLING property flow)
+            # Handles both "tx_buy/tx_rent" (from property selection) and "transaction_buy/transaction_rent" (from goal selection)
+            elif callback_data.startswith("tx_") or callback_data.startswith("transaction_"):
+                # Normalize callback data
+                if callback_data.startswith("transaction_"):
+                    transaction_type_str = callback_data.replace("transaction_", "")
+                else:
+                    transaction_type_str = callback_data.replace("tx_", "")
+                
                 transaction_type_map = {
                     "buy": TransactionType.BUY,
                     "rent": TransactionType.RENT
@@ -1759,6 +1760,40 @@ AGENT'S FAQ & POLICIES:
                 conversation_data["transaction_type"] = transaction_type_str
                 filled_slots["transaction_type"] = True
                 lead_updates["transaction_type"] = transaction_type_map.get(transaction_type_str)
+                
+                # Check if we came from WARMUP (goal selected, then transaction)
+                # In that case, budget and property_type are NOT filled yet - ask budget next
+                if not filled_slots.get("budget"):
+                    # Ask budget next
+                    budget_question = {
+                        Language.EN: "Great! What's your budget range?",
+                        Language.FA: "عالی! بودجه‌ات چقدر است؟",
+                        Language.AR: "رائع! ما هو نطاق ميزانيتك؟",
+                        Language.RU: "Отлично! Каков ваш бюджет?"
+                    }
+                    
+                    # Show budget buttons
+                    budget_buttons = []
+                    for idx, (min_val, max_val) in BUDGET_RANGES.items():
+                        if max_val:
+                            label = f"{min_val:,} - {max_val:,} AED"
+                        else:
+                            label = f"{min_val:,}+ AED"
+                        budget_buttons.append({
+                            "text": label,
+                            "callback_data": f"budget_{idx}"
+                        })
+                    
+                    return BrainResponse(
+                        message=budget_question.get(lang, budget_question[Language.EN]),
+                        next_state=ConversationState.SLOT_FILLING,
+                        lead_updates=lead_updates | {
+                            "conversation_data": conversation_data,
+                            "filled_slots": filled_slots,
+                            "pending_slot": "budget"
+                        },
+                        buttons=budget_buttons
+                    )
                 
                 # Check if all REQUIRED slots are filled
                 required_slots = ["budget", "property_type", "transaction_type"]
