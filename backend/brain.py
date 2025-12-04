@@ -2296,8 +2296,18 @@ AGENT'S FAQ & POLICIES:
                     Language.RU: "✅ Отлично! Спасибо!\n\n📄 Готовлю ваш персональный калькулятор финансирования и подробный отчёт ROI. Отправлю вам через мгновение!\n\nА пока, хотите обсудить ваши конкретные требования? Какая у вас главная цель с недвижимостью в Дубае?"
                 }
                 
+                # Add interactive prompt for voice/photo/location
+                interactive_prompt = {
+                    Language.EN: "\n\n🎙️ **Want personalized help?** Send me a voice note describing your dream property, or share a photo/location of an area you like!",
+                    Language.FA: "\n\n🎙️ **می‌خوای کمک شخصی‌سازی شده؟** یه پیام صوتی بفرست و ملک رویاییت رو توضیح بده، یا عکس/لوکیشن منطقه مورد علاقت رو بفرست!",
+                    Language.AR: "\n\n🎙️ **تريد مساعدة شخصية؟** أرسل لي رسالة صوتية تصف فيها عقارك المثالي، أو شارك صورة/موقع منطقة تعجبك!",
+                    Language.RU: "\n\n🎙️ **Хотите персональную помощь?** Отправьте голосовое сообщение с описанием недвижимости вашей мечты, или фото/локацию района!"
+                }
+                
+                full_message = pdf_sent_message.get(lang, pdf_sent_message[Language.EN]) + interactive_prompt.get(lang, interactive_prompt[Language.EN])
+                
                 return BrainResponse(
-                    message=pdf_sent_message.get(lang, pdf_sent_message[Language.EN]),
+                    message=full_message,
                     next_state=ConversationState.ENGAGEMENT,
                     lead_updates=phone_response.lead_updates,
                     should_generate_roi=True  # Changed from metadata to should_generate_roi (already exists in BrainResponse)
@@ -2772,8 +2782,19 @@ AGENT'S FAQ & POLICIES:
                 "callback_data": "schedule_consultation"
             })
         
+        # Add interactive prompt for voice/photo every 2-3 messages
+        enhanced_response = ai_response
+        if question_count % 2 == 0:  # Every 2nd question
+            voice_photo_prompt = {
+                Language.EN: "\n\n💡 **Tip:** Send me a voice note or photo anytime for instant personalized help!",
+                Language.FA: "\n\n💡 **نکته:** هر وقت خواستی پیام صوتی یا عکس بفرست تا فوری کمک شخصی‌سازی شده بگیری!",
+                Language.AR: "\n\n💡 **نصيحة:** أرسل لي رسالة صوتية أو صورة في أي وقت للحصول على مساعدة فورية شخصية!",
+                Language.RU: "\n\n💡 **Совет:** Отправьте голосовое сообщение или фото в любое время для мгновенной персональной помощи!"
+            }
+            enhanced_response += voice_photo_prompt.get(lang, voice_photo_prompt[Language.EN])
+        
         return BrainResponse(
-            message=ai_response,
+            message=enhanced_response,
             next_state=ConversationState.ENGAGEMENT,
             buttons=buttons,
             lead_updates=lead_updates
