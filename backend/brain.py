@@ -1677,9 +1677,20 @@ AGENT'S FAQ & POLICIES:
         # === HANDLE BUTTON RESPONSES (Slot Filling) ===
         if callback_data:
             # Budget selection
-            if callback_data.startswith("budget_"):
-                idx = int(callback_data.replace("budget_", ""))
-                min_val, max_val = BUDGET_RANGES[idx]
+            # Budget selection (handles both rent_budget_ and buy_budget_)
+            if callback_data.startswith("rent_budget_") or callback_data.startswith("buy_budget_"):
+                # Extract index and determine budget type
+                if callback_data.startswith("rent_budget_"):
+                    idx = int(callback_data.replace("rent_budget_", ""))
+                    # RENTAL budget ranges (stored as annual rent in DB)
+                    rent_budget_ranges = [
+                        (0, 50000), (50000, 100000), (100000, 200000), 
+                        (200000, 500000), (500000, None)
+                    ]
+                    min_val, max_val = rent_budget_ranges[idx]
+                else:
+                    idx = int(callback_data.replace("buy_budget_", ""))
+                    min_val, max_val = BUDGET_RANGES[idx]
                 
                 conversation_data["budget_min"] = min_val
                 conversation_data["budget_max"] = max_val
@@ -1687,22 +1698,39 @@ AGENT'S FAQ & POLICIES:
                 lead_updates["budget_min"] = min_val
                 lead_updates["budget_max"] = max_val
                 
-                # Next: Ask property type
+                # Get property category to show appropriate property types
+                category_str = conversation_data.get("property_category", "residential")
+                
+                # Next: Ask specific property type based on category
                 property_question = {
-                    Language.EN: "Perfect! What type of property are you looking for?",
-                    Language.FA: "عالی! چه نوع ملکی مد نظر دارید؟",
-                    Language.AR: "رائع! ما نوع العقار الذي تبحث عنه؟",
-                    Language.RU: "Отлично! Какой тип недвижимости вы ищете?"
+                    Language.EN: "Perfect! What specific type?",
+                    Language.FA: "عالی! چه نوع دقیقی؟",
+                    Language.AR: "رائع! ما النوع المحدد؟",
+                    Language.RU: "Отлично! Какой именно тип?"
                 }
                 
-                property_buttons = [
-                    {"text": "🏢 " + ("آپارتمان" if lang == Language.FA else "Apartment"), "callback_data": "prop_apartment"},
-                    {"text": "🏠 " + ("ویلا" if lang == Language.FA else "Villa"), "callback_data": "prop_villa"},
-                    {"text": "🏰 " + ("پنت‌هاوس" if lang == Language.FA else "Penthouse"), "callback_data": "prop_penthouse"},
-                    {"text": "🏘️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse"), "callback_data": "prop_townhouse"},
-                    {"text": "🏪 " + ("تجاری" if lang == Language.FA else "Commercial"), "callback_data": "prop_commercial"},
-                    {"text": "🏞️ " + ("زمین" if lang == Language.FA else "Land"), "callback_data": "prop_land"},
-                ]
+                if category_str == "residential":
+                    property_buttons = [
+                        {"text": "🏢 " + ("آپارتمان" if lang == Language.FA else "Apartment" if lang == Language.EN else "شقة" if lang == Language.AR else "Квартира"), 
+                         "callback_data": "prop_apartment"},
+                        {"text": "🏠 " + ("ویلا" if lang == Language.FA else "Villa" if lang == Language.EN else "فيلا" if lang == Language.AR else "Вилла"), 
+                         "callback_data": "prop_villa"},
+                        {"text": "🏰 " + ("پنت‌هاوس" if lang == Language.FA else "Penthouse" if lang == Language.EN else "بنتهاوس" if lang == Language.AR else "Пентхаус"), 
+                         "callback_data": "prop_penthouse"},
+                        {"text": "🏘️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse" if lang == Language.EN else "تاون هاوس" if lang == Language.AR else "Таунхаус"), 
+                         "callback_data": "prop_townhouse"},
+                    ]
+                else:  # commercial
+                    property_buttons = [
+                        {"text": "🏢 " + ("دفتر" if lang == Language.FA else "Office" if lang == Language.EN else "مكتب" if lang == Language.AR else "Офис"), 
+                         "callback_data": "prop_commercial"},
+                        {"text": "🏪 " + ("مغازه" if lang == Language.FA else "Shop" if lang == Language.EN else "محل" if lang == Language.AR else "Магазин"), 
+                         "callback_data": "prop_commercial"},
+                        {"text": "🏭 " + ("انبار" if lang == Language.FA else "Warehouse" if lang == Language.EN else "مستودع" if lang == Language.AR else "Склад"), 
+                         "callback_data": "prop_commercial"},
+                        {"text": "🏞️ " + ("زمین" if lang == Language.FA else "Land" if lang == Language.EN else "أرض" if lang == Language.AR else "Земля"), 
+                         "callback_data": "prop_land"},
+                    ]
                 
                 return BrainResponse(
                     message=property_question.get(lang, property_question[Language.EN]),
@@ -1771,138 +1799,95 @@ AGENT'S FAQ & POLICIES:
                 filled_slots["transaction_type"] = True
                 lead_updates["transaction_type"] = transaction_type_map.get(transaction_type_str)
                 
-                # Check if we came from WARMUP (goal selected, then transaction)
-                # In that case, budget and property_type are NOT filled yet - ask budget next
-                if not filled_slots.get("budget"):
-                    # Ask budget next
+                # After transaction type is selected, ask property category (Residential vs Commercial)
+                # This helps determine budget ranges and property types
+                category_question = {
+                    Language.EN: "Perfect! What type of property?",
+                    Language.FA: "عالی! چه نوع ملکی؟",
+                    Language.AR: "رائع! ما نوع العقار؟",
+                    Language.RU: "Отлично! Какой тип недвижимости?"
+                }
+                
+                category_buttons = [
+                    {"text": "🏠 " + ("مسکونی" if lang == Language.FA else "Residential" if lang == Language.EN else "سكني" if lang == Language.AR else "Жилая"), 
+                     "callback_data": "category_residential"},
+                    {"text": "🏢 " + ("تجاری" if lang == Language.FA else "Commercial" if lang == Language.EN else "تجاري" if lang == Language.AR else "Коммерческая"), 
+                     "callback_data": "category_commercial"}
+                ]
+                
+                return BrainResponse(
+                    message=category_question.get(lang, category_question[Language.EN]),
+                    next_state=ConversationState.SLOT_FILLING,
+                    lead_updates=lead_updates | {
+                        "conversation_data": conversation_data,
+                        "filled_slots": filled_slots,
+                        "pending_slot": "property_category"
+                    },
+                    buttons=category_buttons
+                )
+            
+            # Property category selection (Residential vs Commercial)
+            elif callback_data.startswith("category_"):
+                category_str = callback_data.replace("category_", "")
+                conversation_data["property_category"] = category_str
+                
+                # Get transaction type to determine budget ranges
+                transaction_type_str = conversation_data.get("transaction_type", "buy")
+                
+                # Define budget ranges based on transaction type
+                if transaction_type_str == "rent":
+                    # RENTAL budget ranges (annual rent stored, displayed as monthly)
+                    rent_budget_ranges = [
+                        (0, 50000),       # 0 - 4,167 AED/month
+                        (50000, 100000),  # 4,167 - 8,333 AED/month
+                        (100000, 200000), # 8,333 - 16,667 AED/month
+                        (200000, 500000), # 16,667 - 41,667 AED/month
+                        (500000, None)    # 41,667+ AED/month
+                    ]
                     budget_question = {
-                        Language.EN: "Great! What's your budget range?",
-                        Language.FA: "عالی! بودجه‌ات چقدر است؟",
-                        Language.AR: "رائع! ما هو نطاق ميزانيتك؟",
-                        Language.RU: "Отлично! Каков ваш бюджет?"
+                        Language.EN: "What's your monthly rental budget?",
+                        Language.FA: "بودجه اجاره ماهانه شما چقدر است؟",
+                        Language.AR: "ما هي ميزانية الإيجار الشهرية؟",
+                        Language.RU: "Каков ваш месячный бюджет на аренду?"
                     }
                     
-                    # Show budget buttons
+                    budget_buttons = []
+                    for i, (min_val, max_val) in enumerate(rent_budget_ranges):
+                        # Display as monthly (annual / 12)
+                        monthly_min = min_val // 12
+                        if max_val:
+                            monthly_max = max_val // 12
+                            label = f"{monthly_min:,} - {monthly_max:,} AED/month"
+                        else:
+                            label = f"{monthly_min:,}+ AED/month"
+                        budget_buttons.append({"text": label, "callback_data": f"rent_budget_{i}"})
+                else:
+                    # BUY budget ranges (purchase price)
+                    budget_question = {
+                        Language.EN: "What's your purchase budget?",
+                        Language.FA: "بودجه خرید شما چقدر است؟",
+                        Language.AR: "ما هي ميزانية الشراء؟",
+                        Language.RU: "Каков ваш бюджет на покупку?"
+                    }
+                    
                     budget_buttons = []
                     for idx, (min_val, max_val) in BUDGET_RANGES.items():
                         if max_val:
                             label = f"{min_val:,} - {max_val:,} AED"
                         else:
                             label = f"{min_val:,}+ AED"
-                        budget_buttons.append({
-                            "text": label,
-                            "callback_data": f"budget_{idx}"
-                        })
-                    
-                    return BrainResponse(
-                        message=budget_question.get(lang, budget_question[Language.EN]),
-                        next_state=ConversationState.SLOT_FILLING,
-                        lead_updates=lead_updates | {
-                            "conversation_data": conversation_data,
-                            "filled_slots": filled_slots,
-                            "pending_slot": "budget"
-                        },
-                        buttons=budget_buttons
-                    )
+                        budget_buttons.append({"text": label, "callback_data": f"buy_budget_{idx}"})
                 
-                # Check if all REQUIRED slots are filled
-                required_slots = ["budget", "property_type", "transaction_type"]
-                all_filled = all(filled_slots.get(slot, False) for slot in required_slots)
-                
-                if all_filled:
-                    # Move to VALUE_PROPOSITION and SHOW PROPERTIES immediately
-                    lead_updates.update({
+                return BrainResponse(
+                    message=budget_question.get(lang, budget_question[Language.EN]),
+                    next_state=ConversationState.SLOT_FILLING,
+                    lead_updates=lead_updates | {
                         "conversation_data": conversation_data,
                         "filled_slots": filled_slots,
-                        "pending_slot": None
-                    })
-                    
-                    # Get property recommendations RIGHT NOW
-                    property_recs = await self.get_property_recommendations(lead)
-                    
-                    if property_recs and "no properties" not in property_recs.lower():
-                        # Build comprehensive message with financial education
-                        financial_benefits = {
-                            Language.EN: "\n\n💰 **Why These Properties?**\n\n✅ Strong ROI (7-10% annually) - Your money grows faster than traditional investments\n✅ Rental Income - Tenants pay your mortgage while property appreciates\n✅ Flexible Financing - Multiple payment plans available (cash, mortgage, installments)\n✅ Golden Visa - Properties 2M+ qualify for 10-year UAE residency\n\n💡 Many investors start with 25% down payment and let rental income cover the rest!",
-                            Language.FA: "\n\n💰 **چرا این املاک؟**\n\n✅ بازگشت سرمایه قوی (7-10% سالانه) - پولتون سریع‌تر از سرمایه‌گذاری‌های سنتی رشد میکنه\n✅ درآمد اجاره - مستاجرها وام رو میپردازن و ملک هم ارزش میگیره\n✅ تسهیلات مالی انعطاف‌پذیر - طرح‌های پرداخت مختلف (نقدی، وام، اقساط)\n✅ ویزای طلایی - املاک بالای 2 میلیون اقامت 10 ساله امارات\n\n💡 خیلی از سرمایه‌گذارها با 25% پیش‌پرداخت شروع میکنن و بقیه رو از اجاره میگیرن!",
-                            Language.AR: "\n\n💰 **لماذا هذه العقارات؟**\n\n✅ عائد قوي (7-10% سنوياً) - أموالك تنمو أسرع من الاستثمارات التقليدية\n✅ دخل إيجاري - المستأجرون يدفعون الرهن بينما العقار يرتفع قيمته\n✅ تمويل مرن - خطط دفع متعددة (نقداً، رهن عقاري، أقساط)\n✅ التأشيرة الذهبية - العقارات فوق 2 مليون تؤهل لإقامة 10 سنوات\n\n💡 كثير من المستثمرين يبدؤون بدفعة أولى 25% ودخل الإيجار يغطي الباقي!",
-                            Language.RU: "\n\n💰 **Почему эти объекты?**\n\n✅ Сильный ROI (7-10% годовых) - Ваши деньги растут быстрее традиционных инвестиций\n✅ Арендный доход - Арендаторы платят ипотеку, пока недвижимость дорожает\n✅ Гибкое финансирование - Разные планы оплаты (наличные, ипотека, рассрочка)\n✅ Золотая Виза - Объекты от 2М дают 10-летнее резидентство ОАЭ\n\n💡 Многие инвесторы начинают с 25% первоначального взноса, а арендный доход покрывает остальное!"
-                        }
-                        
-                        value_message = {
-                            Language.EN: f"Perfect! Here are properties that match your criteria:\n\n{property_recs}{financial_benefits[Language.EN]}\n\n📋 Would you like to see the full details and financing options?",
-                            Language.FA: f"عالی! اینها ملک‌هایی هستند که با معیارهای شما مطابقت دارند:\n\n{property_recs}{financial_benefits[Language.FA]}\n\n📋 می‌خواهید جزئیات کامل و گزینه‌های تامین مالی رو ببینید؟",
-                            Language.AR: f"رائع! إليك العقارات التي تطابق معاييرك:\n\n{property_recs}{financial_benefits[Language.AR]}\n\n📋 هل تريد رؤية التفاصيل الكاملة وخيارات التمويل؟",
-                            Language.RU: f"Отлично! Вот объекты, которые соответствуют вашим критериям:\n\n{property_recs}{financial_benefits[Language.RU]}\n\n📋 Хотите увидеть полные детали и варианты финансирования?"
-                        }
-                        
-                        # Check if there are active lotteries
-                        active_lotteries = await get_active_lotteries(self.tenant.id)
-                        if active_lotteries:
-                            # Add lottery offer to the message
-                            lottery = active_lotteries[0]  # Get first active lottery
-                            lottery_msg = TRANSLATIONS["lottery_offer"]
-                            end_date = lottery["end_date"].strftime("%Y-%m-%d")
-                            
-                            lottery_text = lottery_msg.get(lang, lottery_msg[Language.EN]).format(
-                                prize=lottery["prize"],
-                                end_date=end_date
-                            )
-                            
-                            full_message = value_message.get(lang, value_message[Language.EN]) + "\n\n" + lottery_text
-                            
-                            # Add lottery buttons
-                            join_btn = TRANSLATIONS["btn_join_lottery"]
-                            skip_btn = TRANSLATIONS["btn_skip_lottery"]
-                            
-                            buttons = [
-                                {"text": join_btn.get(lang, join_btn[Language.EN]), "callback_data": f"join_lottery_{lottery['id']}"},
-                                {"text": skip_btn.get(lang, skip_btn[Language.EN]), "callback_data": "skip_lottery"}
-                            ]
-                            
-                            return BrainResponse(
-                                message=full_message,
-                                buttons=buttons,
-                                next_state=ConversationState.VALUE_PROPOSITION,
-                                lead_updates=lead_updates,
-                            )
-                        
-                        return BrainResponse(
-                            message=value_message.get(lang, value_message[Language.EN]),
-                            next_state=ConversationState.VALUE_PROPOSITION,
-                            lead_updates=lead_updates,
-                            buttons=[
-                                {"text": self.get_text("btn_yes", lang), "callback_data": "details_yes"},
-                                {"text": self.get_text("btn_no", lang), "callback_data": "details_no"},
-                                {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
-                            ]
-                        )
-                    else:
-                        # No matching properties - show the message from get_property_recommendations
-                        # which now asks if they want to schedule consultation
-                        schedule_btn_text = {
-                            Language.EN: "📅 Yes, Show Available Times",
-                            Language.FA: "📅 بله، زمان‌های خالی رو نشون بده",
-                            Language.AR: "📅 نعم، أظهر الأوقات المتاحة",
-                            Language.RU: "📅 Да, покажите доступное время"
-                        }
-                        
-                        no_thanks_btn = {
-                            Language.EN: "❌ No, I'll Contact Later",
-                            Language.FA: "❌ نه، بعداً تماس میگیرم",
-                            Language.AR: "❌ لا، سأتصل لاحقاً",
-                            Language.RU: "❌ Нет, свяжусь позже"
-                        }
-                        
-                        return BrainResponse(
-                            message=property_recs,  # The message from get_property_recommendations
-                            next_state=ConversationState.VALUE_PROPOSITION,
-                            lead_updates=lead_updates,
-                            buttons=[
-                                {"text": schedule_btn_text.get(lang, schedule_btn_text[Language.EN]), "callback_data": "schedule_consultation"},
-                                {"text": no_thanks_btn.get(lang, no_thanks_btn[Language.EN]), "callback_data": "details_no"}
-                            ]
-                        )
+                        "pending_slot": "budget"
+                    },
+                    buttons=budget_buttons
+                )
         
         # === HANDLE TEXT MESSAGES (FAQ Detection) ===
         if message and not callback_data:
