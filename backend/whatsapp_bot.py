@@ -2,6 +2,28 @@
 ArtinSmartRealty V2 - WhatsApp Bot Interface
 Handles WhatsApp Business API calls and passes everything to brain.py
 Supports both Meta WhatsApp Cloud API and Twilio WhatsApp API
+
+=== UI ADAPTATION STRATEGY ===
+The Brain returns button lists that work perfectly for Telegram but need adaptation for WhatsApp:
+
+TELEGRAM vs WHATSAPP BUTTON CONSTRAINTS:
+- Telegram: Unlimited inline buttons in keyboard layout
+- WhatsApp: Max 3 Reply Buttons OR Max 10 List Items
+
+ADAPTATION LOGIC (implemented in whatsapp_providers.py):
+1. IF buttons <= 3: Use WhatsApp Reply Buttons (Quick Reply)
+2. IF buttons > 3: Use WhatsApp List Message with "Select Option" button
+   - Section Title: "Available Options"
+   - Each button becomes a list row (max 10)
+
+EXAMPLE FLOWS:
+- Language Selection (4 options): List Message
+- Goal Selection (3 options): Reply Buttons  
+- Budget Ranges (5 options): List Message
+- Property Types (6+ options): List Message
+- Buy/Rent (2 options): Reply Buttons
+
+This ensures IDENTICAL user experience while respecting platform constraints.
 """
 
 import os
@@ -108,21 +130,67 @@ class WhatsAppBotHandler:
         return lead
     
     async def _send_response(self, to_phone: str, response: BrainResponse, lead: Lead):
-        """Send Brain response to user via WhatsApp."""
-        await self.send_message(to_phone, response.message, response.buttons)
+        """
+        Send Brain response to user via WhatsApp.
+        Mirrors the Telegram bot's comprehensive handling:
+        - Message + Buttons (adapted for WhatsApp UI)
+        - Contact request handling
+        - ROI PDF generation and delivery
+        - Admin notifications
+        """
+        message = response.message
+        buttons = response.buttons
+        
+        # Handle contact request (WhatsApp doesn't have native "request contact" button like Telegram)
+        if response.request_contact:
+            contact_prompt = {
+                Language.EN: "\n\n📱 Please share your phone number to continue.",
+                Language.FA: "\n\n📱 لطفاً شماره تماس خود را برای ادامه ارسال کنید.",
+                Language.AR: "\n\n📱 يرجى مشاركة رقم هاتفك للمتابعة.",
+                Language.RU: "\n\n📱 Пожалуйста, поделитесь своим номером телефона."
+            }
+            message += contact_prompt.get(lead.language, contact_prompt[Language.EN])
+        
+        # Send main message with buttons
+        await self.send_message(to_phone, message, buttons)
         
         # Update lead state if needed
         updates = response.lead_updates or {}
         if response.next_state:
             updates["conversation_state"] = response.next_state
         
+        logger.info(f"💾 Saving updates for Lead {lead.id}: {updates}")
+        
         if updates:
             await update_lead(lead.id, **updates)
+            logger.info(f"✅ Lead {lead.id} updated successfully")
         
-        # Handle ROI generation if requested
-        if response.should_generate_roi:
+        # Handle PDF delivery if metadata flag is set (matching Telegram bot logic)
+        send_pdf = False
+        if response.metadata and response.metadata.get("send_pdf"):
+            send_pdf = True
+        elif response.should_generate_roi:
+            send_pdf = True
+        
+        if send_pdf:
             try:
                 from roi_engine import generate_roi_pdf
+                from io import BytesIO
+                
+                lang = lead.language or Language.EN
+                
+                # Send "Preparing..." message first (matching Telegram)
+                preparing_msgs = {
+                    Language.EN: "📊 Preparing your personalized ROI report... This will take just a moment!",
+                    Language.FA: "📊 در حال آماده‌سازی گزارش ROI شخصی‌سازی شده... چند لحظه صبر کنید!",
+                    Language.AR: "📊 جاري تحضير تقرير العائد على الاستثمار الشخصي... سيستغرق لحظات فقط!",
+                    Language.RU: "📊 Готовлю персональный отчёт ROI... Это займёт всего мгновение!"
+                }
+                
+                await self.send_message(
+                    to_phone,
+                    preparing_msgs.get(lang, preparing_msgs[Language.EN])
+                )
                 
                 # Generate PDF
                 pdf_bytes = await generate_roi_pdf(
@@ -131,14 +199,59 @@ class WhatsAppBotHandler:
                     property_value=lead.budget_max or lead.budget_min
                 )
                 
-                # Upload PDF to WhatsApp and send
-                # Note: WhatsApp requires media to be uploaded first, then sent by media_id
-                # This is a simplified version - in production, upload PDF to a server first
-                logger.info(f"ROI PDF generated ({len(pdf_bytes)} bytes) for lead {lead.id}")
-                # TODO: Implement WhatsApp document sending via Media Upload API
+                # TODO: Upload PDF to cloud storage and get URL
+                # For WhatsApp, we need to upload to a publicly accessible URL first
+                # Example: AWS S3, Google Cloud Storage, or your file server
+                # pdf_url = await self._upload_pdf_to_storage(pdf_bytes, f"roi_analysis_{lead.id}.pdf")
+                
+                caption_map = {
+                    Language.EN: "📊 Here's your personalized ROI Analysis Report!",
+                    Language.FA: "📊 این هم گزارش تحلیل سود سرمایه‌گذاری شما!",
+                    Language.AR: "📊 إليك تقرير تحليل العائد على الاستثمار الشخصي!",
+                    Language.RU: "📊 Вот ваш персональный отчёт ROI!"
+                }
+                
+                logger.info(f"📄 ROI PDF generated ({len(pdf_bytes)} bytes) for lead {lead.id}")
+                logger.warning("⚠️ PDF upload to cloud storage not implemented. Add upload logic here.")
+                
+                # Placeholder for sending document
+                # await self.provider.send_document(
+                #     to_phone,
+                #     pdf_url,
+                #     filename=f"ROI_Analysis_{self.tenant.name}.pdf",
+                #     caption=caption_map.get(lang, caption_map[Language.EN])
+                # )
                 
             except Exception as e:
                 logger.error(f"Failed to generate ROI PDF: {e}")
+                import traceback
+                traceback.print_exc()
+                # Don't fail the whole message if PDF generation fails
+        
+        # === Handle admin notifications for hot leads (matching Telegram bot) ===
+        if response.metadata and response.metadata.get("notify_admin"):
+            admin_chat_id = self.tenant.admin_chat_id
+            
+            if admin_chat_id:
+                try:
+                    admin_message = response.metadata.get("admin_message", "🚨 New hot lead!")
+                    
+                    # Send to admin via Telegram (assuming admin uses Telegram)
+                    # If admin wants WhatsApp notifications, add WhatsApp send logic here
+                    if self.tenant.telegram_bot_token:
+                        import telegram
+                        bot = telegram.Bot(token=self.tenant.telegram_bot_token)
+                        await bot.send_message(
+                            chat_id=admin_chat_id,
+                            text=admin_message,
+                            parse_mode='HTML'
+                        )
+                        logger.info(f"🚨 Admin notification sent to {admin_chat_id} for lead {lead.id}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to notify admin ({admin_chat_id}): {e}")
+            else:
+                logger.warning(f"⚠️ Admin ID not set for tenant {self.tenant.id}. Use /set_admin to configure.")
+        # ======================================================================
     
     async def handle_webhook(self, payload: Dict[str, Any]) -> bool:
         """

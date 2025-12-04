@@ -12,29 +12,27 @@ async def _handle_warmup(
     """
     WARMUP Phase: Quick rapport building (1-2 questions max)
     Goal: Identify primary objective (Investment, Living, or Residency)
-    """
-    # Voice/Text hint for all messages
-    voice_hint = {
-        Language.EN: "\n\n🎙️ You can also type or send a voice message explaining what you need!",
-        Language.FA: "\n\n🎙️ می‌تونید تایپ کنید یا همین الان ویس بفرستید و بگید چی میخواید!",
-        Language.AR: "\n\n🎙️ يمكنك أيضًا الكتابة أو إرسال رسالة صوتية تشرح ما تحتاجه!",
-        Language.RU: "\n\n🎙️ Вы также можете написать или отправить голосовое сообщение!"
-    }
-    hint = voice_hint.get(lang, voice_hint[Language.EN])
     
-    # If button clicked, capture goal and move to CAPTURE_CONTACT
+    Flow Logic:
+    - Living/Residency → Ask Buy/Rent → Budget
+    - Investment → Auto-set Buy → Ask Budget directly
+    """
+    # Voice/Photo engagement hint (added to response messages)
+    engagement_hint = {
+        Language.EN: "\n\n🎙️ **Tip:** To help you better, you can send a **Voice Message** or upload a **Photo** of your dream property right now!",
+        Language.FA: "\n\n🎙️ **نکته:** برای راهنمایی دقیق‌تر، می‌تونید همین الان **ویس** بفرستید یا **عکس** ملک مورد نظرتون رو آپلود کنید!",
+        Language.AR: "\n\n🎙️ **نصيحة:** لمساعدتك بشكل أفضل، يمكنك إرسال **رسالة صوتية** أو تحميل **صورة** للعقار الذي تحلم به الآن!",
+        Language.RU: "\n\n🎙️ **Совет:** Чтобы помочь вам лучше, вы можете отправить **голосовое сообщение** или загрузить **фото** желаемой недвижимости прямо сейчас!"
+    }
+    hint = engagement_hint.get(lang, engagement_hint[Language.EN])
+    
+    # If button clicked, capture goal and route based on selection
     if callback_data and callback_data.startswith("goal_"):
         goal = callback_data.replace("goal_", "")
         
         # Store in conversation_data
         conversation_data = lead.conversation_data or {}
         conversation_data["goal"] = goal
-        
-        # Set transaction type based on goal
-        if goal == "rent":
-            lead_updates["transaction_type"] = TransactionType.RENT
-        else:
-            lead_updates["transaction_type"] = TransactionType.BUY
         
         # Mark filled_slots
         filled_slots = lead.filled_slots or {}
@@ -43,20 +41,59 @@ async def _handle_warmup(
         lead_updates["conversation_data"] = conversation_data
         lead_updates["filled_slots"] = filled_slots
         
-        # --- IMPORTANT: Move to CAPTURE_CONTACT for immediate phone capture ---
-        contact_request_msg = {
-            Language.EN: "Excellent choice! 🌟\n\nTo better assist you and send relevant options, please enter your **Phone Number** and **Name**.\n\nFormat: Name - Number\nExample: Ali - 09121234567",
-            Language.FA: "انتخاب عالی! 🌟\n\nبرای راهنمایی بهتر و ارسال موارد مشابه، لطفاً **شماره تماس** و **نام** خود را وارد کنید.\n\nفرمت: نام - شماره تماس\nمثال: علی - 09121234567",
-            Language.AR: "خيار ممتاز! 🌟\n\nلمساعدتك بشكل أفضل، يرجى إدخال **رقم الهاتف** و **الاسم**.",
-            Language.RU: "Отличный выбор! 🌟\n\nПожалуйста, введите ваш **Номер телефона** и **Имя**."
-        }
+        # ===== CASE A: Living or Residency → Ask Buy/Rent =====
+        if goal in ["living", "residency"]:
+            transaction_question = {
+                Language.EN: "Great choice! 🏡\n\nAre you looking to **Buy** or **Rent**?",
+                Language.FA: "انتخاب عالی! 🏡\n\n**خرید** می‌خواید یا **اجاره**؟",
+                Language.AR: "خيار رائع! 🏡\n\nهل تبحث عن **الشراء** أو **الإيجار**؟",
+                Language.RU: "Отличный выбор! 🏡\n\nВы хотите **купить** или **арендовать**?"
+            }
+            
+            transaction_buttons = [
+                {"text": "🏠 " + ("خرید" if lang == Language.FA else "Buy"), "callback_data": "transaction_buy"},
+                {"text": "🔑 " + ("اجاره" if lang == Language.FA else "Rent"), "callback_data": "transaction_rent"}
+            ]
+            
+            return BrainResponse(
+                message=transaction_question.get(lang, transaction_question[Language.EN]) + hint,
+                next_state=ConversationState.SLOT_FILLING,
+                lead_updates=lead_updates | {"pending_slot": "transaction_type"},
+                buttons=transaction_buttons
+            )
         
-        return BrainResponse(
-            message=contact_request_msg.get(lang, contact_request_msg[Language.EN]) + hint,
-            next_state=ConversationState.CAPTURE_CONTACT,  # <--- NEW: Go to CAPTURE_CONTACT
-            lead_updates=lead_updates,
-            request_contact=True  # Show contact sharing button in Telegram
-        )
+        # ===== CASE B: Investment → Auto-set Buy, Ask Budget =====
+        elif goal == "investment":
+            # Automatically set transaction_type to BUY for investment
+            lead_updates["transaction_type"] = TransactionType.BUY
+            conversation_data["transaction_type"] = "buy"
+            filled_slots["transaction_type"] = True
+            
+            budget_question = {
+                Language.EN: "Excellent! Let's find the best investment property for you. 💰\n\nWhat is your **budget range**?",
+                Language.FA: "عالی! بیایید بهترین ملک سرمایه‌گذاری رو برات پیدا کنیم. 💰\n\n**بودجه‌ات** چقدر است؟",
+                Language.AR: "ممتاز! دعنا نجد أفضل عقار استثماري لك. 💰\n\nما هو **نطاق ميزانيتك**؟",
+                Language.RU: "Отлично! Давайте найдем лучшую инвестиционную недвижимость для вас. 💰\n\nКаков ваш **диапазон бюджета**?"
+            }
+            
+            # Import BUDGET_RANGES from brain.py
+            from brain import BUDGET_RANGES
+            
+            budget_buttons = []
+            for idx, (min_val, max_val) in BUDGET_RANGES.items():
+                label = f"{min_val:,} - {max_val:,} AED" if max_val else f"{min_val:,}+ AED"
+                budget_buttons.append({"text": label, "callback_data": f"budget_{idx}"})
+            
+            return BrainResponse(
+                message=budget_question.get(lang, budget_question[Language.EN]) + hint,
+                next_state=ConversationState.SLOT_FILLING,
+                lead_updates=lead_updates | {
+                    "conversation_data": conversation_data,
+                    "filled_slots": filled_slots,
+                    "pending_slot": "budget"
+                },
+                buttons=budget_buttons
+            )
     
     # If text message, use AI to answer FAQ but return to goal question
     if message and not callback_data:
@@ -245,9 +282,58 @@ async def _handle_slot_filling(
     
     # === HANDLE BUTTON RESPONSES (Slot Filling) ===
     if callback_data:
+        # Transaction type selection (from WARMUP for Living/Residency)
+        if callback_data.startswith("transaction_"):
+            transaction_type_str = callback_data.replace("transaction_", "")  # "buy" or "rent"
+            transaction_type_map = {
+                "buy": TransactionType.BUY,
+                "rent": TransactionType.RENT
+            }
+            
+            conversation_data["transaction_type"] = transaction_type_str
+            filled_slots["transaction_type"] = True
+            lead_updates["transaction_type"] = transaction_type_map.get(transaction_type_str)
+            
+            # Voice/Photo engagement hint
+            engagement_hint = {
+                Language.EN: "\n\n🎙️ **Tip:** To help you better, you can send a **Voice Message** or upload a **Photo** of your dream property right now!",
+                Language.FA: "\n\n🎙️ **نکته:** برای راهنمایی دقیق‌تر، می‌تونید همین الان **ویس** بفرستید یا **عکس** ملک مورد نظرتون رو آپلود کنید!",
+                Language.AR: "\n\n🎙️ **نصيحة:** لمساعدتك بشكل أفضل، يمكنك إرسال **رسالة صوتية** أو تحميل **صورة** للعقار الذي تحلم به الآن!",
+                Language.RU: "\n\n🎙️ **Совет:** Чтобы помочь вам лучше, вы можете отправить **голосовое сообщание** или загрузить **фото** желаемой недвижимости прямо сейчас!"
+            }
+            hint = engagement_hint.get(lang, engagement_hint[Language.EN])
+            
+            # Next: Ask budget
+            budget_question = {
+                Language.EN: "Perfect! What is your **budget range**?",
+                Language.FA: "عالی! **بودجه‌ات** چقدر است؟",
+                Language.AR: "ممتاز! ما هو **نطاق ميزانيتك**؟",
+                Language.RU: "Отлично! Каков ваш **диапазон бюджета**?"
+            }
+            
+            # Import BUDGET_RANGES from brain.py
+            from brain import BUDGET_RANGES
+            
+            budget_buttons = []
+            for idx, (min_val, max_val) in BUDGET_RANGES.items():
+                label = f"{min_val:,} - {max_val:,} AED" if max_val else f"{min_val:,}+ AED"
+                budget_buttons.append({"text": label, "callback_data": f"budget_{idx}"})
+            
+            return BrainResponse(
+                message=budget_question.get(lang, budget_question[Language.EN]) + hint,
+                next_state=ConversationState.SLOT_FILLING,
+                lead_updates=lead_updates | {
+                    "conversation_data": conversation_data,
+                    "filled_slots": filled_slots,
+                    "pending_slot": "budget"
+                },
+                buttons=budget_buttons
+            )
+        
         # Budget selection
-        if callback_data.startswith("budget_"):
+        elif callback_data.startswith("budget_"):
             idx = int(callback_data.replace("budget_", ""))
+            from brain import BUDGET_RANGES
             min_val, max_val = BUDGET_RANGES[idx]
             
             conversation_data["budget_min"] = min_val
