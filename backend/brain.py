@@ -1622,9 +1622,10 @@ AGENT'S FAQ & POLICIES:
         conversation_data = lead.conversation_data or {}
         filled_slots = lead.filled_slots or {}
         
-        # === PRE-FILL FROM VOICE ENTITIES (if available) ===
+        # === PRE-FILL FROM VOICE ENTITIES (only if this is NOT a callback) ===
+        # Only process voice entities if we're handling a text/voice message, not a button click
         voice_entities = lead.voice_entities or {}
-        if voice_entities and isinstance(voice_entities, dict):
+        if voice_entities and isinstance(voice_entities, dict) and not callback_data:
             # DATA INTEGRITY: Validate types before using
             # Budget from voice
             try:
