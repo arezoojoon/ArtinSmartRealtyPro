@@ -1758,24 +1758,51 @@ AGENT'S FAQ & POLICIES:
                 conversation_data["property_type"] = property_type_str
                 filled_slots["property_type"] = True
                 lead_updates["property_type"] = property_type_map.get(property_type_str)
+                lead_updates["conversation_state"] = ConversationState.VALUE_PROPOSITION
                 
-                # All slots filled! Move to VALUE_PROPOSITION to show properties
-                value_prop_intro = {
-                    Language.EN: "Perfect! Let me find the best properties for you...",
-                    Language.FA: "عالی! بذارید بهترین املاک رو براتون پیدا کنم...",
-                    Language.AR: "رائع! دعني أجد أفضل العقارات لك...",
-                    Language.RU: "Отлично! Позвольте мне найти лучшие объекты для вас..."
+                # All slots filled! Get property recommendations
+                property_recs = await self.get_property_recommendations(lead)
+                
+                # Build comprehensive message with financial education + location/photo prompt
+                financial_benefits = {
+                    Language.EN: "\n\n💰 **Investment Highlights:**\n\n✅ 7-10% Annual ROI - Beat inflation, grow wealth\n✅ Rental Yield covers mortgage - Passive income stream\n✅ Payment Plans Available - Start with 25% down\n✅ Tax-Free Income - No rental tax in UAE\n✅ Capital Appreciation - Dubai property values rising 5-8% yearly\n\n💡 Most investors use 70% financing and rental income pays it off!",
+                    Language.FA: "\n\n💰 **نکات کلیدی سرمایه‌گذاری:**\n\n✅ بازگشت سالانه 7-10% - تورم رو شکست بده، ثروت بساز\n✅ درآمد اجاره وام رو میپوشونه - درآمد منفعل\n✅ طرح‌های پرداخت - با 25% پیش‌پرداخت شروع کن\n✅ درآمد بدون مالیات - مالیات اجاره در امارات صفره\n✅ رشد ارزش - املاک دبی سالانه 5-8% گرون میشن\n\n💡 اکثر سرمایه‌گذارها 70% وام میگیرن و اجاره همه‌شو پرداخت میکنه!",
+                    Language.AR: "\n\n💰 **أبرز نقاط الاستثمار:**\n\n✅ عائد سنوي 7-10% - تغلب على التضخم، اِبنِ ثروة\n✅ دخل الإيجار يغطي الرهن - دخل سلبي\n✅ خطط دفع متاحة - ابدأ بدفعة أولى 25%\n✅ دخل معفى من الضرائب - لا ضريبة إيجار في الإمارات\n✅ ارتفاع قيمة رأس المال - قيمة عقارات دبي ترتفع 5-8% سنوياً\n\n💡 معظم المستثمرين يستخدمون تمويل 70% ودخل الإيجار يسدده!",
+                    Language.RU: "\n\n💰 **Инвестиционные преимущества:**\n\n✅ 7-10% годовых ROI - Обгоняем инфляцию, растим капитал\n✅ Арендный доход покрывает ипотеку - Пассивный доход\n✅ Планы рассрочки - Начните с 25% первого взноса\n✅ Доход без налогов - Нет налога на аренду в ОАЭ\n✅ Рост стоимости - Недвижимость в Дубае растёт 5-8% в год\n\n💡 Большинство инвесторов берут 70% финансирования, а аренда его окупает!"
                 }
                 
+                location_photo_prompt = {
+                    Language.EN: "\n\n📍 **Want personalized help?**\nSend me your location or a photo of an area you like, and I'll find exact matches nearby!",
+                    Language.FA: "\n\n📍 **می‌خوای کمک شخصی‌سازی شده؟**\nلوکیشنت یا عکسی از منطقه‌ای که دوست داری رو بفرست، من دقیقاً املاک اطراف رو پیدا می‌کنم!",
+                    Language.AR: "\n\n📍 **تريد مساعدة مخصصة؟**\nأرسل لي موقعك أو صورة لمنطقة تعجبك، وسأجد لك تطابقات دقيقة في الجوار!",
+                    Language.RU: "\n\n📍 **Хотите персональную помощь?**\nОтправьте мне свою локацию или фото района, который вам нравится, и я найду точные совпадения поблизости!"
+                }
+                
+                if property_recs and "no properties" not in property_recs.lower():
+                    value_message = {
+                        Language.EN: f"Perfect! Here are properties matching your criteria:\n\n{property_recs}{financial_benefits[Language.EN]}{location_photo_prompt[Language.EN]}\n\n📋 Want full details and financing calculator?",
+                        Language.FA: f"عالی! اینها ملک‌هایی هستند که با معیارهای شما مطابقت دارند:\n\n{property_recs}{financial_benefits[Language.FA]}{location_photo_prompt[Language.FA]}\n\n📋 می‌خواید جزئیات کامل و ماشین‌حساب تامین مالی رو ببینید؟",
+                        Language.AR: f"رائع! إليك العقارات المطابقة لمعاييرك:\n\n{property_recs}{financial_benefits[Language.AR]}{location_photo_prompt[Language.AR]}\n\n📋 هل تريد التفاصيل الكاملة وحاسبة التمويل؟",
+                        Language.RU: f"Отлично! Вот объекты по вашим критериям:\n\n{property_recs}{financial_benefits[Language.RU]}{location_photo_prompt[Language.RU]}\n\n📋 Хотите полные детали и калькулятор?"
+                    }
+                else:
+                    value_message = {
+                        Language.EN: f"I'm searching for the perfect properties for you...{location_photo_prompt[Language.EN]}\n\nMeanwhile, would you like a detailed market analysis?",
+                        Language.FA: f"دارم املاک ایده‌آل رو برات جستجو می‌کنم...{location_photo_prompt[Language.FA]}\n\nدر ضمن، می‌خواهید تحلیل بازار کامل؟",
+                        Language.AR: f"أبحث عن العقارات المثالية لك...{location_photo_prompt[Language.AR]}\n\nفي غضون ذلك، هل تريد تحليلاً مفصلاً للسوق؟",
+                        Language.RU: f"Ищу идеальные объекты для вас...{location_photo_prompt[Language.RU]}\n\nТем временем, хотите подробный анализ рынка?"
+                    }
+                
                 return BrainResponse(
-                    message=value_prop_intro.get(lang, value_prop_intro[Language.EN]),
+                    message=value_message.get(lang, value_message[Language.EN]),
                     next_state=ConversationState.VALUE_PROPOSITION,
                     lead_updates=lead_updates | {
                         "conversation_data": conversation_data,
-                        "filled_slots": filled_slots,
-                        "conversation_state": ConversationState.VALUE_PROPOSITION
+                        "filled_slots": filled_slots
                     },
                     buttons=[
+                        {"text": self.get_text("btn_yes", lang), "callback_data": "details_yes"},
+                        {"text": self.get_text("btn_no", lang), "callback_data": "details_no"},
                         {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
                     ]
                 )
