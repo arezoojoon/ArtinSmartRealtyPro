@@ -127,6 +127,9 @@ class ConversationState(str, Enum):
     # Phase 1: Warmup & Profiling (1-2 questions max)
     WARMUP = "warmup"  # Goal: Investment/Living/Residency
     
+    # Phase 1.5: Capture Contact (Get phone number immediately after warmup)
+    CAPTURE_CONTACT = "capture_contact"  # گرفتن شماره بلافاصله
+    
     # Phase 2: Slot Filling (Qualify with context retention)
     SLOT_FILLING = "slot_filling"  # Collect: budget, property_type, location
     
@@ -176,6 +179,9 @@ class Tenant(Base):
     
     # Branding
     primary_color = Column(String(20), default="#D4AF37")  # Gold by default
+    
+    # Admin Settings
+    admin_chat_id = Column(String(100), nullable=True)  # Telegram chat ID for admin notifications
     
     # Subscription
     subscription_status = Column(SQLEnum(SubscriptionStatus), default=SubscriptionStatus.TRIAL)

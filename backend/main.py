@@ -500,11 +500,16 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     print("✅ Background scheduler started")
     
+    # Start Morning Coffee Report scheduler in bot_manager
+    await bot_manager.start_scheduler()
+    print("✅ Morning Coffee Report scheduler started")
+    
     yield
     
     # Shutdown
     print("🛑 Shutting down...")
     scheduler.shutdown()
+    await bot_manager.stop_scheduler()
     await bot_manager.stop_all_bots()
     print("✅ Shutdown complete")
 

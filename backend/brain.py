@@ -1371,6 +1371,9 @@ AGENT'S FAQ & POLICIES:
         elif current_state == ConversationState.WARMUP:
             return await self._handle_warmup(lang, message, callback_data, lead, lead_updates)
         
+        elif current_state == ConversationState.CAPTURE_CONTACT:
+            return await self._handle_capture_contact(lang, message, callback_data, lead, lead_updates)
+        
         elif current_state == ConversationState.SLOT_FILLING:
             return await self._handle_slot_filling(lang, message, callback_data, lead, lead_updates)
         

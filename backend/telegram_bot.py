@@ -9,6 +9,9 @@ import logging
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+
 from telegram import (
     Update, 
     InlineKeyboardButton, 
@@ -73,6 +76,7 @@ class TelegramBotHandler:
         
         # Register handlers
         self.application.add_handler(CommandHandler("start", self.handle_start))
+        self.application.add_handler(CommandHandler("set_admin", self.handle_set_admin))
         self.application.add_handler(CallbackQueryHandler(self.handle_callback))
         self.application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
         self.application.add_handler(MessageHandler(filters.VOICE, self.handle_voice))
@@ -84,7 +88,12 @@ class TelegramBotHandler:
         await self.application.start()
         await self.application.updater.start_polling(drop_pending_updates=True)
         
+        # === FEATURE 3: START GHOST PROTOCOL BACKGROUND TASK ===
+        # Launch Ghost Protocol background task for lead re-engagement
+        asyncio.create_task(self._ghost_protocol_loop())
+        
         logger.info(f"Bot started for tenant: {self.tenant.name}")
+        logger.info(f"🔄 Ghost Protocol background task started for tenant {self.tenant.id}")
     
     async def stop_bot(self):
         """Stop the Telegram bot."""
@@ -97,6 +106,7 @@ class TelegramBotHandler:
         # Close Redis connection
         await close_redis()
         logger.info("✅ Redis connection closed")
+        logger.info(f"🔄 Ghost Protocol background task stopped for tenant {self.tenant.id}")
     
     def _build_inline_keyboard(self, buttons: List[Dict[str, str]]) -> InlineKeyboardMarkup:
         """Build Telegram inline keyboard from button list."""
@@ -294,6 +304,25 @@ class TelegramBotHandler:
                 import traceback
                 traceback.print_exc()
                 # Don't fail the whole message if PDF generation fails
+        
+        # === NEW: Handle admin notifications for hot leads ===
+        if response.metadata and response.metadata.get("notify_admin"):
+            admin_chat_id = self.tenant.admin_chat_id
+            
+            if admin_chat_id:
+                try:
+                    admin_message = response.metadata.get("admin_message", "🚨 New hot lead!")
+                    await context.bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=admin_message,
+                        parse_mode='HTML'
+                    )
+                    logger.info(f"🚨 Admin notification sent to {admin_chat_id} for lead {lead.id}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to notify admin ({admin_chat_id}): {e}")
+            else:
+                logger.warning(f"⚠️ Admin ID not set for tenant {self.tenant.id}. Use /set_admin to configure.")
+        # ===================================================
     
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command."""
@@ -312,6 +341,52 @@ class TelegramBotHandler:
         # Process through Brain
         response = await self.brain.process_message(lead, "/start")
         await self._send_response(update, context, response, lead)
+    
+    async def handle_set_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Handle /set_admin command to register the current user as admin for notifications.
+        Usage: /set_admin
+        """
+        chat_id = str(update.effective_chat.id)
+        
+        try:
+            # Update tenant with admin_chat_id
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Tenant).where(Tenant.id == self.tenant.id)
+                )
+                tenant = result.scalar_one_or_none()
+                
+                if tenant:
+                    tenant.admin_chat_id = chat_id
+                    await session.commit()
+                    
+                    success_msg = {
+                        Language.FA: f"✅ تبریک!\n\nشما ({chat_id}) به عنوان ادمین برای دریافت هشدارهای لید ثبت شدید.\n\n🚀 از این به بعد، به محض ثبت شماره مشتری، برای شما هشدار ارسال می‌شود.",
+                        Language.EN: f"✅ Congratulations!\n\nYou ({chat_id}) have been registered as admin for lead notifications.\n\n🚀 From now on, you'll receive alerts when customers submit their phone numbers.",
+                        Language.AR: f"✅ مبروك!\n\nتم تسجيلك كمسؤول لاستقبال تنبيهات العملاء.\n\n🚀 ستتلقى إشعارات فورية عند تسجيل رقم العميل.",
+                        Language.RU: f"✅ Поздравляем!\n\nВы ({chat_id}) зарегистрированы как администратор для уведомлений о лидах.\n\n🚀 Теперь вы будете получать оповещения при регистрации номера клиента."
+                    }
+                    
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=success_msg.get(Language.FA, success_msg[Language.EN])
+                    )
+                    
+                    logger.info(f"✅ Admin registered: {chat_id} for tenant {self.tenant.id}")
+                else:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="❌ Error: Tenant not found!"
+                    )
+                    logger.error(f"❌ Tenant {self.tenant.id} not found when setting admin")
+        
+        except Exception as e:
+            logger.error(f"❌ Error setting admin: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ An error occurred. Please try again."
+            )
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle inline keyboard callbacks with race condition protection."""
@@ -741,16 +816,354 @@ class TelegramBotHandler:
         except Exception as e:
             logger.error(f"Failed to send appointment reminder to lead {lead.id}: {e}")
 
+    # === FEATURE 3: GHOST PROTOCOL METHODS ===
+    
+    async def _ghost_protocol_loop(self):
+        """
+        Ghost Protocol: Auto follow-up with leads after 2 hours of inactivity
+        Runs every 30 minutes to check for leads needing re-engagement
+        
+        Queries for leads where:
+        - phone IS NOT NULL (has provided contact)
+        - status != VIEWING_SCHEDULED (hasn't booked yet)
+        - updated_at > 2 hours ago (has been inactive)
+        - ghost_reminder_sent = False (reminder not yet sent)
+        """
+        logger.info(f"[Ghost Protocol] Started for tenant {self.tenant.id}")
+        
+        while True:
+            try:
+                # Run check every 30 minutes
+                await asyncio.sleep(1800)
+                
+                # Query leads ready for ghost follow-up
+                async with async_session() as session:
+                    two_hours_ago = datetime.utcnow() - timedelta(hours=2)
+                    
+                    result = await session.execute(
+                        select(Lead).where(
+                            Lead.tenant_id == self.tenant.id,
+                            Lead.phone.isnot(None),
+                            Lead.status != ConversationState.VIEWING_SCHEDULED,
+                            Lead.updated_at < two_hours_ago,
+                            Lead.ghost_reminder_sent == False
+                        ).order_by(Lead.updated_at.asc())
+                    )
+                    
+                    leads_to_followup = result.scalars().all()
+                    
+                    if leads_to_followup:
+                        logger.info(f"[Ghost Protocol] Found {len(leads_to_followup)} leads for follow-up (tenant {self.tenant.id})")
+                    
+                    for lead in leads_to_followup:
+                        try:
+                            await self._send_ghost_message(lead)
+                        except Exception as e:
+                            logger.error(f"[Ghost Protocol] Error sending ghost message to lead {lead.id}: {e}")
+            
+            except Exception as e:
+                logger.error(f"[Ghost Protocol] Error in loop for tenant {self.tenant.id}: {e}")
+                # Continue running even if error occurs
+                await asyncio.sleep(300)  # Wait 5 minutes before retry
+
+    async def _send_ghost_message(self, lead: Lead):
+        """
+        Send personalized ghost follow-up message to re-engage cold lead
+        
+        Message format:
+        - Personalized with lead name
+        - Multi-language support (EN/FA/AR/RU)
+        - Implies value without pressure (colleague found property)
+        
+        After sending:
+        - Mark ghost_reminder_sent = True
+        - Increment fomo_messages_sent counter
+        """
+        try:
+            # Get lead's preferred language
+            lang = lead.language or Language.EN
+            
+            # Construct personalized follow-up message
+            ghost_messages = {
+                Language.EN: f"Hi {lead.name or 'there'}, my colleague found the property you wanted. When can you talk?",
+                Language.FA: f"سلام {lead.name or 'عزیز'}, فایلی که می‌خواستی رو همکارم پیدا کرد. کی می‌تونی صحبت کنی؟",
+                Language.AR: f"مرحباً {lead.name or 'صديقي'}, وجد زميلي العقار الذي طلبته. متى يمكنك التحدث؟",
+                Language.RU: f"Привет {lead.name or 'друг'}, мой коллега нашел объект, который вы искали. Когда сможете поговорить?"
+            }
+            
+            message = ghost_messages.get(lang, ghost_messages[Language.EN])
+            
+            # Send message via Telegram
+            if lead.telegram_chat_id:
+                await self.application.bot.send_message(
+                    chat_id=int(lead.telegram_chat_id),
+                    text=message
+                )
+                
+                # Update lead to mark ghost reminder as sent
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(Lead).where(Lead.id == lead.id)
+                    )
+                    db_lead = result.scalar_one()
+                    db_lead.ghost_reminder_sent = True
+                    db_lead.fomo_messages_sent = (db_lead.fomo_messages_sent or 0) + 1
+                    db_lead.updated_at = datetime.utcnow()
+                    await session.commit()
+                
+                logger.info(f"[Ghost Protocol] Ghost message sent to lead {lead.id} (name: {lead.name}, lang: {lang.value})")
+        
+        except Exception as e:
+            logger.error(f"[Ghost Protocol] Error sending ghost message to lead {lead.id}: {e}")
+            raise
+
+
+# ==================== MORNING COFFEE REPORT ====================
+
+async def generate_daily_report(tenant_id: int) -> Dict[str, str]:
+    """
+    Generate daily "Morning Coffee Report" for a tenant.
+    
+    Returns multilingual report with overnight activity metrics.
+    
+    Metrics:
+    - chat_count: Conversations in last 24 hours
+    - new_leads: Phone numbers captured in last 24 hours
+    - highlight: High-value lead example (Penthouse, Villa, High Budget)
+    """
+    try:
+        async with async_session() as session:
+            now = datetime.utcnow()
+            yesterday = now - timedelta(days=1)
+            
+            # Metric A: Count active conversations (updated in last 24h)
+            chat_result = await session.execute(
+                select(Lead).where(
+                    Lead.tenant_id == tenant_id,
+                    Lead.updated_at >= yesterday
+                )
+            )
+            active_conversations = len(chat_result.scalars().all())
+            
+            # Metric B: New leads with phone captured in last 24h
+            leads_result = await session.execute(
+                select(Lead).where(
+                    Lead.tenant_id == tenant_id,
+                    Lead.phone.isnot(None),
+                    Lead.created_at >= yesterday
+                ).order_by(Lead.created_at.desc())
+            )
+            new_leads = leads_result.scalars().all()
+            lead_count = len(new_leads)
+            lead_names = ", ".join([lead.name or "Anonymous" for lead in new_leads[:3]])
+            
+            # Metric C: Find high-value intent (Penthouse, Villa, High Budget)
+            high_value_result = await session.execute(
+                select(Lead).where(
+                    Lead.tenant_id == tenant_id,
+                    Lead.created_at >= yesterday,
+                    ((Lead.property_type.ilike("%penthouse%")) | 
+                     (Lead.property_type.ilike("%villa%")) |
+                     (Lead.budget_min >= 5000000))  # 5M+ AED
+                ).order_by(Lead.created_at.desc())
+            )
+            high_value_leads = high_value_result.scalars().all()
+            
+            # Generate highlight message
+            highlight_msg = ""
+            if high_value_leads:
+                lead = high_value_leads[0]
+                if lead.property_type and "penthouse" in lead.property_type.lower():
+                    highlight_msg_en = f"🏢 1 person looking for Penthouse!"
+                    highlight_msg_fa = f"🏢 ۱ نفر دنبال پنت‌هاوس!"
+                elif lead.property_type and "villa" in lead.property_type.lower():
+                    highlight_msg_en = f"🏡 1 person looking for Villa!"
+                    highlight_msg_fa = f"🏡 ۱ نفر دنبال ویلا!"
+                else:
+                    highlight_msg_en = f"💎 1 high-value lead (Budget: {lead.budget_min:,} AED)!"
+                    highlight_msg_fa = f"💎 ۱ خریدار ثروتمند (بودجه: {lead.budget_min:,} درهم)!"
+            else:
+                highlight_msg_en = "✨ Keep grinding, more leads coming!"
+                highlight_msg_fa = "✨ ادامه بده، لید‌ها در راهند!"
+            
+            # Generate multilingual report
+            reports = {
+                Language.EN.value: generate_report_en(active_conversations, lead_count, lead_names, highlight_msg_en),
+                Language.FA.value: generate_report_fa(active_conversations, lead_count, lead_names, highlight_msg_fa),
+                Language.AR.value: generate_report_ar(active_conversations, lead_count, lead_names, highlight_msg_en),
+                Language.RU.value: generate_report_ru(active_conversations, lead_count, lead_names, highlight_msg_en),
+            }
+            
+            logger.info(f"[Morning Coffee] Report generated for tenant {tenant_id}: {active_conversations} chats, {lead_count} new leads")
+            return reports
+    
+    except Exception as e:
+        logger.error(f"[Morning Coffee] Error generating report for tenant {tenant_id}: {e}")
+        return {}
+
+
+def generate_report_en(chat_count: int, lead_count: int, lead_names: str, highlight: str) -> str:
+    """Generate English Morning Coffee Report"""
+    return f"""☀️ Good Morning Boss!
+
+Last night while you were sleeping, I had **{chat_count} conversations** for you.
+
+🎯 **New Leads**: {lead_count} people shared their phone numbers:
+   {lead_names if lead_names else "(No new leads yet)"}
+
+💎 **High-Value Alert**: {highlight}
+
+⚡ Time to follow up! Your leads are hot. Let's make it a great day! ☕️
+"""
+
+
+def generate_report_fa(chat_count: int, lead_count: int, lead_names: str, highlight: str) -> str:
+    """Generate Persian Morning Coffee Report"""
+    return f"""☀️ صبح بخیر رئیس! ☕️
+
+دیشب که خواب بودی، من با **{chat_count} نفر** چت کردم.
+
+🎯 **لید‌های جدید**: {lead_count} نفر شماره‌شون رو گذاشتند:
+   {lead_names if lead_names else "(هنوز لید جدیدی نیست)"}
+
+💎 **خریدار VIP**: {highlight}
+
+⚡ وقت تماس رسانی! لید‌های تو گرم هستند. بریم یه روز فوق‌العاده شامل کنیم! 🚀
+"""
+
+
+def generate_report_ar(chat_count: int, lead_count: int, lead_names: str, highlight: str) -> str:
+    """Generate Arabic Morning Coffee Report"""
+    return f"""☀️ صباح الخير يا رئيس! ☕️
+
+بينما كنت نائماً، تحدثت مع **{chat_count} شخص** لصالحك.
+
+🎯 **عملاء جدد**: {lead_count} شخص شارك رقمهم:
+   {lead_names if lead_names else "(لا توجد عملاء جدد حتى الآن)"}
+
+💎 **تنبيه عميل VIP**: {highlight}
+
+⚡ حان الوقت للمتابعة! عملاؤك ساخنون. لنجعل هذا يوماً رائعاً! 🚀
+"""
+
+
+def generate_report_ru(chat_count: int, lead_count: int, lead_names: str, highlight: str) -> str:
+    """Generate Russian Morning Coffee Report"""
+    return f"""☀️ Доброе утро, босс! ☕️
+
+Пока ты спал, я поговорил с **{chat_count} людьми** для тебя.
+
+🎯 **Новые клиенты**: {lead_count} человек поделились их номерами:
+   {lead_names if lead_names else "(Новых клиентов еще нет)"}
+
+💎 **VIP-клиент**: {highlight}
+
+⚡ Пора наводить справки! Твои клиенты горячие. Давай отличный день! 🚀
+"""
+
 
 # ==================== BOT MANAGER ====================
 
 class BotManager:
     """
     Manages multiple Telegram bots for multi-tenant system.
+    Also manages the Morning Coffee Report scheduler.
     """
     
     def __init__(self):
         self.bots: Dict[int, TelegramBotHandler] = {}
+        self.scheduler: Optional[AsyncIOScheduler] = None
+    
+    async def start_scheduler(self):
+        """Start APScheduler for Morning Coffee Reports"""
+        try:
+            self.scheduler = AsyncIOScheduler()
+            
+            # Schedule Morning Coffee Report for 8:00 AM daily
+            self.scheduler.add_job(
+                self.send_morning_coffee_reports,
+                trigger=CronTrigger(hour=8, minute=0),
+                id="morning_coffee_report",
+                name="Morning Coffee Report",
+                replace_existing=True,
+                coalesce=True,
+                max_instances=1
+            )
+            
+            self.scheduler.start()
+            logger.info("✅ [Morning Coffee] APScheduler started - Reports scheduled for 08:00 AM daily")
+        
+        except Exception as e:
+            logger.error(f"❌ [Morning Coffee] Failed to start scheduler: {e}")
+    
+    async def stop_scheduler(self):
+        """Stop APScheduler"""
+        try:
+            if self.scheduler:
+                self.scheduler.shutdown(wait=False)
+                logger.info("✅ [Morning Coffee] APScheduler stopped")
+        except Exception as e:
+            logger.error(f"❌ [Morning Coffee] Error stopping scheduler: {e}")
+    
+    async def send_morning_coffee_reports(self):
+        """
+        Send Morning Coffee Reports to all tenants who have admin_chat_id set.
+        This is called daily at 08:00 AM by the scheduler.
+        """
+        try:
+            logger.info("[Morning Coffee] Starting morning report generation for all tenants...")
+            
+            # Query all tenants with admin_chat_id set
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Tenant).where(Tenant.admin_chat_id.isnot(None))
+                )
+                tenants_with_admin = result.scalars().all()
+            
+            if not tenants_with_admin:
+                logger.info("[Morning Coffee] No tenants with admin_chat_id found")
+                return
+            
+            logger.info(f"[Morning Coffee] Found {len(tenants_with_admin)} tenants to send reports to")
+            
+            # Send report to each tenant
+            for tenant in tenants_with_admin:
+                try:
+                    # Generate report for this tenant
+                    reports = await generate_daily_report(tenant.id)
+                    
+                    if not reports:
+                        logger.warning(f"[Morning Coffee] No report generated for tenant {tenant.id}")
+                        continue
+                    
+                    # Get tenant's language preference (default to English)
+                    tenant_lang = (tenant.language or Language.EN).value if hasattr(tenant, 'language') else "en"
+                    report_text = reports.get(tenant_lang, reports.get("en", ""))
+                    
+                    if not report_text:
+                        logger.warning(f"[Morning Coffee] No report text available for tenant {tenant.id}")
+                        continue
+                    
+                    # Send report via Telegram
+                    if tenant.id in self.bots and self.bots[tenant.id].application:
+                        try:
+                            await self.bots[tenant.id].application.bot.send_message(
+                                chat_id=int(tenant.admin_chat_id),
+                                text=report_text,
+                                parse_mode="HTML"
+                            )
+                            logger.info(f"✅ [Morning Coffee] Report sent to tenant {tenant.id} ({tenant.name})")
+                        
+                        except Exception as e:
+                            logger.error(f"❌ [Morning Coffee] Failed to send report to tenant {tenant.id}: {e}")
+                    else:
+                        logger.warning(f"[Morning Coffee] Bot not running for tenant {tenant.id}")
+                
+                except Exception as e:
+                    logger.error(f"❌ [Morning Coffee] Error processing tenant {tenant.id}: {e}")
+        
+        except Exception as e:
+            logger.error(f"❌ [Morning Coffee] Fatal error in send_morning_coffee_reports: {e}")
     
     async def start_bot_for_tenant(self, tenant: Tenant):
         """Start a bot for a specific tenant."""

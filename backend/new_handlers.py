@@ -13,13 +13,28 @@ async def _handle_warmup(
     WARMUP Phase: Quick rapport building (1-2 questions max)
     Goal: Identify primary objective (Investment, Living, or Residency)
     """
-    # If button clicked, capture goal and move to SLOT_FILLING
+    # Voice/Text hint for all messages
+    voice_hint = {
+        Language.EN: "\n\n🎙️ You can also type or send a voice message explaining what you need!",
+        Language.FA: "\n\n🎙️ می‌تونید تایپ کنید یا همین الان ویس بفرستید و بگید چی میخواید!",
+        Language.AR: "\n\n🎙️ يمكنك أيضًا الكتابة أو إرسال رسالة صوتية تشرح ما تحتاجه!",
+        Language.RU: "\n\n🎙️ Вы также можете написать или отправить голосовое сообщение!"
+    }
+    hint = voice_hint.get(lang, voice_hint[Language.EN])
+    
+    # If button clicked, capture goal and move to CAPTURE_CONTACT
     if callback_data and callback_data.startswith("goal_"):
         goal = callback_data.replace("goal_", "")
         
         # Store in conversation_data
         conversation_data = lead.conversation_data or {}
         conversation_data["goal"] = goal
+        
+        # Set transaction type based on goal
+        if goal == "rent":
+            lead_updates["transaction_type"] = TransactionType.RENT
+        else:
+            lead_updates["transaction_type"] = TransactionType.BUY
         
         # Mark filled_slots
         filled_slots = lead.filled_slots or {}
@@ -28,31 +43,19 @@ async def _handle_warmup(
         lead_updates["conversation_data"] = conversation_data
         lead_updates["filled_slots"] = filled_slots
         
-        # Move to SLOT_FILLING with first question
-        next_question = {
-            Language.EN: f"Great! Let's find the perfect property for {goal}.\n\nWhat's your budget range?",
-            Language.FA: f"عالی! بیایید بهترین ملک را برای {goal} پیدا کنیم.\n\nبودجه‌ات چقدر است؟",
-            Language.AR: f"رائع! دعنا نجد العقار المثالي لـ {goal}.\n\nما هو نطاق ميزانيتك؟",
-            Language.RU: f"Отлично! Давайте найдем идеальную недвижимость для {goal}.\n\nКаков ваш бюджет?"
+        # --- IMPORTANT: Move to CAPTURE_CONTACT for immediate phone capture ---
+        contact_request_msg = {
+            Language.EN: "Excellent choice! 🌟\n\nTo better assist you and send relevant options, please enter your **Phone Number** and **Name**.\n\nFormat: Name - Number\nExample: Ali - 09121234567",
+            Language.FA: "انتخاب عالی! 🌟\n\nبرای راهنمایی بهتر و ارسال موارد مشابه، لطفاً **شماره تماس** و **نام** خود را وارد کنید.\n\nفرمت: نام - شماره تماس\nمثال: علی - 09121234567",
+            Language.AR: "خيار ممتاز! 🌟\n\nلمساعدتك بشكل أفضل، يرجى إدخال **رقم الهاتف** و **الاسم**.",
+            Language.RU: "Отличный выбор! 🌟\n\nПожалуйста, введите ваш **Номер телефона** и **Имя**."
         }
         
-        # Show budget buttons
-        budget_buttons = []
-        for idx, (min_val, max_val) in BUDGET_RANGES.items():
-            if max_val:
-                label = f"{min_val:,} - {max_val:,} AED"
-            else:
-                label = f"{min_val:,}+ AED"
-            budget_buttons.append({
-                "text": label,
-                "callback_data": f"budget_{idx}"
-            })
-        
         return BrainResponse(
-            message=next_question.get(lang, next_question[Language.EN]),
-            next_state=ConversationState.SLOT_FILLING,
-            lead_updates=lead_updates | {"pending_slot": "budget"},
-            buttons=budget_buttons
+            message=contact_request_msg.get(lang, contact_request_msg[Language.EN]) + hint,
+            next_state=ConversationState.CAPTURE_CONTACT,  # <--- NEW: Go to CAPTURE_CONTACT
+            lead_updates=lead_updates,
+            request_contact=True  # Show contact sharing button in Telegram
         )
     
     # If text message, use AI to answer FAQ but return to goal question
@@ -87,7 +90,7 @@ async def _handle_warmup(
     }
     
     return BrainResponse(
-        message=warmup_message.get(lang, warmup_message[Language.EN]),
+        message=warmup_message.get(lang, warmup_message[Language.EN]) + hint,
         next_state=ConversationState.WARMUP,
         buttons=[
             {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
@@ -95,6 +98,130 @@ async def _handle_warmup(
             {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
         ]
     )
+
+
+async def _handle_capture_contact(
+    self, 
+    lang: Language, 
+    message: Optional[str], 
+    callback_data: Optional[str], 
+    lead: Lead, 
+    lead_updates: Dict
+) -> BrainResponse:
+    """
+    CAPTURE_CONTACT Phase (NEW): Get phone number and name immediately after goal selection
+    This happens BEFORE slot filling to ensure we can contact the lead early
+    
+    Success triggers admin notification with hot lead alert
+    """
+    voice_hint = {
+        Language.EN: "\n\n🎙️ Feel free to explain details by Voice!",
+        Language.FA: "\n\n🎙️ هر توضیحی دارید میتونید ویس بفرستید!",
+        Language.AR: "\n\n🎙️ يمكنك إرسال رسالة صوتية!",
+        Language.RU: "\n\n🎙️ Отправьте голосовое сообщение!"
+    }
+    hint = voice_hint.get(lang, voice_hint[Language.EN])
+    
+    # Check if contact was successfully shared via Telegram button
+    if lead.phone and not message:
+        valid_contact = True
+    elif message:
+        # Try to parse phone and name from text message (format: Name - Phone)
+        valid_contact = False
+        phone_validation = await self._validate_phone_number(lang, message, lead_updates)
+        
+        if phone_validation.get("valid", False):  # Assuming validate returns dict with valid key
+            valid_contact = True
+            # Extract name from message (simple parsing)
+            parts = message.split('-')
+            if len(parts) >= 2:
+                name_part = parts[0].strip()
+                if not any(char.isdigit() for char in name_part):
+                    lead_updates["name"] = name_part
+    else:
+        valid_contact = False
+    
+    if valid_contact:
+        # Phone number successfully captured
+        conversation_data = lead.conversation_data or {}
+        goal = conversation_data.get("goal")
+        
+        # Determine next question based on goal
+        if goal == "rent":
+            # For rent, ask about residential vs commercial
+            rent_q = {
+                Language.EN: "Great! For rent, do you need **Residential** or **Commercial**?",
+                Language.FA: "عالی! ✅ شماره شما ذخیره شد.\n\nبرای اجاره، ملک **مسکونی** می‌خواید یا **تجاری**؟",
+                Language.AR: "رائع! للإيجار، هل تريد سكني أم تجاري؟",
+                Language.RU: "Отлично! Для аренды, вам нужна жилая или коммерческая недвижимость?"
+            }
+            
+            return BrainResponse(
+                message=rent_q.get(lang, rent_q[Language.EN]) + hint,
+                next_state=ConversationState.SLOT_FILLING,
+                lead_updates=lead_updates | {"pending_slot": "property_type"},
+                buttons=[
+                    {"text": "🏠 " + ("مسکونی" if lang == Language.FA else "Residential"), "callback_data": "prop_residential"},
+                    {"text": "🏢 " + ("تجاری" if lang == Language.FA else "Commercial"), "callback_data": "prop_commercial"}
+                ],
+                metadata={
+                    "notify_admin": True,
+                    "admin_message": self._generate_admin_alert(lead, goal)
+                }
+            )
+        else:
+            # For buy/investment, ask about budget
+            budget_q = {
+                Language.EN: "Perfect! What is your **approximate budget**?",
+                Language.FA: "عالی! ✅ شماره شما ذخیره شد.\n\nبودجه تقریبی شما چقدر است؟",
+                Language.AR: "رائع! ما هي ميزانيتك التقريبية؟",
+                Language.RU: "Отлично! Какой ваш приблизительный бюджет?"
+            }
+            
+            budget_buttons = []
+            for idx, (min_val, max_val) in BUDGET_RANGES.items():
+                label = f"{min_val:,} - {max_val:,} AED" if max_val else f"{min_val:,}+ AED"
+                budget_buttons.append({"text": label, "callback_data": f"budget_{idx}"})
+            
+            return BrainResponse(
+                message=budget_q.get(lang, budget_q[Language.EN]) + hint,
+                next_state=ConversationState.SLOT_FILLING,
+                lead_updates=lead_updates | {"pending_slot": "budget"},
+                buttons=budget_buttons,
+                metadata={
+                    "notify_admin": True,
+                    "admin_message": self._generate_admin_alert(lead, goal)
+                }
+            )
+    else:
+        # Contact not valid, ask again
+        retry_msg = {
+            Language.EN: "⚠️ Please enter a valid format:\n\n**Name - Phone Number**\n\nExample: Ali - +971501234567\n\nOr use the button below to share your contact:",
+            Language.FA: "⚠️ لطفاً فرمت صحیح وارد کنید:\n\n**نام - شماره تماس**\n\nمثال: علی - 09121234567\n\nیا از دکمه زیر استفاده کنید:",
+            Language.AR: "⚠️ يرجى إدخال التنسيق الصحيح:\n\n**الاسم - رقم الهاتف**",
+            Language.RU: "⚠️ Пожалуйста, введите правильный формат:\n\n**Имя - Номер телефона**"
+        }
+        
+        return BrainResponse(
+            message=retry_msg.get(lang, retry_msg[Language.EN]),
+            next_state=ConversationState.CAPTURE_CONTACT,
+            request_contact=True  # Show contact share button again
+        )
+
+    def _generate_admin_alert(self, lead: Lead, goal: str) -> str:
+        """Generate admin notification message for hot lead"""
+        from datetime import datetime
+        now_time = datetime.now().strftime("%H:%M")
+        
+        admin_alert_msg = (
+            f"🚨 <b>لید داغ (Hot Lead)!</b>\n\n"
+            f"👤 نام: {lead.name or 'کاربر'}\n"
+            f"📱 شماره: <code>{lead.phone or 'ثبت نشده'}</code>\n"
+            f"🎯 هدف: {goal}\n"
+            f"⏰ زمان: {now_time}\n\n"
+            f"📞 <i>همین الان تماس بگیرید!</i>"
+        )
+        return admin_alert_msg
 
 
 async def _handle_slot_filling(
@@ -330,12 +457,27 @@ async def _handle_value_proposition(
             for prop in recommendations
         ])
         
-        value_message = {
-            Language.EN: f"Here are some perfect matches for you:\n\n{properties_text}\n\nWould you like to receive a detailed PDF report with ROI projections?",
-            Language.FA: f"اینها چند تا ملک عالی برای شما هستند:\n\n{properties_text}\n\nمایل هستید یک گزارش کامل PDF با پیش‌بینی ROI دریافت کنید؟",
-            Language.AR: f"إليك بعض الخيارات المثالية لك:\n\n{properties_text}\n\nهل ترغب في تلقي تقرير PDF مفصل مع توقعات عائد الاستثمار؟",
-            Language.RU: f"Вот несколько идеальных вариантов для вас:\n\n{properties_text}\n\nХотите получить подробный PDF-отчет с прогнозами ROI?"
+        # === FEATURE 2: SCARCITY & URGENCY TACTICS ===
+        # Add FOMO message to create urgency
+        scarcity_messages = {
+            Language.EN: "\n\n⚠️ Only 3 units left at this price!",
+            Language.FA: "\n\n⚠️ فقط ۳ واحد با این قیمت باقی مانده است!",
+            Language.AR: "\n\n⚠️ بقي 3 وحدات فقط بهذا السعر!",
+            Language.RU: "\n\n⚠️ Осталось только 3 единицы по этой цене!"
         }
+        
+        scarcity_msg = scarcity_messages.get(lang, scarcity_messages[Language.EN])
+        
+        value_message = {
+            Language.EN: f"Here are some perfect matches for you:\n\n{properties_text}{scarcity_msg}\n\nWould you like to receive a detailed PDF report with ROI projections?",
+            Language.FA: f"اینها چند تا ملک عالی برای شما هستند:\n\n{properties_text}{scarcity_msg}\n\nمایل هستید یک گزارش کامل PDF با پیش‌بینی ROI دریافت کنید؟",
+            Language.AR: f"إليك بعض الخيارات المثالية لك:\n\n{properties_text}{scarcity_msg}\n\nهل ترغب في تلقي تقرير PDF مفصل مع توقعات عائد الاستثمار؟",
+            Language.RU: f"Вот несколько идеальных вариантов для вас:\n\n{properties_text}{scarcity_msg}\n\nХотите получить подробный PDF-отчет с прогнозами ROI?"
+        }
+        
+        # Track urgency engagement
+        lead_updates["urgency_score"] = min(10, (lead.urgency_score or 0) + 1)
+        lead_updates["fomo_messages_sent"] = (lead.fomo_messages_sent or 0) + 1
         
         return BrainResponse(
             message=value_message.get(lang, value_message[Language.EN]),
@@ -347,16 +489,22 @@ async def _handle_value_proposition(
         )
     else:
         # No matching properties - still move to HARD_GATE
+        # === FEATURE 2: HOT MARKET URGENCY MESSAGE ===
         no_match_message = {
-            Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Share your contact?",
-            Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. شماره‌تون رو به اشتراک می‌گذارید؟",
-            Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تشارك معلومات الاتصال الخاصة بك؟",
-            Language.RU: "У меня нет точных совпадений прямо сейчас, но я могу отправить вам подробный анализ рынка. Поделитесь контактом?"
+            Language.EN: "⚠️ Market is very hot and units sell fast! I'll send you exclusive off-market deals. Share your contact?",
+            Language.FA: "⚠️ بازار خیلی داغ است و فایل‌ها سریع فروش می‌روند! من برای شما فایل‌های حصری ارسال می‌کنم. شماره‌تون رو به اشتراک می‌گذارید؟",
+            Language.AR: "⚠️ السوق ساخن جداً والوحدات تباع بسرعة! سأرسل لك صفقات حصرية. هل تشارك معلومات الاتصال الخاصة بك؟",
+            Language.RU: "⚠️ Рынок очень активен, объекты уходят быстро! Я отправлю вам эксклюзивные предложения. Поделитесь контактом?"
         }
+        
+        # Track urgency engagement
+        lead_updates["urgency_score"] = min(10, (lead.urgency_score or 0) + 2)  # Higher urgency for no matches
+        lead_updates["fomo_messages_sent"] = (lead.fomo_messages_sent or 0) + 1
         
         return BrainResponse(
             message=no_match_message.get(lang, no_match_message[Language.EN]),
-            next_state=ConversationState.HARD_GATE
+            next_state=ConversationState.HARD_GATE,
+            lead_updates=lead_updates
         )
 
 
