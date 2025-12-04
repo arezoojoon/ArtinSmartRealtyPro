@@ -419,6 +419,7 @@ class BrainResponse:
     lead_updates: Optional[Dict[str, Any]] = None
     should_generate_roi: bool = False
     request_contact: bool = False  # NEW: Request phone number with contact button (Telegram)
+    metadata: Optional[Dict[str, Any]] = None  # NEW: Additional metadata (e.g., send_pdf flag)
 
 
 # ==================== LOTTERY HELPERS ====================
