@@ -330,13 +330,22 @@ class TelegramBotHandler:
         
         logger.info(f"🔄 /start command - Lead {lead.id}: Before reset - state={lead.conversation_state}, lang={lead.language}")
         
-        # Reset conversation state for new start
-        await update_lead(lead.id, conversation_state=ConversationState.START)
+        # Reset conversation state AND conversation data for fresh start
+        await update_lead(
+            lead.id, 
+            conversation_state=ConversationState.START,
+            conversation_data={},  # Clear all previous conversation data
+            filled_slots={},  # Clear all filled slots
+            pending_slot=None  # Clear pending slot
+        )
         # CRITICAL: Update lead object in memory too!
         lead.conversation_state = ConversationState.START
         lead.language = None  # Reset language to show language selection
+        lead.conversation_data = {}
+        lead.filled_slots = {}
+        lead.pending_slot = None
         
-        logger.info(f"🔄 /start command - Lead {lead.id}: After reset - state={lead.conversation_state}, lang={lead.language}")
+        logger.info(f"🔄 /start command - Lead {lead.id}: After reset - state={lead.conversation_state}, cleared conversation_data")
         
         # Process through Brain
         response = await self.brain.process_message(lead, "/start")
