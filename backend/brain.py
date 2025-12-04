@@ -1704,7 +1704,7 @@ AGENT'S FAQ & POLICIES:
                 # Next: Ask specific property type based on category
                 property_question = {
                     Language.EN: "Perfect! What specific type?",
-                    Language.FA: "عالی! چه نوع دقیقی؟",
+                    Language.FA: "عالی! چه نوع ملکی؟",
                     Language.AR: "رائع! ما النوع المحدد؟",
                     Language.RU: "Отлично! Какой именно тип?"
                 }
@@ -1759,25 +1759,24 @@ AGENT'S FAQ & POLICIES:
                 filled_slots["property_type"] = True
                 lead_updates["property_type"] = property_type_map.get(property_type_str)
                 
-                # Next: Ask transaction type (buy/rent)
-                transaction_question = {
-                    Language.EN: "Got it! Are you looking to Buy or Rent?",
-                    Language.FA: "فهمیدم! می‌خواهید بخرید یا اجاره کنید؟",
-                    Language.AR: "فهمت! هل تريد الشراء أم الإيجار؟",
-                    Language.RU: "Понял! Вы хотите купить или арендовать?"
+                # All slots filled! Move to VALUE_PROPOSITION to show properties
+                value_prop_intro = {
+                    Language.EN: "Perfect! Let me find the best properties for you...",
+                    Language.FA: "عالی! بذارید بهترین املاک رو براتون پیدا کنم...",
+                    Language.AR: "رائع! دعني أجد أفضل العقارات لك...",
+                    Language.RU: "Отлично! Позвольте мне найти лучшие объекты для вас..."
                 }
                 
                 return BrainResponse(
-                    message=transaction_question.get(lang, transaction_question[Language.EN]),
-                    next_state=ConversationState.SLOT_FILLING,
+                    message=value_prop_intro.get(lang, value_prop_intro[Language.EN]),
+                    next_state=ConversationState.VALUE_PROPOSITION,
                     lead_updates=lead_updates | {
                         "conversation_data": conversation_data,
                         "filled_slots": filled_slots,
-                        "pending_slot": "transaction_type"
+                        "conversation_state": ConversationState.VALUE_PROPOSITION
                     },
                     buttons=[
-                        {"text": self.get_text("btn_buy", lang), "callback_data": "tx_buy"},
-                        {"text": self.get_text("btn_rent", lang), "callback_data": "tx_rent"}
+                        {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
                     ]
                 )
             
