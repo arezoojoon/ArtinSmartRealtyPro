@@ -2234,17 +2234,17 @@ AGENT'S FAQ & POLICIES:
             # If validation successful, move to ENGAGEMENT with PDF flag
             if phone_response.next_state == ConversationState.ENGAGEMENT:
                 pdf_sent_message = {
-                    Language.EN: "📄 Preparing your detailed ROI report...\n\nIt will be sent to you shortly!",
-                    Language.FA: "📄 گزارش ROI شما در حال آماده‌سازی است...\n\nبه زودی برایتان ارسال می‌شود!",
-                    Language.AR: "📄 جاري إعداد تقرير عائد الاستثمار المفصل...\n\nسيتم إرساله إليك قريبًا!",
-                    Language.RU: "📄 Готовлю ваш подробный отчет ROI...\n\nОн скоро будет отправлен!"
+                    Language.EN: "✅ Perfect! Thank you!\n\n📄 I'm preparing your personalized financing calculator and detailed ROI report now. It will be sent to you in a moment!\n\nIn the meantime, would you like to discuss your specific requirements? What's your main goal with Dubai real estate?",
+                    Language.FA: "✅ عالی! ممنون!\n\n📄 دارم ماشین‌حساب تامین مالی شخصی‌سازی شده و گزارش ROI کامل شما رو آماده می‌کنم. چند لحظه دیگه برات می‌فرستم!\n\nدر این بین، دوست داری درباره نیازهای خاصت صحبت کنیم؟ هدف اصلی شما از املاک دبی چیه؟",
+                    Language.AR: "✅ ممتاز! شكراً!\n\n📄 أقوم بإعداد حاسبة التمويل المخصصة وتقرير عائد الاستثمار الشامل الآن. سأرسله لك خلال لحظات!\n\nفي هذه الأثناء، هل تريد مناقشة متطلباتك المحددة؟ ما هو هدفك الرئيسي من عقارات دبي؟",
+                    Language.RU: "✅ Отлично! Спасибо!\n\n📄 Готовлю ваш персональный калькулятор финансирования и подробный отчёт ROI. Отправлю вам через мгновение!\n\nА пока, хотите обсудить ваши конкретные требования? Какая у вас главная цель с недвижимостью в Дубае?"
                 }
                 
                 return BrainResponse(
                     message=pdf_sent_message.get(lang, pdf_sent_message[Language.EN]),
                     next_state=ConversationState.ENGAGEMENT,
                     lead_updates=phone_response.lead_updates,
-                    metadata={"send_pdf": True}
+                    should_generate_roi=True  # Changed from metadata to should_generate_roi (already exists in BrainResponse)
                 )
             else:
                 # Phone validation failed - return error
