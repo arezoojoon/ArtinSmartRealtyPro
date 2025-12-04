@@ -368,6 +368,15 @@ BUDGET_RANGES = {
     4: (5000000, None)
 }
 
+# Rental budget ranges (annual values in AED)
+RENT_BUDGET_RANGES = {
+    0: (0, 50000),           # 0 - 50K AED/year = 0 - 4.2K/month
+    1: (50000, 100000),      # 50K - 100K AED/year = 4.2K - 8.3K/month
+    2: (100000, 200000),     # 100K - 200K AED/year = 8.3K - 16.7K/month
+    3: (200000, 500000),     # 200K - 500K AED/year = 16.7K - 41.7K/month
+    4: (500000, None)        # 500K+ AED/year = 41.7K+/month
+}
+
 def parse_budget_string(budget_str: str) -> Optional[int]:
     """Parse budget strings like '2M', '500K', '1.5 Million' to integers."""
     if not budget_str:

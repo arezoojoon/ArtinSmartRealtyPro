@@ -312,17 +312,11 @@ async def _handle_slot_filling(
                     Language.RU: "Отлично! Каков ваш **месячный бюджет аренды**?"
                 }
                 
-                # Rental budget ranges (monthly)
-                rent_budget_ranges = {
-                    0: (0, 50000),           # 0 - 50K AED/year = 0 - 4.2K/month
-                    1: (50000, 100000),      # 50K - 100K AED/year = 4.2K - 8.3K/month
-                    2: (100000, 200000),     # 100K - 200K AED/year = 8.3K - 16.7K/month
-                    3: (200000, 500000),     # 200K - 500K AED/year = 16.7K - 41.7K/month
-                    4: (500000, None)        # 500K+ AED/year = 41.7K+/month
-                }
+                # Import rental budget ranges from brain.py
+                from brain import RENT_BUDGET_RANGES
                 
                 budget_buttons = []
-                for idx, (min_val, max_val) in rent_budget_ranges.items():
+                for idx, (min_val, max_val) in RENT_BUDGET_RANGES.items():
                     # Convert annual to monthly display
                     min_monthly = min_val // 12 if min_val else 0
                     max_monthly = max_val // 12 if max_val else None
@@ -414,14 +408,8 @@ async def _handle_slot_filling(
             
             if transaction_type_str == "rent":
                 # Rental budget ranges (annual)
-                rent_budget_ranges = {
-                    0: (0, 50000),
-                    1: (50000, 100000),
-                    2: (100000, 200000),
-                    3: (200000, 500000),
-                    4: (500000, None)
-                }
-                min_val, max_val = rent_budget_ranges[idx]
+                from brain import RENT_BUDGET_RANGES
+                min_val, max_val = RENT_BUDGET_RANGES[idx]
             else:
                 # Buy budget ranges
                 from brain import BUDGET_RANGES
@@ -435,6 +423,15 @@ async def _handle_slot_filling(
             
             # ===== CASE 1: RENT → Ask property category (Residential or Commercial) =====
             if transaction_type_str == "rent":
+                # Voice/Photo engagement hint after budget selection
+                engagement_hint = {
+                    Language.EN: "\n\n🎙️ **Tip:** Send me a **Voice Message** describing your needs, or upload a **Photo** of your dream property and I'll find similar ones!",
+                    Language.FA: "\n\n🎙️ **نکته:** می‌تونید **ویس** بدید درخواستتون رو بشنوم، یا **عکس** ملک مورد علاقه‌تون رو بدید مشابه‌هاش رو پیدا کنم!",
+                    Language.AR: "\n\n🎙️ **نصيحة:** أرسل لي **رسالة صوتية** تصف احتياجاتك، أو حمّل **صورة** للعقار الذي تحلم به وسأجد ما يشبهه!",
+                    Language.RU: "\n\n🎙️ **Совет:** Отправьте мне **голосовое сообщение** с описанием ваших потребностей, или загрузите **фото** желаемой недвижимости, и я найду похожие!"
+                }
+                hint = engagement_hint.get(lang, engagement_hint[Language.EN])
+                
                 property_category_question = {
                     Language.EN: "Perfect! Are you looking for **Residential** or **Commercial** property?",
                     Language.FA: "عالی! به دنبال ملک **مسکونی** هستید یا **تجاری**؟",
@@ -448,7 +445,7 @@ async def _handle_slot_filling(
                 ]
                 
                 return BrainResponse(
-                    message=property_category_question.get(lang, property_category_question[Language.EN]),
+                    message=property_category_question.get(lang, property_category_question[Language.EN]) + hint,
                     next_state=ConversationState.SLOT_FILLING,
                     lead_updates=lead_updates | {
                         "conversation_data": conversation_data,
