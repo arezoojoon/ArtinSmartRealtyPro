@@ -9,7 +9,8 @@ from enum import Enum
 from typing import Optional, List, Dict, Any
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Time, Boolean, 
-    ForeignKey, Enum as SQLEnum, JSON, Float, create_engine
+    ForeignKey, Enum as SQLEnum, JSON, Float, create_engine,
+    UniqueConstraint
 )
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
