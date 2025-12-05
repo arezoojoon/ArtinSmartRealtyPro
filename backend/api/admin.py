@@ -23,8 +23,8 @@ from database import (
 router = APIRouter(prefix="/admin", tags=["Admin - God Mode"])
 security = HTTPBearer()
 
-# JWT Configuration - Import from main app
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-here-change-in-production")
+# JWT Configuration
+JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32))
 JWT_ALGORITHM = "HS256"
 
 # Pydantic models for request bodies
