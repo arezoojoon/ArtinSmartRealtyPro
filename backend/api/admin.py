@@ -22,7 +22,7 @@ from database import (
 from auth_config import JWT_SECRET, JWT_ALGORITHM, PASSWORD_SALT
 
 router = APIRouter(prefix="/admin", tags=["Admin - God Mode"])
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # Pydantic models for request bodies
 class CreateTenantRequest(BaseModel):
@@ -39,6 +39,8 @@ def decode_jwt_token(token: str) -> dict:
     """Decode and verify JWT token."""
     try:
         return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -46,6 +48,9 @@ async def get_current_super_admin(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> int:
     """Verify that the current user is a Super Admin (tenant_id=0)."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
     payload = decode_jwt_token(credentials.credentials)
     tenant_id = payload.get("tenant_id")
     
