@@ -109,6 +109,22 @@ class SubscriptionStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class FeatureFlag(str, Enum):
+    """Available features that can be enabled/disabled per tenant"""
+    RAG_SYSTEM = "rag_system"  # Retrieval-Augmented Generation (Knowledge Base)
+    VOICE_AI = "voice_ai"  # Voice call automation
+    ADVANCED_ANALYTICS = "advanced_analytics"  # Advanced reporting & insights
+    WHATSAPP_BOT = "whatsapp_bot"  # WhatsApp integration
+    TELEGRAM_BOT = "telegram_bot"  # Telegram integration
+    BROADCAST_MESSAGES = "broadcast_messages"  # Mass messaging
+    LOTTERY_SYSTEM = "lottery_system"  # Gamification - lottery
+    CALENDAR_BOOKING = "calendar_booking"  # Appointment scheduling
+    LEAD_EXPORT = "lead_export"  # Export leads to CSV/Excel
+    API_ACCESS = "api_access"  # REST API access
+    CUSTOM_BRANDING = "custom_branding"  # White-label branding
+    MULTI_LANGUAGE = "multi_language"  # 4 language support (FA/EN/AR/RU)
+
+
 class PainPoint(str, Enum):
     """Pain points for Pain & Solution technique"""
     INFLATION_RISK = "inflation_risk"  # Currency devaluation fear
@@ -199,6 +215,37 @@ class Tenant(Base):
     # Relationships
     leads = relationship("Lead", back_populates="tenant", cascade="all, delete-orphan")
     availabilities = relationship("AgentAvailability", back_populates="tenant", cascade="all, delete-orphan")
+    features = relationship("TenantFeature", back_populates="tenant", cascade="all, delete-orphan")
+
+
+class TenantFeature(Base):
+    """
+    Feature flags for each tenant - controls access to specific features.
+    Super Admin can enable/disable features per tenant.
+    """
+    __tablename__ = "tenant_features"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    feature = Column(SQLEnum(FeatureFlag), nullable=False)
+    is_enabled = Column(Boolean, default=True)
+    
+    # Metadata
+    enabled_at = Column(DateTime, default=datetime.utcnow)
+    enabled_by = Column(Integer, nullable=True)  # Admin user ID who enabled it
+    notes = Column(String(500), nullable=True)  # Admin notes
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    tenant = relationship("Tenant", back_populates="features")
+    
+    # Unique constraint: one entry per tenant per feature
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'feature', name='uix_tenant_feature'),
+    )
 
 
 class Lead(Base):

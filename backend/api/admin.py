@@ -17,7 +17,7 @@ import os
 
 from database import (
     async_session, Tenant, Lead, ConversationState,
-    LeadStatus, SubscriptionStatus
+    LeadStatus, SubscriptionStatus, TenantFeature, FeatureFlag
 )
 
 router = APIRouter(prefix="/admin", tags=["Admin - God Mode"])
@@ -444,3 +444,205 @@ async def generate_license_key(
         "plan": plan,
         "type": "lifetime"
     }
+
+
+# ==================== FEATURE MANAGEMENT ====================
+
+class ToggleFeatureRequest(BaseModel):
+    feature: str
+    enabled: bool
+    notes: Optional[str] = None
+
+
+@router.get("/features")
+async def get_all_features(
+    current_admin: int = Depends(get_current_super_admin)
+):
+    """Get list of all available features"""
+    return {
+        "features": [
+            {
+                "key": feature.value,
+                "name": feature.value.replace("_", " ").title(),
+                "description": _get_feature_description(feature)
+            }
+            for feature in FeatureFlag
+        ]
+    }
+
+
+@router.get("/tenants/{tenant_id}/features")
+async def get_tenant_features(
+    tenant_id: int,
+    current_admin: int = Depends(get_current_super_admin)
+):
+    """Get all features for a specific tenant"""
+    async with async_session() as session:
+        # Check tenant exists
+        result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Get enabled features
+        features_result = await session.execute(
+            select(TenantFeature).where(TenantFeature.tenant_id == tenant_id)
+        )
+        enabled_features_db = features_result.scalars().all()
+        
+        # Create a map of enabled features
+        enabled_map = {f.feature: f for f in enabled_features_db}
+        
+        # Return all features with enabled status
+        features_list = []
+        for feature in FeatureFlag:
+            db_feature = enabled_map.get(feature)
+            features_list.append({
+                "feature": feature.value,
+                "name": feature.value.replace("_", " ").title(),
+                "description": _get_feature_description(feature),
+                "enabled": db_feature.is_enabled if db_feature else False,
+                "enabled_at": db_feature.enabled_at.isoformat() if db_feature and db_feature.is_enabled else None,
+                "notes": db_feature.notes if db_feature else None
+            })
+        
+        return {
+            "tenant_id": tenant_id,
+            "tenant_name": tenant.name or tenant.company_name,
+            "features": features_list
+        }
+
+
+@router.put("/tenants/{tenant_id}/features/{feature}")
+async def toggle_feature(
+    tenant_id: int,
+    feature: str,
+    request: ToggleFeatureRequest,
+    current_admin: int = Depends(get_current_super_admin)
+):
+    """Enable or disable a feature for a tenant"""
+    # Validate feature
+    try:
+        feature_enum = FeatureFlag(feature)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid feature: {feature}")
+    
+    async with async_session() as session:
+        # Check tenant exists
+        result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Check if feature entry exists
+        feature_result = await session.execute(
+            select(TenantFeature).where(
+                TenantFeature.tenant_id == tenant_id,
+                TenantFeature.feature == feature_enum
+            )
+        )
+        tenant_feature = feature_result.scalar_one_or_none()
+        
+        if tenant_feature:
+            # Update existing
+            tenant_feature.is_enabled = request.enabled
+            tenant_feature.enabled_at = datetime.utcnow() if request.enabled else tenant_feature.enabled_at
+            tenant_feature.enabled_by = current_admin
+            if request.notes:
+                tenant_feature.notes = request.notes
+        else:
+            # Create new
+            tenant_feature = TenantFeature(
+                tenant_id=tenant_id,
+                feature=feature_enum,
+                is_enabled=request.enabled,
+                enabled_by=current_admin,
+                notes=request.notes
+            )
+            session.add(tenant_feature)
+        
+        await session.commit()
+        
+        action = "enabled" if request.enabled else "disabled"
+        return {
+            "message": f"✅ Feature '{feature}' {action} for tenant {tenant.name or tenant.company_name}",
+            "tenant_id": tenant_id,
+            "feature": feature,
+            "enabled": request.enabled
+        }
+
+
+@router.post("/tenants/{tenant_id}/features/bulk")
+async def bulk_toggle_features(
+    tenant_id: int,
+    features: List[str],
+    enabled: bool,
+    current_admin: int = Depends(get_current_super_admin)
+):
+    """Enable or disable multiple features at once"""
+    async with async_session() as session:
+        # Check tenant exists
+        result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        updated = []
+        for feature_str in features:
+            try:
+                feature_enum = FeatureFlag(feature_str)
+            except ValueError:
+                continue  # Skip invalid features
+            
+            # Check if exists
+            feature_result = await session.execute(
+                select(TenantFeature).where(
+                    TenantFeature.tenant_id == tenant_id,
+                    TenantFeature.feature == feature_enum
+                )
+            )
+            tenant_feature = feature_result.scalar_one_or_none()
+            
+            if tenant_feature:
+                tenant_feature.is_enabled = enabled
+                tenant_feature.enabled_at = datetime.utcnow() if enabled else tenant_feature.enabled_at
+                tenant_feature.enabled_by = current_admin
+            else:
+                tenant_feature = TenantFeature(
+                    tenant_id=tenant_id,
+                    feature=feature_enum,
+                    is_enabled=enabled,
+                    enabled_by=current_admin
+                )
+                session.add(tenant_feature)
+            
+            updated.append(feature_str)
+        
+        await session.commit()
+        
+        action = "enabled" if enabled else "disabled"
+        return {
+            "message": f"✅ {len(updated)} features {action}",
+            "tenant_id": tenant_id,
+            "features": updated,
+            "enabled": enabled
+        }
+
+
+def _get_feature_description(feature: FeatureFlag) -> str:
+    """Get human-readable description for a feature"""
+    descriptions = {
+        FeatureFlag.RAG_SYSTEM: "AI Knowledge Base - Contextual responses using Dubai real estate facts",
+        FeatureFlag.VOICE_AI: "Voice call automation for phone conversations",
+        FeatureFlag.ADVANCED_ANALYTICS: "Advanced reporting, insights, and conversion tracking",
+        FeatureFlag.WHATSAPP_BOT: "WhatsApp Business API integration",
+        FeatureFlag.TELEGRAM_BOT: "Telegram Bot API integration",
+        FeatureFlag.BROADCAST_MESSAGES: "Send mass messages to all or filtered leads",
+        FeatureFlag.LOTTERY_SYSTEM: "Gamification - Run lotteries and prizes",
+        FeatureFlag.CALENDAR_BOOKING: "Appointment scheduling and calendar management",
+        FeatureFlag.LEAD_EXPORT: "Export leads to CSV/Excel files",
+        FeatureFlag.API_ACCESS: "REST API access for custom integrations",
+        FeatureFlag.CUSTOM_BRANDING: "White-label branding and customization",
+        FeatureFlag.MULTI_LANGUAGE: "Multi-language support (FA/EN/AR/RU)"
+    }
+    return descriptions.get(feature, feature.value)
