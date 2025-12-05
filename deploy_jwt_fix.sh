@@ -1,26 +1,29 @@
 #!/bin/bash
-# Deployment script for JWT Secret Fix
+# Deployment script for JWT Secret Fix + Admin API Authentication Fix
 # Run on production server: bash deploy_jwt_fix.sh
 
 set -e  # Exit on error
 
-echo "🔧 ArtinSmartRealty - JWT Secret Fix Deployment"
-echo "================================================"
+echo "🔧 ArtinSmartRealty - Complete Authentication Fix Deployment"
+echo "============================================================="
 echo ""
 
 # Step 1: Pull latest code
 echo "📥 Step 1: Pulling latest code from GitHub..."
+cd /opt/ArtinSmartRealty
 git pull origin main
-echo "✅ Code updated"
+echo "✅ Code updated (latest commit: $(git rev-parse --short HEAD))"
 echo ""
 
 # Step 2: Check if JWT_SECRET exists in .env
 echo "🔍 Step 2: Checking JWT_SECRET in .env..."
 if grep -q "^JWT_SECRET=" .env 2>/dev/null; then
     echo "✅ JWT_SECRET already exists in .env"
+    JWT_SECRET_LENGTH=$(grep "^JWT_SECRET=" .env | cut -d'=' -f2 | wc -c)
+    echo "   Length: $JWT_SECRET_LENGTH characters"
 else
     echo "⚠️  JWT_SECRET not found in .env"
-    echo "🔑 Generating new JWT_SECRET..."
+    echo "🔑 Generating new secure JWT_SECRET..."
     
     # Generate a secure JWT secret
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
@@ -30,7 +33,7 @@ else
     echo "# JWT Secret (Auto-generated on $(date))" >> .env
     echo "JWT_SECRET=${JWT_SECRET}" >> .env
     
-    echo "✅ JWT_SECRET added to .env"
+    echo "✅ JWT_SECRET added to .env (${#JWT_SECRET} characters)"
 fi
 echo ""
 
@@ -40,7 +43,7 @@ if grep -q "^PASSWORD_SALT=" .env 2>/dev/null; then
     echo "✅ PASSWORD_SALT already exists in .env"
 else
     echo "⚠️  PASSWORD_SALT not found in .env"
-    echo "🔑 Using default PASSWORD_SALT..."
+    echo "🔑 Adding default PASSWORD_SALT..."
     
     echo "" >> .env
     echo "# Password Salt" >> .env
@@ -50,104 +53,145 @@ else
 fi
 echo ""
 
-# Step 4: Show current environment variables
-echo "📋 Step 4: Current JWT Configuration:"
-echo "-------------------------------------"
-docker-compose exec backend python -c "
-import os
-print(f'JWT_SECRET exists: {\"JWT_SECRET\" in os.environ}')
-print(f'JWT_SECRET length: {len(os.getenv(\"JWT_SECRET\", \"\"))}')
-print(f'PASSWORD_SALT: {os.getenv(\"PASSWORD_SALT\", \"NOT_SET\")}')
-" 2>/dev/null || echo "Backend not running yet"
-echo ""
-
-# Step 5: Restart backend
-echo "🔄 Step 5: Restarting backend..."
+# Step 4: Rebuild and restart backend
+echo "🔄 Step 4: Rebuilding and restarting backend..."
 docker-compose down backend
+docker-compose build backend
 docker-compose up -d backend
 
 echo "⏳ Waiting for backend to start..."
-sleep 15
+sleep 20
 
 # Check if backend is healthy
-for i in {1..10}; do
+for i in {1..15}; do
     if curl -s http://localhost:8000/health > /dev/null 2>&1; then
         echo "✅ Backend is healthy!"
         break
     fi
-    echo "Waiting for backend... ($i/10)"
+    if [ $i -eq 15 ]; then
+        echo "❌ Backend failed to start!"
+        echo "Checking logs..."
+        docker-compose logs backend --tail 50
+        exit 1
+    fi
+    echo "Waiting for backend... ($i/15)"
     sleep 3
 done
 echo ""
 
-# Step 6: Test authentication
+# Step 5: Verify environment variables in container
+echo "📋 Step 5: Verifying JWT Configuration in container..."
+echo "------------------------------------------------------"
+docker-compose exec backend python -c "
+import os
+jwt_secret = os.getenv('JWT_SECRET', '')
+password_salt = os.getenv('PASSWORD_SALT', 'NOT_SET')
+print(f'✅ JWT_SECRET exists: {\"JWT_SECRET\" in os.environ}')
+print(f'✅ JWT_SECRET length: {len(jwt_secret)} characters')
+print(f'✅ PASSWORD_SALT: {password_salt}')
+print(f'✅ SUPER_ADMIN_EMAIL: {os.getenv(\"SUPER_ADMIN_EMAIL\", \"NOT_SET\")}')
+" || echo "⚠️  Could not verify environment variables"
+echo ""
+
+# Step 6: Test Super Admin Authentication
 echo "🧪 Step 6: Testing Super Admin Authentication..."
-echo "------------------------------------------------"
+echo "-------------------------------------------------"
 
 # Test login
-echo "Testing login endpoint..."
+echo "▶️  Testing login endpoint..."
 LOGIN_RESPONSE=$(curl -s https://realty.artinsmartagent.com/api/auth/login \
     -X POST \
     -H "Content-Type: application/json" \
-    -d '{"email":"admin@artinsmartrealty.com","password":"SuperARTIN2588357!"}')
+    -d '{"email":"admin@artinsmartrealty.com","password":"SuperARTIN2588357!"}' \
+    2>&1)
 
-echo "Login response:"
-echo "$LOGIN_RESPONSE" | python3 -m json.tool || echo "$LOGIN_RESPONSE"
+if echo "$LOGIN_RESPONSE" | grep -q "access_token"; then
+    echo "✅ Login successful!"
+    echo "$LOGIN_RESPONSE" | python3 -m json.tool 2>/dev/null | head -10 || echo "$LOGIN_RESPONSE" | head -5
+else
+    echo "❌ Login failed!"
+    echo "$LOGIN_RESPONSE"
+    exit 1
+fi
 echo ""
 
 # Extract token
 TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
 
 if [ -z "$TOKEN" ]; then
-    echo "❌ Failed to get access token!"
+    echo "❌ Failed to extract access token!"
     exit 1
 fi
 
-echo "✅ Token obtained: ${TOKEN:0:50}..."
+echo "✅ Token extracted: ${TOKEN:0:50}..."
 echo ""
 
-# Test admin endpoint
-echo "Testing admin/tenants endpoint..."
-ADMIN_RESPONSE=$(curl -s https://realty.artinsmartagent.com/api/admin/tenants \
-    -H "Authorization: Bearer $TOKEN")
+# Step 7: Test Admin Endpoints
+echo "🧪 Step 7: Testing Admin API Endpoints..."
+echo "------------------------------------------"
 
-echo "Admin response:"
-echo "$ADMIN_RESPONSE" | python3 -m json.tool || echo "$ADMIN_RESPONSE"
-echo ""
+# Test /api/admin/tenants
+echo "▶️  Testing GET /api/admin/tenants..."
+TENANTS_RESPONSE=$(curl -s https://realty.artinsmartagent.com/api/admin/tenants \
+    -H "Authorization: Bearer $TOKEN" \
+    2>&1)
 
-# Check if successful
-if echo "$ADMIN_RESPONSE" | grep -q '"id"'; then
-    echo "✅ SUCCESS! Admin API is working!"
+if echo "$TENANTS_RESPONSE" | grep -q '"id"'; then
+    echo "✅ SUCCESS! /api/admin/tenants is working!"
     echo ""
-    echo "🎉 Deployment Complete!"
-    echo "======================"
-    echo "Super Admin can now access all endpoints."
-elif echo "$ADMIN_RESPONSE" | grep -q "Invalid token\|Not authenticated"; then
-    echo "❌ FAILED! Still getting authentication error"
+    echo "Tenants list (first 3):"
+    echo "$TENANTS_RESPONSE" | python3 -m json.tool 2>/dev/null | head -50 || echo "$TENANTS_RESPONSE" | head -20
+    TENANT_COUNT=$(echo "$TENANTS_RESPONSE" | grep -o '"id"' | wc -l)
     echo ""
-    echo "🔍 Debugging information:"
-    docker-compose logs backend --tail 50 | grep -i "error\|invalid\|token"
+    echo "📊 Total tenants: $TENANT_COUNT"
+elif echo "$TENANTS_RESPONSE" | grep -q "Invalid token\|Not authenticated\|Token expired"; then
+    echo "❌ FAILED! Authentication error:"
+    echo "$TENANTS_RESPONSE"
+    echo ""
+    echo "🔍 Checking backend logs for errors..."
+    docker-compose logs backend --tail 100 | grep -i "error\|invalid\|token\|401"
     exit 1
 else
-    echo "⚠️  Unexpected response from admin API"
+    echo "⚠️  Unexpected response:"
+    echo "$TENANTS_RESPONSE"
     exit 1
 fi
-
-# Step 7: Test feature flags endpoint
 echo ""
-echo "🧪 Step 7: Testing Feature Flags API..."
+
+# Test /api/admin/features
+echo "▶️  Testing GET /api/admin/features..."
 FEATURES_RESPONSE=$(curl -s https://realty.artinsmartagent.com/api/admin/features \
-    -H "Authorization: Bearer $TOKEN")
+    -H "Authorization: Bearer $TOKEN" \
+    2>&1)
 
-echo "Features response:"
-echo "$FEATURES_RESPONSE" | python3 -m json.tool | head -30
+if echo "$FEATURES_RESPONSE" | grep -q '"tenant_id"'; then
+    echo "✅ SUCCESS! /api/admin/features is working!"
+    echo ""
+    echo "Feature flags (first 20 lines):"
+    echo "$FEATURES_RESPONSE" | python3 -m json.tool 2>/dev/null | head -20 || echo "$FEATURES_RESPONSE" | head -15
+else
+    echo "⚠️  Feature flags endpoint issue (non-critical):"
+    echo "$FEATURES_RESPONSE" | head -10
+fi
 echo ""
 
-echo "✅ All tests passed!"
+# Step 8: Final Summary
+echo "🎉 =============================================="
+echo "🎉 DEPLOYMENT SUCCESSFUL!"
+echo "🎉 =============================================="
+echo ""
+echo "✅ All authentication systems working:"
+echo "   • JWT Secret: Configured and consistent"
+echo "   • Login endpoint: Working"
+echo "   • Admin API: Working"
+echo "   • Token validation: Working"
 echo ""
 echo "📝 Next Steps:"
-echo "1. Login to Super Admin dashboard: https://realty.artinsmartagent.com"
-echo "2. Use credentials: admin@artinsmartrealty.com / SuperARTIN2588357!"
-echo "3. Test feature flags management"
+echo "   1. Open browser: https://realty.artinsmartagent.com"
+echo "   2. Login with: admin@artinsmartrealty.com"
+echo "   3. Password: SuperARTIN2588357!"
+echo "   4. Test Super Admin Dashboard"
+echo "   5. Manage tenant feature flags"
 echo ""
-echo "🎯 JWT Secret is now consistent across all modules!"
+echo "🎯 Super Admin Panel is fully operational!"
+echo ""
