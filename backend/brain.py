@@ -18,7 +18,7 @@ from database import (
     Lead, Tenant, ConversationState, Language,
     TransactionType, PropertyType, PaymentMethod, Purpose,
     LeadStatus, update_lead, get_available_slots, DayOfWeek,
-    PainPoint, get_tenant_context_for_ai
+    PainPoint, get_tenant_context_for_ai, TenantKnowledge
 )
 
 # Configure logging
@@ -593,15 +593,58 @@ OFF-PLAN PROJECTS (Current Launches):
         knowledge = self.tenant_context.get("knowledge", [])
         if knowledge:
             kb_text = "\n".join([
-                f"  Q: {k['title']}\n  A: {k['content'][:200]}..."
-                for k in knowledge[:5]  # Limit to 5 FAQs
+                f"  **{k['title']}**\n  {k['content'][:300]}...\n"
+                for k in knowledge[:10]  # Increased to 10 for more comprehensive knowledge
             ])
             context_parts.append(f"""
-AGENT'S FAQ & POLICIES:
+DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
 {kb_text}
 """)
         
         return "\n".join(context_parts)
+    
+    def _search_relevant_knowledge(self, user_message: str, max_results: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search for relevant knowledge entries based on user message keywords.
+        Returns top matching knowledge entries.
+        """
+        if not self.tenant_context or not self.tenant_context.get("knowledge"):
+            return []
+        
+        all_knowledge = self.tenant_context.get("knowledge", [])
+        message_lower = user_message.lower()
+        
+        # Score each knowledge entry based on keyword matches
+        scored_knowledge = []
+        for k in all_knowledge:
+            score = 0
+            # Check if any keyword matches
+            keywords = k.get("keywords", [])
+            for keyword in keywords:
+                if keyword.lower() in message_lower:
+                    score += 2  # Higher weight for exact keyword match
+            
+            # Check title relevance
+            if any(word in message_lower for word in k.get("title", "").lower().split()):
+                score += 1
+            
+            if score > 0:
+                scored_knowledge.append((score, k))
+        
+        # Sort by score and return top results
+        scored_knowledge.sort(reverse=True, key=lambda x: x[0])
+        return [k for _, k in scored_knowledge[:max_results]]
+    
+    def _format_knowledge_for_prompt(self, knowledge_list: List[Dict[str, Any]]) -> str:
+        """Format knowledge entries for inclusion in AI prompt."""
+        if not knowledge_list:
+            return "No specific knowledge entries matched this query."
+        
+        formatted = []
+        for k in knowledge_list:
+            formatted.append(f"📌 **{k['title']}**\n{k['content']}\n")
+        
+        return "\n".join(formatted)
     
     def detect_language(self, text: str) -> Language:
         """Auto-detect language from text."""
@@ -1005,6 +1048,9 @@ AGENT'S FAQ & POLICIES:
             if not self.tenant_context:
                 await self.load_tenant_context(lead)
             
+            # Search for relevant knowledge based on user message
+            relevant_knowledge = self._search_relevant_knowledge(user_message, max_results=3)
+            
             # Build tenant data context
             tenant_data_prompt = self._build_tenant_context_prompt()
             
@@ -1048,6 +1094,9 @@ AGENT'S FAQ & POLICIES:
             
             If user says "I have only 500K-1M AED for residency", respond with:
             "Great! The 2-Year Investor Visa is perfect for you - it requires only 750,000 AED minimum. Plus, you'll earn rental income while building wealth!"
+            
+            RELEVANT KNOWLEDGE (USE FOR FACTUAL ANSWERS):
+            {self._format_knowledge_for_prompt(relevant_knowledge)}
             
             PROPERTY RECOMMENDATIONS:
             7. **Use ONLY actual properties from agent's inventory below**
