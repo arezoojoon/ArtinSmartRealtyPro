@@ -48,21 +48,17 @@ from roi_engine import generate_roi_pdf
 
 # Import API routers
 from api import broadcast, catalogs, lotteries, admin
+from auth_config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, PASSWORD_SALT
 
 
 # ==================== AUTH CONFIG ====================
-
-JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32))
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
 
 security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
     """Hash password using PBKDF2 with SHA-256 (more secure than plain SHA-256)."""
-    salt = os.getenv("PASSWORD_SALT", "artinsmartrealty_salt_v2")
-    return hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+    return hashlib.pbkdf2_hmac('sha256', password.encode(), PASSWORD_SALT.encode(), 100000).hex()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

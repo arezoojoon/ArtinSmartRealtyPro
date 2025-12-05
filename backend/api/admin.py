@@ -19,13 +19,10 @@ from database import (
     async_session, Tenant, Lead, ConversationState,
     LeadStatus, SubscriptionStatus, TenantFeature, FeatureFlag
 )
+from auth_config import JWT_SECRET, JWT_ALGORITHM, PASSWORD_SALT
 
 router = APIRouter(prefix="/admin", tags=["Admin - God Mode"])
 security = HTTPBearer()
-
-# JWT Configuration
-JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32))
-JWT_ALGORITHM = "HS256"
 
 # Pydantic models for request bodies
 class CreateTenantRequest(BaseModel):
@@ -36,8 +33,7 @@ class CreateTenantRequest(BaseModel):
 
 def hash_password(password: str) -> str:
     """Hash password using PBKDF2-HMAC-SHA256."""
-    salt = os.getenv("PASSWORD_SALT", "artinsmartrealty_salt_v2")
-    return hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+    return hashlib.pbkdf2_hmac('sha256', password.encode(), PASSWORD_SALT.encode(), 100000).hex()
 
 def decode_jwt_token(token: str) -> dict:
     """Decode and verify JWT token."""

@@ -52,6 +52,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       PDF_OUTPUT_DIR: /app/pdf_reports
       DEBUG: ${DEBUG:-false}
+      JWT_SECRET: ${JWT_SECRET}
+      PASSWORD_SALT: ${PASSWORD_SALT:-artinsmartrealty_salt_v2}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@artinsmartrealty.com}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-SuperAdmin123!}
     ports:
