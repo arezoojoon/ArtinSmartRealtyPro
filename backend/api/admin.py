@@ -23,9 +23,9 @@ from database import (
 router = APIRouter(prefix="/admin", tags=["Admin - God Mode"])
 security = HTTPBearer()
 
-# JWT Configuration
-SECRET_KEY = "your-secret-key-here-change-in-production"
-ALGORITHM = "HS256"
+# JWT Configuration - Import from main app
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-here-change-in-production")
+JWT_ALGORITHM = "HS256"
 
 # Pydantic models for request bodies
 class CreateTenantRequest(BaseModel):
@@ -42,7 +42,7 @@ def hash_password(password: str) -> str:
 def decode_jwt_token(token: str) -> dict:
     """Decode and verify JWT token."""
     try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
