@@ -539,7 +539,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Include API routers
-app.include_router(admin.router)
+app.include_router(admin.router, prefix="/api")
 app.include_router(broadcast.router)
 app.include_router(catalogs.router)
 app.include_router(lotteries.router)

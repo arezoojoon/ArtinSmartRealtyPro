@@ -225,6 +225,12 @@ async def activate_tenant(
 class UpdateSubscriptionRequest(BaseModel):
     status: str
 
+class UpdateTenantCredentialsRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+    name: Optional[str] = None
+    company_name: Optional[str] = None
+
 @router.put("/tenants/{tenant_id}/subscription")
 async def update_tenant_subscription(
     tenant_id: int,
@@ -248,6 +254,52 @@ async def update_tenant_subscription(
         await session.commit()
         
         return {"message": f"✅ Subscription updated to {status}", "tenant_id": tenant_id}
+
+
+@router.put("/tenants/{tenant_id}/credentials")
+async def update_tenant_credentials(
+    tenant_id: int,
+    request: UpdateTenantCredentialsRequest,
+    current_admin: int = Depends(get_current_super_admin)
+):
+    """Update tenant email, password, name, or company name"""
+    async with async_session() as session:
+        result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Update fields if provided
+        if request.email:
+            # Check if email already exists for another tenant
+            existing = await session.execute(
+                select(Tenant).where(Tenant.email == request.email, Tenant.id != tenant_id)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Email already in use by another tenant")
+            tenant.email = request.email
+        
+        if request.password:
+            # Hash the password
+            tenant.password_hash = hashlib.sha256(request.password.encode()).hexdigest()
+        
+        if request.name:
+            tenant.name = request.name
+        
+        if request.company_name:
+            tenant.company_name = request.company_name
+        
+        tenant.updated_at = datetime.utcnow()
+        await session.commit()
+        
+        return {
+            "message": "✅ Tenant credentials updated successfully",
+            "tenant_id": tenant_id,
+            "email": tenant.email,
+            "name": tenant.name,
+            "company_name": tenant.company_name
+        }
 
 
 @router.post("/tenants/{tenant_id}/impersonate")
