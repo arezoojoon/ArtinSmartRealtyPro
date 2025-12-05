@@ -305,10 +305,14 @@ async def seed_knowledge():
             print("❌ No tenants found! Please create a tenant first.")
             return
         
-        print(f"found {len(tenants)} tenants. Seeding knowledge base for all...")
+        print(f"\n📋 Found {len(tenants)} tenants:")
+        for t in tenants:
+            print(f"   • ID {t.id}: {t.name}")
+        
+        print(f"\n🚀 Seeding knowledge base for all {len(tenants)} tenants...\n")
         
         for tenant in tenants:
-            print(f"  -> Seeding for tenant: {tenant.name} ({tenant.id})")
+            print(f"  -> Processing tenant: {tenant.name} (ID: {tenant.id})")
             
             # Counter for added items
             added_count = 0
