@@ -860,6 +860,9 @@ async def get_tenant_context_for_ai(tenant_id: int, lead: Optional["Lead"] = Non
                     "category": k.category,
                     "title": k.title,
                     "content": k.content,
+                    "keywords": k.keywords,
+                    "language": k.language,
+                    "priority": k.priority,
                 }
                 for k in knowledge
             ]

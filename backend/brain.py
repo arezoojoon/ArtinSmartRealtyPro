@@ -646,6 +646,119 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         return "\n".join(formatted)
     
+    async def get_relevant_knowledge(self, query: str, lang: Language, limit: int = 3) -> str:
+        """
+        Retrieval Engine for Contextual Knowledge Injection (Simple RAG).
+        
+        Args:
+            query: User's message or query text
+            lang: User's language preference
+            limit: Maximum number of knowledge entries to return
+        
+        Returns:
+            Formatted string with relevant knowledge entries for LLM prompt
+        
+        Scoring Algorithm:
+            +2 Points: If any keyword from entry.keywords appears in query
+            +1 Point: If words from entry.title appear in query
+        """
+        # Load tenant context if not already loaded
+        if not self.tenant_context:
+            logger.warning("⚠️ Tenant context not loaded for knowledge retrieval")
+            return ""
+        
+        # Get all knowledge entries from context
+        all_knowledge = self.tenant_context.get("knowledge", [])
+        if not all_knowledge:
+            logger.info("ℹ️ No knowledge entries found in tenant context")
+            return ""
+        
+        query_lower = query.lower()
+        scored_entries = []
+        
+        # Score each knowledge entry
+        for entry in all_knowledge:
+            # Skip if language doesn't match
+            if entry.get("language") and entry.get("language") != lang:
+                continue
+            
+            score = 0
+            
+            # +2 points for each keyword match
+            keywords = entry.get("keywords", [])
+            if keywords:
+                for keyword in keywords:
+                    if keyword.lower() in query_lower:
+                        score += 2
+                        logger.debug(f"🔍 Keyword match '{keyword}' in query: +2 points")
+            
+            # +1 point for title word matches
+            title_words = entry.get("title", "").lower().split()
+            for word in title_words:
+                if len(word) > 3 and word in query_lower:  # Ignore short words
+                    score += 1
+                    logger.debug(f"🔍 Title word match '{word}' in query: +1 point")
+            
+            # Only include entries with score > 0
+            if score > 0:
+                scored_entries.append((score, entry.get("priority", 0), entry))
+                logger.info(f"✅ Scored '{entry.get('title')}': {score} points (priority: {entry.get('priority', 0)})")
+        
+        # Sort by score (descending), then by priority (descending)
+        scored_entries.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        
+        # Get top N entries
+        top_entries = [entry for _, _, entry in scored_entries[:limit]]
+        
+        if not top_entries:
+            logger.info("ℹ️ No relevant knowledge entries found for query")
+            return ""
+        
+        # Format for LLM prompt
+        formatted_parts = []
+        for entry in top_entries:
+            formatted_parts.append(f"**{entry['title']}**\n{entry['content']}")
+        
+        result = "\n\n".join(formatted_parts)
+        logger.info(f"📚 Retrieved {len(top_entries)} relevant knowledge entries")
+        
+        return result
+    
+    async def get_specific_knowledge(self, topic_keyword: str, lang: Language) -> str:
+        """
+        Helper method to fetch knowledge for specific topics.
+        Used for targeted injection in conversation handlers.
+        
+        Args:
+            topic_keyword: Specific keyword to search for (e.g., "escrow", "golden visa", "ROI")
+            lang: User's language preference
+        
+        Returns:
+            Formatted knowledge entry or empty string if not found
+        """
+        if not self.tenant_context:
+            return ""
+        
+        all_knowledge = self.tenant_context.get("knowledge", [])
+        
+        # Search for entries matching the topic keyword
+        for entry in all_knowledge:
+            # Check language match
+            if entry.get("language") and entry.get("language") != lang:
+                continue
+            
+            # Check if topic_keyword is in keywords or title
+            keywords = entry.get("keywords", [])
+            title = entry.get("title", "").lower()
+            topic_lower = topic_keyword.lower()
+            
+            if any(topic_lower in kw.lower() for kw in keywords) or topic_lower in title:
+                logger.info(f"📌 Found specific knowledge for '{topic_keyword}': {entry['title']}")
+                return f"\n\n💡 **{entry['title']}**\n{entry['content']}"
+        
+        logger.debug(f"ℹ️ No specific knowledge found for '{topic_keyword}'")
+        return ""
+    
     def detect_language(self, text: str) -> Language:
         """Auto-detect language from text."""
         if not text:
@@ -1048,8 +1161,13 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             if not self.tenant_context:
                 await self.load_tenant_context(lead)
             
-            # Search for relevant knowledge based on user message
-            relevant_knowledge = self._search_relevant_knowledge(user_message, max_results=3)
+            # === STRATEGY A: Smart FAQ Handling ===
+            # Retrieve relevant knowledge based on user's message
+            knowledge_text = await self.get_relevant_knowledge(
+                query=user_message,
+                lang=lead.language or Language.EN,
+                limit=3
+            )
             
             # Build tenant data context
             tenant_data_prompt = self._build_tenant_context_prompt()
@@ -1095,8 +1213,9 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             If user says "I have only 500K-1M AED for residency", respond with:
             "Great! The 2-Year Investor Visa is perfect for you - it requires only 750,000 AED minimum. Plus, you'll earn rental income while building wealth!"
             
-            RELEVANT KNOWLEDGE (USE FOR FACTUAL ANSWERS):
-            {self._format_knowledge_for_prompt(relevant_knowledge)}
+            === TRUSTED KNOWLEDGE BASE (Use this to answer questions) ===
+            {knowledge_text if knowledge_text else "No specific knowledge entries matched this query."}
+            =============================================================
             
             PROPERTY RECOMMENDATIONS:
             7. **Use ONLY actual properties from agent's inventory below**

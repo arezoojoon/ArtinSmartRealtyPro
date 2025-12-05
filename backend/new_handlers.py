@@ -664,6 +664,25 @@ async def _handle_value_proposition(
             for prop in recommendations
         ])
         
+        # === STRATEGY B: Educational Selling - Inject Purpose-Specific Knowledge ===
+        educational_snippet = ""
+        
+        if lead.purpose == Purpose.INVESTMENT:
+            # Fetch knowledge about ROI or Rental Yield
+            roi_knowledge = await self.get_specific_knowledge("ROI", lang)
+            if not roi_knowledge:
+                roi_knowledge = await self.get_specific_knowledge("rental yield", lang)
+            if not roi_knowledge:
+                roi_knowledge = await self.get_specific_knowledge("investment", lang)
+            educational_snippet = roi_knowledge
+            
+        elif lead.purpose == Purpose.RESIDENCY:
+            # Fetch knowledge about Golden Visa
+            visa_knowledge = await self.get_specific_knowledge("Golden Visa", lang)
+            if not visa_knowledge:
+                visa_knowledge = await self.get_specific_knowledge("visa", lang)
+            educational_snippet = visa_knowledge
+        
         # === FEATURE 2: SCARCITY & URGENCY TACTICS ===
         # Add FOMO message to create urgency
         scarcity_messages = {
@@ -676,10 +695,10 @@ async def _handle_value_proposition(
         scarcity_msg = scarcity_messages.get(lang, scarcity_messages[Language.EN])
         
         value_message = {
-            Language.EN: f"Here are some perfect matches for you:\n\n{properties_text}{scarcity_msg}\n\nWould you like to receive a detailed PDF report with ROI projections?",
-            Language.FA: f"اینها چند تا ملک عالی برای شما هستند:\n\n{properties_text}{scarcity_msg}\n\nمایل هستید یک گزارش کامل PDF با پیش‌بینی ROI دریافت کنید؟",
-            Language.AR: f"إليك بعض الخيارات المثالية لك:\n\n{properties_text}{scarcity_msg}\n\nهل ترغب في تلقي تقرير PDF مفصل مع توقعات عائد الاستثمار؟",
-            Language.RU: f"Вот несколько идеальных вариантов для вас:\n\n{properties_text}{scarcity_msg}\n\nХотите получить подробный PDF-отчет с прогнозами ROI?"
+            Language.EN: f"Here are some perfect matches for you:\n\n{properties_text}{scarcity_msg}{educational_snippet}\n\nWould you like to receive a detailed PDF report with ROI projections?",
+            Language.FA: f"اینها چند تا ملک عالی برای شما هستند:\n\n{properties_text}{scarcity_msg}{educational_snippet}\n\nمایل هستید یک گزارش کامل PDF با پیش‌بینی ROI دریافت کنید؟",
+            Language.AR: f"إليك بعض الخيارات المثالية لك:\n\n{properties_text}{scarcity_msg}{educational_snippet}\n\nهل ترغب في تلقي تقرير PDF مفصل مع توقعات عائد الاستثمار؟",
+            Language.RU: f"Вот несколько идеальных вариантов для вас:\n\n{properties_text}{scarcity_msg}{educational_snippet}\n\nХотите получить подробный PDF-отчет с прогнозами ROI?"
         }
         
         # Track urgency engagement
@@ -729,11 +748,18 @@ async def _handle_hard_gate(
     """
     # If user clicked "Yes, send PDF"
     if callback_data == "pdf_yes":
+        # === STRATEGY C: Trust Injection - Add Escrow/Safety Knowledge ===
+        trust_snippet = await self.get_specific_knowledge("escrow", lang)
+        if not trust_snippet:
+            trust_snippet = await self.get_specific_knowledge("safety", lang)
+        if not trust_snippet:
+            trust_snippet = await self.get_specific_knowledge("secure", lang)
+        
         phone_request = {
-            Language.EN: "Perfect! To send you the PDF report, I need your phone number.\n\nPlease share your contact or type your number:",
-            Language.FA: "عالی! برای ارسال گزارش PDF، به شماره تماس شما نیاز دارم.\n\nلطفاً شماره خود را به اشتراک بگذارید یا تایپ کنید:",
-            Language.AR: "رائع! لإرسال تقرير PDF لك، أحتاج رقم هاتفك.\n\nيرجى مشاركة جهة الاتصال الخاصة بك أو كتابة رقمك:",
-            Language.RU: "Отлично! Чтобы отправить вам PDF-отчет, мне нужен ваш номер телефона.\n\nПожалуйста, поделитесь контактом или введите номер:"
+            Language.EN: f"Perfect! To send you the PDF report, I need your phone number.\n\nPlease share your contact or type your number:{trust_snippet}",
+            Language.FA: f"عالی! برای ارسال گزارش PDF، به شماره تماس شما نیاز دارم.\n\nلطفاً شماره خود را به اشتراک بگذارید یا تایپ کنید:{trust_snippet}",
+            Language.AR: f"رائع! لإرسال تقرير PDF لك، أحتاج رقم هاتفك.\n\nيرجى مشاركة جهة الاتصال الخاصة بك أو كتابة رقمك:{trust_snippet}",
+            Language.RU: f"Отлично! Чтобы отправить вам PDF-отчет, мне нужен ваш номер телефона.\n\nПожалуйста, поделитесь контактом или введите номер:{trust_snippet}"
         }
         
         return BrainResponse(
