@@ -394,6 +394,7 @@ class TenantProperty(Base):
     image_urls = Column(JSON, default=list)  # Full URLs for display
     image_files = Column(JSON, default=list)  # File metadata: [{filename, size, uploaded_at, url}]
     primary_image = Column(String(512), nullable=True)  # Main display image
+    brochure_pdf = Column(String(512), nullable=True)  # Property brochure/flyer PDF URL
     
     # Full Description (formatted text from agent)
     full_description = Column(Text, nullable=True)  # Rich text description with emojis
