@@ -575,12 +575,12 @@ class TelegramBotHandler:
             await edit_message_with_checkmark(update, context, selected_button_text)
             logger.info(f"✅ Checkmark added to button: {selected_button_text}")
         
-            # Save context to Redis
-            await save_context_to_redis(lead)
-            logger.info(f"💾 Saved callback context to Redis for lead {lead.id}")
-            
-            await self._send_response(update, context, response, lead)
-            logger.info(f"🔓 Lock released for callback user {telegram_id}")
+        # Save context to Redis
+        await save_context_to_redis(lead)
+        logger.info(f"💾 Saved callback context to Redis for lead {lead.id}")
+        
+        await self._send_response(update, context, response, lead)
+        logger.info(f"🔓 Lock released for callback user {telegram_id}")
     
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages with race condition protection."""
