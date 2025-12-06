@@ -52,10 +52,10 @@ TRANSLATIONS = {
         Language.RU: "👋 Здравствуйте! Я AI-ассистент {agent_name}.\n\nПожалуйста, выберите язык:\nPlease select your language:\nلطفاً زبان خود را انتخاب کنید:\nيرجى اختيار لغتك:"
     },
     "welcome": {
-        Language.EN: "👋 Wonderful! I'm so excited to help you discover amazing investment opportunities in Dubai!\n\nDid you know Dubai real estate offers 7-10% rental yields? Let me show you how you can grow your wealth here! 🚀",
-        Language.FA: "👋 عالیه! من خیلی هیجان‌زده‌ام که به شما کمک کنم فرصت‌های سرمایه‌گذاری شگفت‌انگیز در دبی را کشف کنید!\n\nمیدونستید املاک دبی ۷-۱۰٪ بازده اجاره دارد؟ بذار بهتون نشون بدم چطور میتونید ثروتتون رو اینجا رشد بدید! 🚀",
-        Language.AR: "👋 رائع! أنا متحمس جدًا لمساعدتك في اكتشاف فرص استثمارية مذهلة في دبي!\n\nهل تعلم أن العقارات في دبي توفر عوائد إيجارية 7-10%؟ دعني أريك كيف يمكنك تنمية ثروتك هنا! 🚀",
-        Language.RU: "👋 Замечательно! Я так рад помочь вам открыть потрясающие инвестиционные возможности в Дубае!\n\nЗнаете ли вы, что недвижимость в Дубае приносит 7-10% арендной доходности? Позвольте показать, как вы можете приумножить капитал здесь! 🚀"
+        Language.EN: "👋 Wonderful! I'm so excited to help you discover amazing opportunities in Dubai!\n\n✨ **Did you know?**\n• 7-10% rental yields (vs 3% globally)\n• Zero income tax on property profits\n• Property values growing 8-12% yearly\n• Golden Visa eligibility from AED 2M+\n\nLet me show you how you can grow your wealth here! 🚀",
+        Language.FA: "👋 عالیه! من خیلی هیجان‌زده‌ام که به شما کمک کنم فرصت‌های شگفت‌انگیز در دبی را کشف کنید!\n\n✨ **میدونستید؟**\n• بازده اجاره ۷-۱۰٪ (در مقابل ۳٪ جهانی)\n• مالیات صفر روی سود املاک\n• رشد ارزش املاک ۸-۱۲٪ سالانه\n• امکان اخذ گلدن ویزا از ۲ میلیون درهم\n\nبذار بهتون نشون بدم چطور میتونید ثروتتون رو اینجا رشد بدید! 🚀",
+        Language.AR: "👋 رائع! أنا متحمس جدًا لمساعدتك في اكتشاف فرص مذهلة في دبي!\n\n✨ **هل تعلم؟**\n• عوائد إيجارية 7-10% (مقابل 3% عالمياً)\n• صفر ضريبة دخل على أرباح العقارات\n• قيمة العقارات تنمو 8-12% سنوياً\n• الأهلية للتأشيرة الذهبية من 2 مليون درهم\n\nدعني أريك كيف يمكنك تنمية ثروتك هنا! 🚀",
+        Language.RU: "👋 Замечательно! Я так рад помочь вам открыть потрясающие возможности в Дубае!\n\n✨ **Знаете ли вы?**\n• 7-10% арендная доходность (против 3% в мире)\n• Ноль налогов на прибыль от недвижимости\n• Рост стоимости 8-12% в год\n• Право на Golden Visa от 2 млн дирхамов\n\nПозвольте показать, как вы можете приумножить капитал здесь! 🚀"
     },
     "hook_roi": {
         Language.EN: "🏠 Get a FREE ROI Analysis!\n\nSee how much you could earn from Dubai Real Estate investment.\n\nWould you like to receive your personalized report?",
@@ -64,10 +64,10 @@ TRANSLATIONS = {
         Language.RU: "🏠 Получите БЕСПЛАТНЫЙ анализ ROI!\n\nУзнайте, сколько вы можете заработать на недвижимости в Дубае.\n\nХотите получить персональный отчёт?"
     },
     "phone_request": {
-        Language.EN: "🔒 **Security Protocol Activated**\n\nTo access this EXCLUSIVE off-market ROI report and property details, our system requires WhatsApp verification.\n\n💎 This report contains:\n• Confidential pricing (not public)\n• Developer insider deals\n• Investment forecasts\n\nClick below to unlock immediately. 👇",
-        Language.FA: "🔒 **پروتکل امنیتی فعال شد**\n\nبرای دسترسی به این گزارش ROI اختصاصی و جزئیات ملک، سیستم ما نیاز به تایید واتس‌اپ دارد.\n\n💎 این گزارش شامل:\n• قیمت‌گذاری محرمانه (غیرعمومی)\n• معاملات داخلی سازندگان\n• پیش‌بینی سرمایه‌گذاری\n\nدکمه زیر را بزنید تا فوراً باز شود. 👇",
-        Language.AR: "🔒 **تم تفعيل بروتوكول الأمان**\n\nللوصول إلى تقرير عائد الاستثمار الحصري وتفاصيل العقار، يتطلب نظامنا التحقق من واتساب.\n\n💎 يحتوي هذا التقرير على:\n• تسعير سري (غير عام)\n• صفقات داخلية للمطورين\n• توقعات استثمارية\n\nانقر أدناه لإلغاء القفل فورًا. 👇",
-        Language.RU: "🔒 **Протокол безопасности активирован**\n\nДля доступа к ЭКСКЛЮЗИВНОМУ отчёту ROI и деталям объектов требуется верификация WhatsApp.\n\n💎 Отчёт содержит:\n• Конфиденциальные цены (не публичные)\n• Инсайдерские сделки застройщиков\n• Инвестиционные прогнозы\n\nНажмите ниже, чтобы разблокировать. 👇"
+        Language.EN: "🔒 **Security Protocol Activated**\n\nTo access this EXCLUSIVE off-market ROI report and property details, our system requires verification.\n\n💎 This report contains:\n• Confidential pricing (not public)\n• Developer insider deals\n• Investment forecasts\n\n📝 **Please enter your information in this exact format:**\n\n`Full Name – +971XXXXXXXXX`\n\n**Example:** Arezoo Mohammadzadegan – +971505037158\n\n(Note: Use the dash – between name and number)",
+        Language.FA: "🔒 **پروتکل امنیتی فعال شد**\n\nبرای دسترسی به این گزارش ROI اختصاصی و جزئیات ملک، سیستم ما نیاز به تایید دارد.\n\n💎 این گزارش شامل:\n• قیمت‌گذاری محرمانه (غیرعمومی)\n• معاملات داخلی سازندگان\n• پیش‌بینی سرمایه‌گذاری\n\n📝 **لطفاً اطلاعات خود را دقیقاً به این فرمت وارد کنید:**\n\n`نام کامل – +971XXXXXXXXX`\n\n**مثال:** عارضو محمدزادگان – +971505037158\n\n(توجه: از خط تیره – بین نام و شماره استفاده کنید)",
+        Language.AR: "🔒 **تم تفعيل بروتوكول الأمان**\n\nللوصول إلى تقرير عائد الاستثمار الحصري وتفاصيل العقار، يتطلب نظامنا التحقق.\n\n💎 يحتوي هذا التقرير على:\n• تسعير سري (غير عام)\n• صفقات داخلية للمطورين\n• توقعات استثمارية\n\n📝 **الرجاء إدخال معلوماتك بهذا التنسيق بالضبط:**\n\n`الاسم الكامل – +971XXXXXXXXX`\n\n**مثال:** أريزو محمدزادگان – +971505037158\n\n(ملاحظة: استخدم الشرطة – بين الاسم والرقم)",
+        Language.RU: "🔒 **Протокол безопасности активирован**\n\nДля доступа к ЭКСКЛЮЗИВНОМУ отчёту ROI и деталям объектов требуется верификация.\n\n💎 Отчёт содержит:\n• Конфиденциальные цены (не публичные)\n• Инсайдерские сделки застройщиков\n• Инвестиционные прогнозы\n\n📝 **Пожалуйста, введите данные точно в этом формате:**\n\n`Полное Имя – +971XXXXXXXXX`\n\n**Пример:** Arezoo Mohammadzadegan – +971505037158\n\n(Примечание: используйте тире – между именем и номером)"
     },
     "phone_request_button": {
         Language.EN: "📱 Share Phone Number",
@@ -1759,8 +1759,50 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             lead_updates["conversation_data"] = conversation_data
             lead_updates["filled_slots"] = filled_slots
             
-            # For investment goal, ask transaction type first (buy/rent)
-            # For living/residency, ALSO ask transaction type (not budget directly)
+            # 🔥 INVESTMENT LOGIC FIX: Investment always means BUY (never rent for investment)
+            if goal == "investment":
+                # Auto-set transaction type to BUY
+                conversation_data["transaction_type"] = "buy"
+                filled_slots["transaction_type"] = True
+                lead_updates["conversation_data"] = conversation_data
+                lead_updates["filled_slots"] = filled_slots
+                lead_updates["transaction_type"] = TransactionType.BUY
+                lead_updates["purpose"] = Purpose.INVESTMENT
+                
+                # Skip "Buy or Rent?" question entirely - go directly to property category
+                # Add Dubai investment benefits to build excitement
+                investment_intro = {
+                    Language.EN: "🚀 Excellent choice! Dubai is a GOLDMINE for investors right now!\n\n💰 **Why Dubai Real Estate:**\n• 7-10% Annual Rental Yield (vs 3% globally)\n• Zero Income Tax on rental profits\n• Property values growing 8-12% yearly\n• Off-plan payment plans from 25% down\n\nLet's find your wealth-building property! What type?",
+                    Language.FA: "🚀 انتخاب عالی! دبی الان یک معدن طلا برای سرمایه‌گذاراست!\n\n💰 **چرا املاک دبی:**\n• بازده سالانه ۷-۱۰٪ (در مقابل ۳٪ جهانی)\n• مالیات صفر روی سود اجاره\n• رشد ارزش املاک ۸-۱۲٪ سالانه\n• پلن‌های پرداخت از ۲۵٪ پیش پرداخت\n\nبیا ملک ثروت‌سازت رو پیدا کنیم! چه نوع ملکی؟",
+                    Language.AR: "🚀 اختيار ممتاز! دبي منجم ذهب للمستثمرين الآن!\n\n💰 **لماذا عقارات دبي:**\n• عائد إيجار سنوي 7-10% (مقابل 3% عالميًا)\n• صفر ضريبة دخل على أرباح الإيجار\n• قيمة العقارات تنمو 8-12% سنويًا\n• خطط سداد من 25% مقدم\n\nلنجد عقارك لبناء الثروة! ما النوع؟",
+                    Language.RU: "🚀 Отличный выбор! Дубай сейчас ЗОЛОТАЯ ЖИЛА для инвесторов!\n\n💰 **Почему недвижимость Дубая:**\n• 7-10% годовая арендная доходность (против 3% в мире)\n• Ноль налогов на доход от аренды\n• Рост стоимости 8-12% в год\n• Планы рассрочки от 25% первого взноса\n\nДавайте найдём объект для роста капитала! Какой тип?"
+                }
+                
+                category_buttons = [
+                    {"text": "🏠 " + ("مسکونی" if lang == Language.FA else "Residential" if lang == Language.EN else "سكني" if lang == Language.AR else "Жилая"), 
+                     "callback_data": "category_residential"},
+                    {"text": "🏢 " + ("تجاری" if lang == Language.FA else "Commercial" if lang == Language.EN else "تجاري" if lang == Language.AR else "Коммерческая"), 
+                     "callback_data": "category_commercial"}
+                ]
+                
+                return BrainResponse(
+                    message=investment_intro.get(lang, investment_intro[Language.EN]),
+                    next_state=ConversationState.SLOT_FILLING,
+                    lead_updates=lead_updates | {
+                        "conversation_data": conversation_data,
+                        "filled_slots": filled_slots,
+                        "pending_slot": "property_category"
+                    },
+                    buttons=category_buttons
+                )
+            
+            # For living/residency goals, ask transaction type (buy/rent)
+            # Set purpose based on goal
+            if goal == "living":
+                lead_updates["purpose"] = Purpose.LIVING
+            elif goal == "residency":
+                lead_updates["purpose"] = Purpose.RESIDENCY
+            
             transaction_question = {
                 Language.EN: f"Perfect! Are you looking to buy or rent?",
                 Language.FA: f"عالی! می‌خواهید بخرید یا اجاره کنید؟",
@@ -2132,11 +2174,30 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                         budget_buttons.append({"text": label, "callback_data": f"rent_budget_{i}"})
                 else:
                     # BUY budget ranges (purchase price)
+                    # Add Dubai advantages for purchase (especially for investment goal)
+                    goal = conversation_data.get("goal", "")
+                    dubai_benefits_prefix = ""
+                    
+                    if goal == "investment":
+                        dubai_benefits_prefix = {
+                            Language.EN: "💰 **Smart Move!** Most investors start with:\n• Off-plan payment plans (25% down, rest over 2-4 years)\n• Rental income covers 70% of mortgage\n• Property ready = instant cash flow!\n\n",
+                            Language.FA: "💰 **انتخاب هوشمندانه!** اکثر سرمایه‌گذارها با این شروع می‌کنن:\n• پلن‌های پرداخت (۲۵٪ پیش، بقیه ۲-۴ سال)\n• درآمد اجاره ۷۰٪ وام رو می‌پوشونه\n• ملک آماده = جریان نقدی فوری!\n\n",
+                            Language.AR: "💰 **خطوة ذكية!** معظم المستثمرين يبدأون بـ:\n• خطط سداد (25% مقدم، الباقي على 2-4 سنوات)\n• دخل الإيجار يغطي 70% من الرهن\n• عقار جاهز = تدفق نقدي فوري!\n\n",
+                            Language.RU: "💰 **Умный ход!** Большинство инвесторов начинают с:\n• Планы рассрочки (25% аванс, остальное за 2-4 года)\n• Арендный доход покрывает 70% ипотеки\n• Готовый объект = мгновенный денежный поток!\n\n"
+                        }
+                    else:
+                        dubai_benefits_prefix = {
+                            Language.EN: "🏡 **Flexible Financing Available:**\n• Mortgages from 25% down payment\n• Fixed rates as low as 3.99%\n• Pre-approval in 48 hours\n\n",
+                            Language.FA: "🏡 **تامین مالی انعطاف‌پذیر:**\n• وام از ۲۵٪ پیش پرداخت\n• نرخ ثابت از ۳.۹۹٪\n• تایید اولیه در ۴۸ ساعت\n\n",
+                            Language.AR: "🏡 **تمويل مرن متاح:**\n• رهن من 25% دفعة أولى\n• أسعار ثابتة من 3.99%\n• الموافقة المسبقة في 48 ساعة\n\n",
+                            Language.RU: "🏡 **Гибкое финансирование:**\n• Ипотека от 25% первого взноса\n• Фиксированные ставки от 3.99%\n• Предодобрение за 48 часов\n\n"
+                        }
+                    
                     budget_question = {
-                        Language.EN: "What's your purchase budget?",
-                        Language.FA: "بودجه خرید شما چقدر است؟",
-                        Language.AR: "ما هي ميزانية الشراء؟",
-                        Language.RU: "Каков ваш бюджет на покупку?"
+                        Language.EN: dubai_benefits_prefix[Language.EN] + "What's your purchase budget?",
+                        Language.FA: dubai_benefits_prefix[Language.FA] + "بودجه خرید شما چقدر است؟",
+                        Language.AR: dubai_benefits_prefix[Language.AR] + "ما هي ميزانية الشراء؟",
+                        Language.RU: dubai_benefits_prefix[Language.RU] + "Каков ваш бюджет на покупку?"
                     }
                     
                     budget_buttons = []
@@ -2570,14 +2631,17 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
     # ==================== PHONE VALIDATION (Used by HARD_GATE) ====================
     
     async def _validate_phone_number(self, lang: Language, message: str, lead_updates: Dict) -> BrainResponse:
-        """Validate phone number with STRICT international validation and SQL injection protection."""
+        """
+        Validate phone number and name with STRICT format enforcement.
+        Expected format: "Full Name – +971XXXXXXXXX"
+        """
         # DATA INTEGRITY: Sanitize input to prevent SQL injection
-        if not message or len(message) > 50:
+        if not message or len(message) > 150:
             error_msgs = {
-                Language.EN: "⚠️ Please provide a valid phone number (max 50 characters).\n(e.g., +971501234567 for UAE, +989123456789 for Iran)",
-                Language.FA: "⚠️ لطفاً شماره تلفن معتبر وارد کنید (حداکثر 50 کاراکتر).\n(مثلاً +971501234567 برای امارات، +989123456789 برای ایران)",
-                Language.AR: "⚠️ يرجى إدخال رقم هاتف صالح (حد أقصى 50 حرفاً).\n(مثلاً +971501234567 للإمارات، +989123456789 لإيران)",
-                Language.RU: "⚠️ Пожалуйста, укажите корректный номер (макс 50 символов).\n(например, +971501234567 для ОАЭ, +989123456789 для Ирана)"
+                Language.EN: "⚠️ Please use the correct format:\n\n`Full Name – +971XXXXXXXXX`\n\n**Example:** Arezoo Mohammadzadegan – +971505037158",
+                Language.FA: "⚠️ لطفاً از فرمت صحیح استفاده کنید:\n\n`نام کامل – +971XXXXXXXXX`\n\n**مثال:** عارضو محمدزادگان – +971505037158",
+                Language.AR: "⚠️ الرجاء استخدام التنسيق الصحيح:\n\n`الاسم الكامل – +971XXXXXXXXX`\n\n**مثال:** أريزو محمدزادگان – +971505037158",
+                Language.RU: "⚠️ Пожалуйста, используйте правильный формат:\n\n`Полное Имя – +971XXXXXXXXX`\n\n**Пример:** Arezoo Mohammadzadegan – +971505037158"
             }
             return BrainResponse(
                 message=error_msgs.get(lang, error_msgs[Language.EN]),
@@ -2585,20 +2649,57 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 request_contact=True
             )
         
-        # Clean message: remove spaces, dashes, parentheses, dots
-        cleaned_message = re.sub(r'[\s\-\(\)\.]', '', message.strip())
+        # Try to parse "Name – Phone" format (allow various dash types: -, –, —, -)
+        # Pattern: text (dash) phone number
+        name_phone_pattern = r'^(.+?)\s*[-–—]\s*(\+?\d[\d\s\-\(\)\.]+)$'
+        match = re.match(name_phone_pattern, message.strip())
+        
+        if not match:
+            # Format doesn't match - provide clear example
+            error_msgs = {
+                Language.EN: "⚠️ **Incorrect format!**\n\nPlease use exactly:\n\n`Your Full Name – +971XXXXXXXXX`\n\n**Example:**\nArezoo Mohammadzadegan – +971505037158\n\n(Make sure to include the dash – between name and number)",
+                Language.FA: "⚠️ **فرمت اشتباه!**\n\nلطفاً دقیقاً از این فرمت استفاده کنید:\n\n`نام کامل شما – +971XXXXXXXXX`\n\n**مثال:**\nعارضو محمدزادگان – +971505037158\n\n(حتماً خط تیره – را بین نام و شماره قرار دهید)",
+                Language.AR: "⚠️ **تنسيق غير صحيح!**\n\nالرجاء استخدام بالضبط:\n\n`اسمك الكامل – +971XXXXXXXXX`\n\n**مثال:**\nأريزو محمدزادگان – +971505037158\n\n(تأكد من إدراج الشرطة – بين الاسم والرقم)",
+                Language.RU: "⚠️ **Неправильный формат!**\n\nИспользуйте точно:\n\n`Ваше Полное Имя – +971XXXXXXXXX`\n\n**Пример:**\nArezoo Mohammadzadegan – +971505037158\n\n(Убедитесь, что поставили тире – между именем и номером)"
+            }
+            return BrainResponse(
+                message=error_msgs.get(lang, error_msgs[Language.EN]),
+                next_state=ConversationState.HARD_GATE,
+                request_contact=True
+            )
+        
+        # Extract name and phone
+        name_raw = match.group(1).strip()
+        phone_raw = match.group(2).strip()
+        
+        # Validate name (at least 2 characters, no numbers)
+        if len(name_raw) < 2 or re.search(r'\d{3,}', name_raw):
+            error_msgs = {
+                Language.EN: "⚠️ Please enter your **full name** (minimum 2 characters, no numbers).\n\n**Example:** Arezoo Mohammadzadegan – +971505037158",
+                Language.FA: "⚠️ لطفاً **نام کامل** خود را وارد کنید (حداقل ۲ کاراکتر، بدون عدد).\n\n**مثال:** عارضو محمدزادگان – +971505037158",
+                Language.AR: "⚠️ الرجاء إدخال **اسمك الكامل** (حد أدنى 2 حرف، بدون أرقام).\n\n**مثال:** أريزو محمدزادگان – +971505037158",
+                Language.RU: "⚠️ Пожалуйста, введите ваше **полное имя** (минимум 2 символа, без цифр).\n\n**Пример:** Arezoo Mohammadzadegan – +971505037158"
+            }
+            return BrainResponse(
+                message=error_msgs.get(lang, error_msgs[Language.EN]),
+                next_state=ConversationState.HARD_GATE,
+                request_contact=True
+            )
+        
+        # Clean phone number: remove spaces, dashes, parentheses, dots
+        cleaned_phone = re.sub(r'[\s\-\(\)\.]', '', phone_raw)
         
         # Add + if missing
-        if not cleaned_message.startswith('+'):
-            if cleaned_message.isdigit() and len(cleaned_message) >= 10:
-                cleaned_message = '+' + cleaned_message
+        if not cleaned_phone.startswith('+'):
+            if cleaned_phone.isdigit() and len(cleaned_phone) >= 10:
+                cleaned_phone = '+' + cleaned_phone
         
         # International phone pattern
         phone_pattern = r'^\+\d{10,15}$'
         
         valid = False
-        if re.match(phone_pattern, cleaned_message):
-            digits_only = cleaned_message.lstrip('+')
+        if re.match(phone_pattern, cleaned_phone):
+            digits_only = cleaned_phone.lstrip('+')
             unique_digits = len(set(digits_only))
             
             # Validation rules
@@ -2614,8 +2715,9 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 valid = True
             
             if valid:
-                phone_number = cleaned_message if cleaned_message.startswith('+') else f'+{cleaned_message}'
+                phone_number = cleaned_phone if cleaned_phone.startswith('+') else f'+{cleaned_phone}'
                 lead_updates["phone"] = phone_number
+                lead_updates["name"] = name_raw  # Store full name
                 lead_updates["status"] = LeadStatus.CONTACTED
                 
                 return BrainResponse(
@@ -2624,12 +2726,12 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     lead_updates=lead_updates
                 )
         
-        # Invalid phone - ONE example only
+        # Invalid phone - provide example
         error_msgs = {
-            Language.EN: "⚠️ Please provide a valid international phone number.\n\nExamples:\n+971501234567 (UAE)\n+989123456789 (Iran)\n+966501234567 (Saudi)",
-            Language.FA: "⚠️ لطفاً شماره تلفن بین‌المللی معتبر وارد کنید.\n\nمثال‌ها:\n+971501234567 (امارات)\n+989123456789 (ایران)\n+966501234567 (عربستان)",
-            Language.AR: "⚠️ يرجى إدخال رقم هاتف دولي صالح.\n\nأمثلة:\n+971501234567 (الإمارات)\n+989123456789 (إيران)\n+966501234567 (السعودية)",
-            Language.RU: "⚠️ Пожалуйста, укажите корректный международный номер.\n\nПримеры:\n+971501234567 (ОАЭ)\n+989123456789 (Иран)\n+966501234567 (Саудия)"
+            Language.EN: "⚠️ Phone number format is incorrect.\n\nPlease use international format:\n\n**Examples:**\nAli Rezaei – +971501234567 (UAE)\nSara Ahmadi – +989123456789 (Iran)\nMohammed Al-Said – +966501234567 (Saudi)",
+            Language.FA: "⚠️ فرمت شماره تلفن اشتباه است.\n\nلطفاً از فرمت بین‌المللی استفاده کنید:\n\n**مثال‌ها:**\nعلی رضایی – +971501234567 (امارات)\nسارا احمدی – +989123456789 (ایران)\nمحمد السعید – +966501234567 (عربستان)",
+            Language.AR: "⚠️ تنسيق رقم الهاتف غير صحيح.\n\nالرجاء استخدام التنسيق الدولي:\n\n**أمثلة:**\nعلي رضائي – +971501234567 (الإمارات)\nسارة أحمدي – +989123456789 (إيران)\nمحمد السعيد – +966501234567 (السعودية)",
+            Language.RU: "⚠️ Неверный формат номера телефона.\n\nИспользуйте международный формат:\n\n**Примеры:**\nAli Rezaei – +971501234567 (ОАЭ)\nSara Ahmadi – +989123456789 (Иран)\nMohammed Al-Said – +966501234567 (Саудия)"
         }
         return BrainResponse(
             message=error_msgs.get(lang, error_msgs[Language.EN]),
