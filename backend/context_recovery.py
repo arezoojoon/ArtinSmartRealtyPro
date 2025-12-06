@@ -139,8 +139,10 @@ async def save_context_to_redis(lead: Lead):
     Save current conversation context to Redis.
     Call this after every state transition.
     """
+    # conversation_state is now stored as string, not enum
+    conv_state = lead.conversation_state if isinstance(lead.conversation_state, str) else lead.conversation_state.value
     context = {
-        "conversation_state": lead.conversation_state.value,
+        "conversation_state": conv_state,
         "filled_slots": lead.filled_slots or {},
         "pending_slot": lead.pending_slot,
         "conversation_data": lead.conversation_data or {},
