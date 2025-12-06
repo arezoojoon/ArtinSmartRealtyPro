@@ -440,7 +440,13 @@ const Dashboard = ({ user, onLogout }) => {
 
     const handleAddSlot = async (slotData) => {
         try {
-            await api.post(`/api/tenants/${tenantId}/schedule`, slotData);
+            // Get existing slots and add the new one
+            const allSlots = [...slots, slotData];
+            
+            // Backend expects { "slots": [array] } format
+            await api.post(`/api/tenants/${tenantId}/schedule`, {
+                slots: allSlots
+            });
             fetchDashboardData();
         } catch (err) {
             console.error('Failed to add slot:', err);
