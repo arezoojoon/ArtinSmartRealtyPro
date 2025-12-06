@@ -1182,29 +1182,66 @@ async def list_schedule_slots(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """List schedule slots for a tenant. Requires authentication."""
+    """
+    List schedule slots for a tenant. 
+    Checks current week's bookings against Appointment table.
+    """
     await verify_tenant_access(credentials, tenant_id, db)
     
     query = select(AgentAvailability).where(AgentAvailability.tenant_id == tenant_id)
     
     if day_of_week:
         query = query.where(AgentAvailability.day_of_week == day_of_week)
-    if available_only:
-        query = query.where(AgentAvailability.is_booked == False)
     
     result = await db.execute(query)
     slots = result.scalars().all()
     
-    return [
-        ScheduleSlotResponse(
+    # Calculate is_booked for current week
+    now = datetime.now()
+    current_weekday = now.weekday()
+    
+    day_mapping = {
+        'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+        'friday': 4, 'saturday': 5, 'sunday': 6
+    }
+    
+    slot_responses = []
+    for s in slots:
+        target_weekday = day_mapping.get(s.day_of_week.value.lower(), 0)
+        days_ahead = (target_weekday - current_weekday) % 7
+        
+        if days_ahead == 0:
+            days_ahead = 7
+        
+        next_occurrence = now + timedelta(days=days_ahead)
+        scheduled_datetime = datetime.combine(next_occurrence.date(), s.start_time)
+        
+        # Check if this specific date/time is booked
+        appointment_check = await db.execute(
+            select(Appointment).where(
+                Appointment.lead_id.in_(
+                    select(Lead.id).where(Lead.tenant_id == tenant_id)
+                ),
+                Appointment.scheduled_date == scheduled_datetime,
+                Appointment.is_cancelled == False
+            )
+        )
+        
+        is_booked = appointment_check.scalar_one_or_none() is not None
+        
+        # Filter if available_only requested
+        if available_only and is_booked:
+            continue
+        
+        slot_responses.append(ScheduleSlotResponse(
             id=s.id,
             day_of_week=s.day_of_week,
             start_time=s.start_time.strftime("%H:%M"),
             end_time=s.end_time.strftime("%H:%M"),
-            is_booked=s.is_booked
-        )
-        for s in slots
-    ]
+            is_booked=is_booked
+        ))
+    
+    return slot_responses
 
 
 @app.delete("/api/tenants/{tenant_id}/schedule/{slot_id}")
@@ -1214,7 +1251,11 @@ async def delete_schedule_slot(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a schedule slot. Requires authentication."""
+    """
+    Delete a schedule slot template.
+    Note: This only deletes the recurring availability template.
+    Existing appointments in Appointment table remain intact.
+    """
     await verify_tenant_access(credentials, tenant_id, db)
     
     result = await db.execute(
@@ -1228,8 +1269,39 @@ async def delete_schedule_slot(
     if not slot:
         raise HTTPException(status_code=404, detail="Slot not found")
     
-    if slot.is_booked:
-        raise HTTPException(status_code=400, detail="Cannot delete a booked slot")
+    # Check if there are future appointments for this slot
+    # (optional: warn if deleting a slot with future appointments)
+    now = datetime.now()
+    current_weekday = now.weekday()
+    
+    day_mapping = {
+        'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+        'friday': 4, 'saturday': 5, 'sunday': 6
+    }
+    
+    target_weekday = day_mapping.get(slot.day_of_week.value.lower(), 0)
+    days_ahead = (target_weekday - current_weekday) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    
+    next_occurrence = now + timedelta(days=days_ahead)
+    scheduled_datetime = datetime.combine(next_occurrence.date(), slot.start_time)
+    
+    future_appointments = await db.execute(
+        select(Appointment).where(
+            Appointment.lead_id.in_(
+                select(Lead.id).where(Lead.tenant_id == tenant_id)
+            ),
+            Appointment.scheduled_date >= scheduled_datetime,
+            Appointment.is_cancelled == False
+        )
+    )
+    
+    if future_appointments.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot delete slot with future appointments. Cancel appointments first."
+        )
     
     await db.execute(
         delete(AgentAvailability).where(AgentAvailability.id == slot_id)
@@ -1246,14 +1318,17 @@ async def create_schedule_slots(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create or replace all schedule slots for a tenant."""
+    """
+    Create or replace all schedule slots for a tenant.
+    Deletes all existing slot templates and creates new ones.
+    Note: This doesn't affect existing Appointment records.
+    """
     await verify_tenant_access(credentials, tenant_id, db)
     
-    # Delete existing unbooked slots
+    # Delete all existing slots (bookings are in Appointment table, so safe to delete templates)
     await db.execute(
         delete(AgentAvailability).where(
-            AgentAvailability.tenant_id == tenant_id,
-            AgentAvailability.is_booked == False
+            AgentAvailability.tenant_id == tenant_id
         )
     )
     
@@ -1273,7 +1348,7 @@ async def create_schedule_slots(
             start_time=dt_time(start_hour, start_min),
             end_time=dt_time(end_hour, end_min),
             appointment_type=AppointmentType[slot_data.get('appointment_type', 'viewing').upper()],
-            is_booked=False
+            is_booked=False  # This field is deprecated but kept for backward compatibility
         )
         db.add(new_slot)
         created_slots.append(new_slot)

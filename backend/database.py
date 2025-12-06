@@ -638,36 +638,123 @@ async def update_lead(lead_id: int, **kwargs) -> Lead:
 
 
 async def get_available_slots(tenant_id: int, day_of_week: Optional[DayOfWeek] = None) -> List[AgentAvailability]:
-    """Get available (not booked) slots for a tenant."""
+    """
+    Get availability slots for a tenant.
+    Returns all recurring slot templates (AgentAvailability records).
+    Note: Actual booking status is checked against Appointment table, not is_booked flag.
+    """
     async with async_session() as session:
         query = select(AgentAvailability).where(
-            AgentAvailability.tenant_id == tenant_id,
-            AgentAvailability.is_booked == False
+            AgentAvailability.tenant_id == tenant_id
         )
         if day_of_week:
             query = query.where(AgentAvailability.day_of_week == day_of_week)
         
         result = await session.execute(query)
-        return result.scalars().all()
+        slots = result.scalars().all()
+        
+        # For each slot, check if next occurrence is booked in Appointment table
+        now = datetime.now()
+        current_weekday = now.weekday()
+        
+        day_mapping = {
+            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+            'friday': 4, 'saturday': 5, 'sunday': 6
+        }
+        
+        for slot in slots:
+            target_weekday = day_mapping.get(slot.day_of_week.value.lower(), 0)
+            days_ahead = (target_weekday - current_weekday) % 7
+            
+            if days_ahead == 0:
+                days_ahead = 7
+            
+            next_occurrence = now + timedelta(days=days_ahead)
+            scheduled_datetime = datetime.combine(next_occurrence.date(), slot.start_time)
+            
+            # Check if this date/time has an appointment
+            appointment_check = await session.execute(
+                select(Appointment).where(
+                    Appointment.lead_id.in_(
+                        select(Lead.id).where(Lead.tenant_id == tenant_id)
+                    ),
+                    Appointment.scheduled_date == scheduled_datetime,
+                    Appointment.is_cancelled == False
+                )
+            )
+            
+            # Dynamically set is_booked for this week's occurrence
+            slot.is_booked = appointment_check.scalar_one_or_none() is not None
+        
+        return slots
 
 
 async def book_slot(slot_id: int, lead_id: int) -> bool:
-    """Book an available slot."""
+    """
+    Book an available slot for a specific week.
+    Creates an Appointment record instead of marking the recurring slot as permanently booked.
+    """
     async with async_session() as session:
+        # Get the slot template
         result = await session.execute(
-            select(AgentAvailability).where(
-                AgentAvailability.id == slot_id,
-                AgentAvailability.is_booked == False
-            )
+            select(AgentAvailability).where(AgentAvailability.id == slot_id)
         )
         slot = result.scalar_one_or_none()
         
-        if slot:
-            slot.is_booked = True
-            slot.booked_by_lead_id = lead_id
-            await session.commit()
-            return True
-        return False
+        if not slot:
+            return False
+        
+        # Calculate the next occurrence of this day/time
+        now = datetime.now()
+        current_weekday = now.weekday()  # 0=Monday, 6=Sunday
+        
+        # Map day_of_week enum to weekday number
+        day_mapping = {
+            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+            'friday': 4, 'saturday': 5, 'sunday': 6
+        }
+        
+        target_weekday = day_mapping.get(slot.day_of_week.value.lower(), 0)
+        days_ahead = (target_weekday - current_weekday) % 7
+        
+        if days_ahead == 0:
+            days_ahead = 7  # Book for next week if same day
+        
+        next_occurrence = now + timedelta(days=days_ahead)
+        
+        # Combine date with slot time
+        scheduled_datetime = datetime.combine(
+            next_occurrence.date(),
+            slot.start_time
+        )
+        
+        # Check if this specific date/time is already booked
+        existing_appointment = await session.execute(
+            select(Appointment).where(
+                Appointment.lead_id.in_(
+                    select(Lead.id).where(Lead.tenant_id == slot.tenant_id)
+                ),
+                Appointment.scheduled_date == scheduled_datetime,
+                Appointment.is_cancelled == False
+            )
+        )
+        
+        if existing_appointment.scalar_one_or_none():
+            return False  # This specific date/time is already booked
+        
+        # Create Appointment record
+        appointment = Appointment(
+            lead_id=lead_id,
+            appointment_type=AppointmentType.CONSULTATION,
+            scheduled_date=scheduled_datetime,
+            duration_minutes=60,
+            is_confirmed=True,
+            notes=f"Booked via automated slot booking (Slot ID: {slot_id})"
+        )
+        
+        session.add(appointment)
+        await session.commit()
+        return True
 
 
 async def create_appointment(

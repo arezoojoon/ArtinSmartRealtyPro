@@ -185,6 +185,29 @@ const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot, compactMode = false, o
     const [selectedDay, setSelectedDay] = useState(DAYS_OF_WEEK[0]);
     const [newSlot, setNewSlot] = useState({ start_time: '09:00', end_time: '10:00' });
 
+    // Calculate current week dates
+    const getWeekDates = () => {
+        const today = new Date();
+        const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const monday = new Date(today);
+        
+        // Calculate Monday of current week
+        const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+        monday.setDate(today.getDate() - daysFromMonday);
+        
+        return DAYS_OF_WEEK.map((_, index) => {
+            const date = new Date(monday);
+            date.setDate(monday.getDate() + index);
+            return {
+                dayName: DAY_LABELS[index],
+                date: date,
+                formatted: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            };
+        });
+    };
+
+    const weekDates = getWeekDates();
+
     const handleAddSlot = () => {
         onAddSlot({
             day_of_week: selectedDay,
@@ -224,10 +247,14 @@ const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot, compactMode = false, o
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-3">
                 {DAYS_OF_WEEK.map((day, index) => {
                     const daySlots = slots.filter(s => s.day_of_week === day);
+                    const dayInfo = weekDates[index];
                     return (
                         <div key={day} className="glass-card rounded-xl p-3 min-h-[140px]">
-                            <p className="text-gold-500 text-xs font-bold text-center mb-3 uppercase">
-                                {DAY_LABELS[index]}
+                            <p className="text-gold-500 text-xs font-bold text-center mb-1 uppercase">
+                                {dayInfo.dayName}
+                            </p>
+                            <p className="text-gray-400 text-xs text-center mb-3">
+                                {dayInfo.formatted}
                             </p>
                             {daySlots.map(slot => (
                                 <div

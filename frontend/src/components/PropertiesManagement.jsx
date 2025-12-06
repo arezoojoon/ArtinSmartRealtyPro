@@ -19,7 +19,8 @@ import {
     TrendingUp,
     Award,
     Save,
-    AlertCircle
+    AlertCircle,
+    FileText
 } from 'lucide-react';
 import PropertyImageUpload from './PropertyImageUpload';
 
@@ -71,6 +72,7 @@ const PropertiesManagement = ({ tenantId }) => {
         is_featured: false,
         is_urgent: false,  // Urgent Sale flag
         image_urls: [],  // Property images
+        brochure_pdf: '',  // PDF brochure URL
     });
 
     useEffect(() => {
@@ -187,6 +189,7 @@ const PropertiesManagement = ({ tenantId }) => {
                 is_featured: property.is_featured || false,
                 is_urgent: property.is_urgent || false,
                 image_urls: property.image_urls || [],
+                brochure_pdf: property.brochure_pdf || '',
             });
         } else {
             setEditingProperty(null);
@@ -211,6 +214,7 @@ const PropertiesManagement = ({ tenantId }) => {
                 is_featured: false,
                 is_urgent: false,
                 image_urls: [],
+                brochure_pdf: '',
             });
         }
         console.log('Setting showModal to true');  // Debug log
@@ -650,6 +654,85 @@ const PropertiesManagement = ({ tenantId }) => {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Property PDF Upload */}
+                            {editingProperty?.id && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        📄 Property Brochure PDF (Auto-Fill)
+                                    </label>
+                                    <div className="space-y-3">
+                                        <input
+                                            type="file"
+                                            accept=".pdf"
+                                            onChange={async (e) => {
+                                                const file = e.target.files[0];
+                                                if (!file) return;
+
+                                                const uploadFormData = new FormData();
+                                                uploadFormData.append('file', file);
+
+                                                try {
+                                                    const response = await fetch(
+                                                        `${API_BASE_URL}/api/tenants/${tenantId}/properties/upload-pdf?extract_text=true`,
+                                                        {
+                                                            method: 'POST',
+                                                            body: uploadFormData,
+                                                            headers: {
+                                                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                                                            }
+                                                        }
+                                                    );
+
+                                                    if (!response.ok) throw new Error('Upload failed');
+
+                                                    const data = await response.json();
+                                                    
+                                                    // Auto-fill form with extracted data
+                                                    if (data.extracted_data) {
+                                                        const extracted = data.extracted_data;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            price: extracted.price || prev.price,
+                                                            bedrooms: extracted.bedrooms || prev.bedrooms,
+                                                            area_sqft: extracted.area_sqft || prev.area_sqft,
+                                                            location: extracted.location || prev.location,
+                                                            brochure_pdf: data.file_url
+                                                        }));
+                                                        alert('✅ PDF uploaded and data extracted successfully!');
+                                                    } else {
+                                                        setFormData(prev => ({ ...prev, brochure_pdf: data.file_url }));
+                                                        alert('✅ PDF uploaded successfully!');
+                                                    }
+                                                } catch (error) {
+                                                    console.error('PDF upload error:', error);
+                                                    alert('❌ Failed to upload PDF. Please try again.');
+                                                }
+                                            }}
+                                            className="w-full bg-navy-light border border-gray-700 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gold file:text-navy file:font-semibold hover:file:bg-amber-500 cursor-pointer"
+                                        />
+                                        {formData.brochure_pdf && (
+                                            <div className="flex items-center gap-2 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg px-4 py-2">
+                                                <FileText className="w-4 h-4 text-green-500" />
+                                                <span className="text-sm text-green-500">PDF uploaded successfully</span>
+                                            </div>
+                                        )}
+                                        <p className="text-xs text-gray-400">
+                                            💡 Upload a property brochure PDF to auto-fill price, bedrooms, area, and location
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            {!editingProperty?.id && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        📄 Property Brochure PDF
+                                    </label>
+                                    <div className="bg-navy-light border border-gray-700 rounded-lg p-6 text-center text-gray-400">
+                                        <p>💾 ابتدا ملک را ذخیره کنید، سپس می‌توانید PDF آپلود کنید</p>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* ROI & Rental Yield */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
