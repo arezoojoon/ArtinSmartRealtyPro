@@ -829,51 +829,133 @@ class TelegramBotHandler:
     
     async def _ghost_protocol_loop(self):
         """
-        Ghost Protocol: Auto follow-up with leads after 2 hours of inactivity
-        Runs every 30 minutes to check for leads needing re-engagement
+        Ghost Protocol V2: Two-stage follow-up system
         
-        Queries for leads where:
-        - phone IS NOT NULL (has provided contact)
-        - status != VIEWING_SCHEDULED (hasn't booked yet)
-        - updated_at > 2 hours ago (has been inactive)
-        - ghost_reminder_sent = False (reminder not yet sent)
+        STAGE 1 - FAST NUDGE (15 minutes):
+        - Quick check-in: "Are you still there?"
+        - Triggers FOMO: "I just found something crazy"
+        
+        STAGE 2 - VALUE NUDGE (2 hours):
+        - Provides value: "My colleague found the property you wanted"
+        - Creates urgency: "When can you talk?"
+        
+        Runs every 5 minutes to check for leads needing re-engagement
+        
+        Database flags:
+        - fast_nudge_sent: Tracks if 15-min nudge was sent
+        - ghost_reminder_sent: Tracks if 2-hour nudge was sent
         """
-        logger.info(f"[Ghost Protocol] Started for tenant {self.tenant.id}")
+        logger.info(f"[Ghost Protocol V2] Started for tenant {self.tenant.id}")
         
         while True:
             try:
-                # Run check every 30 minutes
-                await asyncio.sleep(1800)
+                # Run check every 5 minutes for faster response
+                await asyncio.sleep(300)
                 
-                # Query leads ready for ghost follow-up
                 async with async_session() as session:
-                    two_hours_ago = datetime.utcnow() - timedelta(hours=2)
+                    now = datetime.utcnow()
                     
-                    result = await session.execute(
+                    # === STAGE 1: FAST NUDGE (15-20 mins of inactivity) ===
+                    fifteen_mins_ago = now - timedelta(minutes=15)
+                    twenty_mins_ago = now - timedelta(minutes=20)
+                    
+                    # Query leads who:
+                    # - Were active 15-20 mins ago
+                    # - Haven't received fast nudge yet
+                    # - Have engaged (at least some conversation data)
+                    result_fast = await session.execute(
                         select(Lead).where(
                             Lead.tenant_id == self.tenant.id,
-                            Lead.phone.isnot(None),
-                            Lead.status != ConversationState.VIEWING_SCHEDULED,
-                            Lead.updated_at < two_hours_ago,
-                            Lead.ghost_reminder_sent == False
-                        ).order_by(Lead.updated_at.asc())
+                            Lead.updated_at < fifteen_mins_ago,
+                            Lead.updated_at > twenty_mins_ago,
+                            Lead.conversation_data.isnot(None),  # Has engaged before
+                            Lead.conversation_data['fast_nudge_sent'].astext.is_(None)  # Fast nudge not sent
+                        ).order_by(Lead.updated_at.desc()).limit(10)
                     )
                     
-                    leads_to_followup = result.scalars().all()
+                    fast_nudge_leads = result_fast.scalars().all()
                     
-                    if leads_to_followup:
-                        logger.info(f"[Ghost Protocol] Found {len(leads_to_followup)} leads for follow-up (tenant {self.tenant.id})")
+                    if fast_nudge_leads:
+                        logger.info(f"[Ghost Protocol V2] Found {len(fast_nudge_leads)} leads for FAST NUDGE")
                     
-                    for lead in leads_to_followup:
+                    for lead in fast_nudge_leads:
+                        try:
+                            await self._send_fast_nudge(lead, session)
+                        except Exception as e:
+                            logger.error(f"[Fast Nudge] Error for lead {lead.id}: {e}")
+                    
+                    # === STAGE 2: VALUE NUDGE (2 hours of inactivity) ===
+                    two_hours_ago = now - timedelta(hours=2)
+                    
+                    result_value = await session.execute(
+                        select(Lead).where(
+                            Lead.tenant_id == self.tenant.id,
+                            Lead.phone.isnot(None),  # Has shared contact
+                            Lead.status != ConversationState.VIEWING_SCHEDULED,  # Hasn't booked yet
+                            Lead.updated_at < two_hours_ago,
+                            Lead.ghost_reminder_sent == False  # Value nudge not sent
+                        ).order_by(Lead.updated_at.asc()).limit(10)
+                    )
+                    
+                    value_nudge_leads = result_value.scalars().all()
+                    
+                    if value_nudge_leads:
+                        logger.info(f"[Ghost Protocol V2] Found {len(value_nudge_leads)} leads for VALUE NUDGE")
+                    
+                    for lead in value_nudge_leads:
                         try:
                             await self._send_ghost_message(lead)
                         except Exception as e:
-                            logger.error(f"[Ghost Protocol] Error sending ghost message to lead {lead.id}: {e}")
+                            logger.error(f"[Value Nudge] Error for lead {lead.id}: {e}")
             
             except Exception as e:
-                logger.error(f"[Ghost Protocol] Error in loop for tenant {self.tenant.id}: {e}")
-                # Continue running even if error occurs
+                logger.error(f"[Ghost Protocol V2] Error in loop: {e}")
                 await asyncio.sleep(300)  # Wait 5 minutes before retry
+    
+    async def _send_fast_nudge(self, lead: Lead, session):
+        """
+        Send quick 15-minute check-in to prevent lead from going cold.
+        
+        Messages are casual and create curiosity (FOMO):
+        - "Are you still with me?"
+        - "I just found something crazy"
+        """
+        try:
+            lang = lead.language or Language.EN
+            
+            fast_nudge_messages = {
+                Language.EN: "Hey! Still there? 👀\n\nI just found something CRAZY that matches what you're looking for. Want to see it?",
+                Language.FA: "هستی؟ 👀\n\nیه چیزی دیدم که باورت نمیشه، دقیقاً همون چیزیه که دنبالشی. می‌خوای ببینی؟",
+                Language.AR: "مرحبًا! لا تزال هناك؟ 👀\n\nوجدت للتو شيئًا جنونيًا يطابق ما تبحث عنه. تريد أن ترى؟",
+                Language.RU: "Привет! Вы ещё здесь? 👀\n\nТолько что нашёл БЕЗУМНУЮ вещь, которая идеально вам подходит. Хотите увидеть?"
+            }
+            
+            message = fast_nudge_messages.get(lang, fast_nudge_messages[Language.EN])
+            
+            if lead.telegram_chat_id:
+                await self.application.bot.send_message(
+                    chat_id=int(lead.telegram_chat_id),
+                    text=message
+                )
+                
+                # Mark fast nudge as sent in conversation_data
+                conversation_data = lead.conversation_data or {}
+                conversation_data['fast_nudge_sent'] = True
+                conversation_data['fast_nudge_at'] = datetime.utcnow().isoformat()
+                
+                result = await session.execute(
+                    select(Lead).where(Lead.id == lead.id)
+                )
+                db_lead = result.scalar_one()
+                db_lead.conversation_data = conversation_data
+                db_lead.fomo_messages_sent = (db_lead.fomo_messages_sent or 0) + 1
+                await session.commit()
+                
+                logger.info(f"[Fast Nudge] Sent to lead {lead.id} ({lang.value})")
+        
+        except Exception as e:
+            logger.error(f"[Fast Nudge] Error sending to lead {lead.id}: {e}")
+            raise
 
     async def _send_ghost_message(self, lead: Lead):
         """
@@ -931,14 +1013,15 @@ class TelegramBotHandler:
 
 async def generate_daily_report(tenant_id: int) -> Dict[str, str]:
     """
-    Generate daily "Morning Coffee Report" for a tenant.
+    Generate daily "Wolf Closer Morning Report" - NOT just stats, but ACTION LIST!
     
-    Returns multilingual report with overnight activity metrics.
+    Transforms overnight activity into an ACTIONABLE hit list with:
+    - Hot leads with phone numbers (clickable WhatsApp links)
+    - Budget-qualified prospects
+    - Viewing-ready candidates
+    - Direct call-to-action for agent
     
-    Metrics:
-    - chat_count: Conversations in last 24 hours
-    - new_leads: Phone numbers captured in last 24 hours
-    - highlight: High-value lead example (Penthouse, Villa, High Budget)
+    This is a WEAPON, not a report.
     """
     try:
         async with async_session() as session:
@@ -954,120 +1037,187 @@ async def generate_daily_report(tenant_id: int) -> Dict[str, str]:
             )
             active_conversations = len(chat_result.scalars().all())
             
-            # Metric B: New leads with phone captured in last 24h
-            leads_result = await session.execute(
+            # Metric B: NEW STRATEGY - Get HOT LEADS (qualified + phone + not booked yet)
+            hot_leads_result = await session.execute(
+                select(Lead).where(
+                    Lead.tenant_id == tenant_id,
+                    Lead.phone.isnot(None),  # Has phone
+                    Lead.status != ConversationState.VIEWING_SCHEDULED,  # Not booked yet = opportunity!
+                    Lead.budget_max.isnot(None),  # Budget qualified
+                    Lead.updated_at >= yesterday  # Active in last 24h
+                ).order_by(Lead.budget_max.desc()).limit(10)  # Top 10 by budget
+            )
+            hot_leads_list = hot_leads_result.scalars().all()
+            
+            # Metric C: Count total new leads with phone (for stats)
+            total_leads_result = await session.execute(
                 select(Lead).where(
                     Lead.tenant_id == tenant_id,
                     Lead.phone.isnot(None),
                     Lead.created_at >= yesterday
-                ).order_by(Lead.created_at.desc())
+                )
             )
-            new_leads = leads_result.scalars().all()
-            lead_count = len(new_leads)
-            lead_names = ", ".join([lead.name or "Anonymous" for lead in new_leads[:3]])
+            total_new_leads_count = len(total_leads_result.scalars().all())
             
-            # Metric C: Find high-value intent (Penthouse, Villa, High Budget)
-            high_value_result = await session.execute(
+            # Metric D: Find DIAMOND lead (highest budget or Golden Visa seeker)
+            diamond_result = await session.execute(
                 select(Lead).where(
                     Lead.tenant_id == tenant_id,
                     Lead.created_at >= yesterday,
-                    ((Lead.property_type.ilike("%penthouse%")) | 
-                     (Lead.property_type.ilike("%villa%")) |
-                     (Lead.budget_min >= 5000000))  # 5M+ AED
-                ).order_by(Lead.created_at.desc())
+                    ((Lead.purpose == Purpose.RESIDENCY) | (Lead.budget_max >= 2000000))  # Golden Visa or 2M+
+                ).order_by(Lead.budget_max.desc())
             )
-            high_value_leads = high_value_result.scalars().all()
+            diamond_leads = diamond_result.scalars().all()
             
             # Generate highlight message
-            highlight_msg = ""
-            if high_value_leads:
-                lead = high_value_leads[0]
-                if lead.property_type and "penthouse" in lead.property_type.lower():
-                    highlight_msg_en = f"🏢 1 person looking for Penthouse!"
-                    highlight_msg_fa = f"🏢 ۱ نفر دنبال پنت‌هاوس!"
-                elif lead.property_type and "villa" in lead.property_type.lower():
-                    highlight_msg_en = f"🏡 1 person looking for Villa!"
-                    highlight_msg_fa = f"🏡 ۱ نفر دنبال ویلا!"
+            highlight_msg_en = highlight_msg_fa = highlight_msg_ar = highlight_msg_ru = ""
+            if diamond_leads:
+                lead = diamond_leads[0]
+                budget_str = f"{lead.budget_max:,.0f} AED" if lead.budget_max else "High"
+                if lead.purpose == Purpose.RESIDENCY:
+                    highlight_msg_en = f"🛂 Golden Visa seeker (Budget: {budget_str})!"
+                    highlight_msg_fa = f"🛂 خریدار گلدن ویزا (بودجه: {budget_str})!"
+                    highlight_msg_ar = f"🛂 باحث عن التأشيرة الذهبية (الميزانية: {budget_str})!"
+                    highlight_msg_ru = f"🛂 Ищет Golden Visa (Бюджет: {budget_str})!"
                 else:
-                    highlight_msg_en = f"💎 1 high-value lead (Budget: {lead.budget_min:,} AED)!"
-                    highlight_msg_fa = f"💎 ۱ خریدار ثروتمند (بودجه: {lead.budget_min:,} درهم)!"
+                    highlight_msg_en = f"💎 High-value investor ({budget_str})!"
+                    highlight_msg_fa = f"💎 سرمایه‌گذار VIP ({budget_str})!"
+                    highlight_msg_ar = f"💎 مستثمر كبير ({budget_str})!"
+                    highlight_msg_ru = f"💎 Крупный инвестор ({budget_str})!"
             else:
-                highlight_msg_en = "✨ Keep grinding, more leads coming!"
-                highlight_msg_fa = "✨ ادامه بده، لید‌ها در راهند!"
+                highlight_msg_en = "✨ Quality leads incoming - keep the pipeline hot!"
+                highlight_msg_fa = "✨ لید‌های با کیفیت در راهند - خط رو گرم نگه دار!"
+                highlight_msg_ar = "✨ عملاء جيدون قادمون - حافظ على الخط ساخنًا!"
+                highlight_msg_ru = "✨ Качественные лиды на подходе - держи воронку горячей!"
             
-            # Generate multilingual report
+            # Generate multilingual weaponized reports
             reports = {
-                Language.EN.value: generate_report_en(active_conversations, lead_count, lead_names, highlight_msg_en),
-                Language.FA.value: generate_report_fa(active_conversations, lead_count, lead_names, highlight_msg_fa),
-                Language.AR.value: generate_report_ar(active_conversations, lead_count, lead_names, highlight_msg_en),
-                Language.RU.value: generate_report_ru(active_conversations, lead_count, lead_names, highlight_msg_en),
+                Language.EN.value: generate_wolf_report_en(active_conversations, total_new_leads_count, hot_leads_list, highlight_msg_en),
+                Language.FA.value: generate_wolf_report_fa(active_conversations, total_new_leads_count, hot_leads_list, highlight_msg_fa),
+                Language.AR.value: generate_wolf_report_ar(active_conversations, total_new_leads_count, hot_leads_list, highlight_msg_ar),
+                Language.RU.value: generate_wolf_report_ru(active_conversations, total_new_leads_count, hot_leads_list, highlight_msg_ru),
             }
             
-            logger.info(f"[Morning Coffee] Report generated for tenant {tenant_id}: {active_conversations} chats, {lead_count} new leads")
+            logger.info(f"[Wolf Report] Generated for tenant {tenant_id}: {active_conversations} chats, {len(hot_leads_list)} hot leads")
             return reports
     
     except Exception as e:
-        logger.error(f"[Morning Coffee] Error generating report for tenant {tenant_id}: {e}")
+        logger.error(f"[Wolf Report] Error generating report for tenant {tenant_id}: {e}")
         return {}
 
 
-def generate_report_en(chat_count: int, lead_count: int, lead_names: str, highlight: str) -> str:
-    """Generate English Morning Coffee Report"""
-    return f"""☀️ Good Morning Boss!
+def generate_wolf_report_en(chat_count: int, total_leads: int, hot_leads: list, highlight: str) -> str:
+    """Generate English Wolf Closer Report - Actionable Hit List!"""
+    
+    # Build hot leads action list with WhatsApp click-to-chat links
+    hot_leads_text = ""
+    if hot_leads:
+        for i, lead in enumerate(hot_leads[:5], 1):  # Top 5 only
+            phone_clean = lead.phone.replace('+', '').replace(' ', '').replace('-', '') if lead.phone else ''
+            name = lead.name or "Prospect"
+            budget = f"{lead.budget_max:,.0f} AED" if lead.budget_max else "TBD"
+            
+            # WhatsApp click-to-chat link
+            wa_link = f"https://wa.me/{phone_clean}" if phone_clean else "#"
+            
+            hot_leads_text += f"{i}. [{name}]({wa_link}) - Budget: {budget}\n"
+    else:
+        hot_leads_text = "   (No hot leads yet - pipeline building...)"
+    
+    return f"""☀️ **WOLF CLOSER BRIEFING** ☕️
 
-Last night while you were sleeping, I had **{chat_count} conversations** for you.
+📊 **Last Night Stats:** {chat_count} conversations | {total_leads} qualified
 
-🎯 **New Leads**: {lead_count} people shared their phone numbers:
-   {lead_names if lead_names else "(No new leads yet)"}
+🔥 **YOUR HIT LIST (Call NOW!):**
+{hot_leads_text}
 
-💎 **High-Value Alert**: {highlight}
+💎 **Diamond Lead:** {highlight}
 
-⚡ Time to follow up! Your leads are hot. Let's make it a great day! ☕️
+🚀 **Action:** These leads are HOT. Strike while iron burns. Let's close!
 """
 
 
-def generate_report_fa(chat_count: int, lead_count: int, lead_names: str, highlight: str) -> str:
-    """Generate Persian Morning Coffee Report"""
-    return f"""☀️ صبح بخیر رئیس! ☕️
+def generate_wolf_report_fa(chat_count: int, total_leads: int, hot_leads: list, highlight: str) -> str:
+    """Generate Persian Wolf Closer Report - لیست هدف‌گیری!"""
+    
+    # Build hot leads action list with WhatsApp click-to-chat links
+    hot_leads_text = ""
+    if hot_leads:
+        for i, lead in enumerate(hot_leads[:5], 1):  # Top 5 only
+            phone_clean = lead.phone.replace('+', '').replace(' ', '').replace('-', '') if lead.phone else ''
+            name = lead.name or "مشتری"
+            budget = f"{lead.budget_max:,.0f} درهم" if lead.budget_max else "نامشخص"
+            
+            # WhatsApp click-to-chat link
+            wa_link = f"https://wa.me/{phone_clean}" if phone_clean else "#"
+            
+            hot_leads_text += f"{i}. [{name}]({wa_link}) - بودجه: {budget}\n"
+    else:
+        hot_leads_text = "   (هنوز لید داغی نیست - در حال ساخت خط...)"\n    
+    return f"""☀️ **گزارش صبحگاهی گرگ فروش** ☕️
 
-دیشب که خواب بودی، من با **{chat_count} نفر** چت کردم.
+📊 **آمار دیشب:** {chat_count} مکالمه | {total_leads} واجد شرایط
 
-🎯 **لید‌های جدید**: {lead_count} نفر شماره‌شون رو گذاشتند:
-   {lead_names if lead_names else "(هنوز لید جدیدی نیست)"}
+🔥 **لیست تماس امروز (همین الان زنگ بزن!):**
+{hot_leads_text}
 
-💎 **خریدار VIP**: {highlight}
+💎 **الماس امروز:** {highlight}
 
-⚡ وقت تماس رسانی! لید‌های تو گرم هستند. بریم یه روز فوق‌العاده شامل کنیم! 🚀
+🚀 **دستور:** این لیدها داغ هستند. وقتی آهن داغه باید کوبید. بریم ببندیم!
 """
 
 
-def generate_report_ar(chat_count: int, lead_count: int, lead_names: str, highlight: str) -> str:
-    """Generate Arabic Morning Coffee Report"""
-    return f"""☀️ صباح الخير يا رئيس! ☕️
+def generate_wolf_report_ar(chat_count: int, total_leads: int, hot_leads: list, highlight: str) -> str:
+    """Generate Arabic Wolf Closer Report"""
+    
+    hot_leads_text = ""
+    if hot_leads:
+        for i, lead in enumerate(hot_leads[:5], 1):
+            phone_clean = lead.phone.replace('+', '').replace(' ', '').replace('-', '') if lead.phone else ''
+            name = lead.name or "عميل"
+            budget = f"{lead.budget_max:,.0f} درهم" if lead.budget_max else "غير محدد"
+            wa_link = f"https://wa.me/{phone_clean}" if phone_clean else "#"
+            hot_leads_text += f"{i}. [{name}]({wa_link}) - الميزانية: {budget}\n"
+    else:
+        hot_leads_text = "   (لا توجد عملاء ساخنون حتى الآن...)"
+    
+    return f"""☀️ **تقرير البائع الذئب** ☕️
 
-بينما كنت نائماً، تحدثت مع **{chat_count} شخص** لصالحك.
+📊 **إحصائيات الليلة الماضية:** {chat_count} محادثة | {total_leads} مؤهل
 
-🎯 **عملاء جدد**: {lead_count} شخص شارك رقمهم:
-   {lead_names if lead_names else "(لا توجد عملاء جدد حتى الآن)"}
+🔥 **قائمة الاتصال (اتصل الآن!):**
+{hot_leads_text}
 
-💎 **تنبيه عميل VIP**: {highlight}
+💎 **العميل الماسي:** {highlight}
 
-⚡ حان الوقت للمتابعة! عملاؤك ساخنون. لنجعل هذا يوماً رائعاً! 🚀
+🚀 **إجراء:** هؤلاء العملاء ساخنون. اضرب والحديد ساخن. دعنا نغلق!
 """
 
 
-def generate_report_ru(chat_count: int, lead_count: int, lead_names: str, highlight: str) -> str:
-    """Generate Russian Morning Coffee Report"""
-    return f"""☀️ Доброе утро, босс! ☕️
+def generate_wolf_report_ru(chat_count: int, total_leads: int, hot_leads: list, highlight: str) -> str:
+    """Generate Russian Wolf Closer Report"""
+    
+    hot_leads_text = ""
+    if hot_leads:
+        for i, lead in enumerate(hot_leads[:5], 1):
+            phone_clean = lead.phone.replace('+', '').replace(' ', '').replace('-', '') if lead.phone else ''
+            name = lead.name or "Клиент"
+            budget = f"{lead.budget_max:,.0f} AED" if lead.budget_max else "Неизв."
+            wa_link = f"https://wa.me/{phone_clean}" if phone_clean else "#"
+            hot_leads_text += f"{i}. [{name}]({wa_link}) - Бюджет: {budget}\n"
+    else:
+        hot_leads_text = "   (Пока нет горячих лидов...)"
+    
+    return f"""☀️ **ОТЧЁТ ВОЛКА-ПРОДАВЦА** ☕️
 
-Пока ты спал, я поговорил с **{chat_count} людьми** для тебя.
+📊 **Статистика за ночь:** {chat_count} разговоров | {total_leads} квалифицированных
 
-🎯 **Новые клиенты**: {lead_count} человек поделились их номерами:
-   {lead_names if lead_names else "(Новых клиентов еще нет)"}
+🔥 **СПИСОК ДЛЯ ЗВОНКОВ (Звони СЕЙЧАС!):**
+{hot_leads_text}
 
-💎 **VIP-клиент**: {highlight}
+💎 **Бриллиантовый клиент:** {highlight}
 
-⚡ Пора наводить справки! Твои клиенты горячие. Давай отличный день! 🚀
+🚀 **Действие:** Эти лиды горячие. Куй железо пока горячо. Закрываем!
 """
 
 

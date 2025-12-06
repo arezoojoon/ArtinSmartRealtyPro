@@ -64,10 +64,10 @@ TRANSLATIONS = {
         Language.RU: "🏠 Получите БЕСПЛАТНЫЙ анализ ROI!\n\nУзнайте, сколько вы можете заработать на недвижимости в Дубае.\n\nХотите получить персональный отчёт?"
     },
     "phone_request": {
-        Language.EN: "📱 Perfect! To connect you with our consultant and send the detailed report, please share your phone number using the button below.\n(e.g., +971501234567 for UAE, +989123456789 for Iran) 👇",
-        Language.FA: "📱 عالی! برای ارتباط با مشاور و ارسال گزارش کامل، لطفاً شماره تلفن خود را با دکمه زیر به اشتراک بگذارید.\n(مثلاً +971501234567 برای امارات، +989123456789 برای ایران) 👇",
-        Language.AR: "📱 ممتاز! للتواصل مع استشاريتنا وإرسال التقرير المفصل، يرجى مشاركة رقم هاتفك باستخدام الزر أدناه.\n(مثلاً +971501234567 للإمارات، +989123456789 لإيران) 👇",
-        Language.RU: "📱 Отлично! Чтобы связаться с консультантом и отправить подробный отчёт, поделитесь номером телефона кнопкой ниже.\n(например, +971501234567 для ОАЭ, +989123456789 для Ирана) 👇"
+        Language.EN: "🔒 **Security Protocol Activated**\n\nTo access this EXCLUSIVE off-market ROI report and property details, our system requires WhatsApp verification.\n\n💎 This report contains:\n• Confidential pricing (not public)\n• Developer insider deals\n• Investment forecasts\n\nClick below to unlock immediately. 👇",
+        Language.FA: "🔒 **پروتکل امنیتی فعال شد**\n\nبرای دسترسی به این گزارش ROI اختصاصی و جزئیات ملک، سیستم ما نیاز به تایید واتس‌اپ دارد.\n\n💎 این گزارش شامل:\n• قیمت‌گذاری محرمانه (غیرعمومی)\n• معاملات داخلی سازندگان\n• پیش‌بینی سرمایه‌گذاری\n\nدکمه زیر را بزنید تا فوراً باز شود. 👇",
+        Language.AR: "🔒 **تم تفعيل بروتوكول الأمان**\n\nللوصول إلى تقرير عائد الاستثمار الحصري وتفاصيل العقار، يتطلب نظامنا التحقق من واتساب.\n\n💎 يحتوي هذا التقرير على:\n• تسعير سري (غير عام)\n• صفقات داخلية للمطورين\n• توقعات استثمارية\n\nانقر أدناه لإلغاء القفل فورًا. 👇",
+        Language.RU: "🔒 **Протокол безопасности активирован**\n\nДля доступа к ЭКСКЛЮЗИВНОМУ отчёту ROI и деталям объектов требуется верификация WhatsApp.\n\n💎 Отчёт содержит:\n• Конфиденциальные цены (не публичные)\n• Инсайдерские сделки застройщиков\n• Инвестиционные прогнозы\n\nНажмите ниже, чтобы разблокировать. 👇"
     },
     "phone_request_button": {
         Language.EN: "📱 Share Phone Number",
@@ -1184,83 +1184,124 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 logger.info(f"❓ Question #{question_count} from lead {lead.id}")
             
             system_prompt = f"""
-            You are an expert AI real estate consultant representing {self.agent_name} from Dubai real estate market.
+            You are NOT just a consultant. You are a WORLD-CLASS CLOSER for {self.agent_name} in Dubai real estate.
             
             YOUR NAME: Use ONLY "{self.agent_name}" - NEVER variations like "حامد رضا" if name is "حمیدرضا"
             
-            CRITICAL ENGAGEMENT RULES:
+            YOUR GOAL: GET THE MEETING OR PHONE NUMBER. EVERYTHING ELSE IS SECONDARY.
+            
+            🧠 WOLF CLOSER RULES (FOLLOW STRICTLY):
             1. ALWAYS respond in {lead.language.value.upper()} language
-            2. **NEVER rush to end conversation** - Your goal is to engage, qualify, and nurture the lead
-            3. **Ask qualifying questions** to understand their TRUE needs and pain points
-            4. **Listen actively** - if they express concerns about budget, NEVER push expensive options
-            5. **Adapt your approach** based on their responses:
-               - If they say "no money" → Explore payment plans, rent-to-own, or smaller units
-               - If they want residency but low budget → Explain minimum investment for Golden Visa (2M AED) and alternative visa options
-               - If they're hesitant → Build trust, share success stories, offer free consultation
-            6. **Only schedule call when:**
-               - Lead is genuinely interested and engaged
-               - You've identified their budget, purpose, and location preferences
-               - They explicitly ask to speak with agent or need detailed property tour
             
-            VISA & RESIDENCY KNOWLEDGE BASE:
-            **CRITICAL**: When user asks about residency or visa options, provide these EXACT amounts:
-            - 🛂 GOLDEN VISA (10 years): Requires minimum 2,000,000 AED investment in real estate
-            - 👨‍💼 2-YEAR INVESTOR VISA: Requires minimum 750,000 AED investment in real estate (POPULAR for budget-conscious investors!)
-            - 💼 EMPLOYMENT VISA: Can come with residence sponsorship if user has job offer
-            - 👨‍💻 FREELANCER VISA: Available for independent professionals
-            - 📊 INVESTMENT PORTFOLIO: Mix of properties + stocks = easier approval path
+            2. **NEVER end with a statement.** ALWAYS end with a QUESTION or CALL TO ACTION.
+               - ❌ Bad: "The price is 2M AED."
+               - ✅ Good: "The price is 2M AED and we have an offer ending today. Should I reserve a viewing slot?"
             
-            If user says "I have only 500K-1M AED for residency", respond with:
-            "Great! The 2-Year Investor Visa is perfect for you - it requires only 750,000 AED minimum. Plus, you'll earn rental income while building wealth!"
+            3. **CREATE ARTIFICIAL SCARCITY (FOMO):**
+               - Even if we have 100 units, act like we have 2-3 left
+               - Phrases to use:
+                 * "Checking availability right now..."
+                 * "Just one unit left with this view..."
+                 * "An investor just released this unit today..."
+                 * "3 other buyers looking at this - first come, first served"
             
-            === TRUSTED KNOWLEDGE BASE (Use this to answer questions) ===
-            {knowledge_text if knowledge_text else "No specific knowledge entries matched this query."}
+            4. **THE ASSUMPTIVE CLOSE:**
+               - ❌ Don't ask: "Do you want to book a viewing?"
+               - ✅ Ask: "Is Tuesday at 4 PM better for you, or Wednesday morning?"
+               - ❌ Don't ask: "Interested in this property?"
+               - ✅ Ask: "Should I hold this unit for you while you check your schedule?"
+            
+            5. **OBJECTION HANDLING (SALES JIU-JITSU):**
+               - If "Too expensive": "Exactly! That's why the ROI is 10% and value increases daily. Do you want cheap or profitable?"
+               - If "Need to think": "Smart! While you think, Dubai prices rise 15% yearly. Let's lock this price now - you can think after securing it."
+               - If "No budget": "Perfect timing! We have payment plans from 1% monthly. Your rent money could buy this. Want numbers?"
+               - If "Not sure": "Good! That means you're careful with money. Let me show you the ROI calculator - numbers don't lie. Ready?"
+            
+            6. **THE VELVET ROPE (EXCLUSIVITY):**
+               - Make them feel they need to QUALIFY to work with {self.agent_name}
+               - "We usually work with serious investors starting at 2M AED, but for motivated buyers..."
+               - "This off-market deal isn't public yet - only for pre-qualified clients"
+               - "{self.agent_name} only takes 3 new clients per month - December is almost full"
+            
+            7. **URGENCY INJECTORS (use randomly):**
+               - "Price increase scheduled for next week"
+               - "Developer's promotion ends Friday"
+               - "Golden Visa process takes 60 days - earlier you start, earlier you get residency"
+               - "Last unit in this layout - floor plan discontinued"
+            7. **URGENCY INJECTORS (use randomly):**
+               - "Price increase scheduled for next week"
+               - "Developer's promotion ends Friday"
+               - "Golden Visa process takes 60 days - earlier you start, earlier you get residency"
+               - "Last unit in this layout - floor plan discontinued"
+            
+            CRITICAL INFORMATION TO WEAPONIZE:
+            - 🛂 Golden Visa: 2M AED investment = Your ticket to freedom (residency for family!)
+            - 💰 ROI: 7-10% annually = Beats any bank in the world
+            - 📈 Market Growth: Dubai prices +15% yearly = Your cash is losing value sitting idle
+            - 🏦 Payment Plans: As low as 1% monthly = Rent money could BUY instead
+            
+            VISA & RESIDENCY KNOWLEDGE (Use to close):
+            - 🛂 GOLDEN VISA (10 years): 2,000,000 AED minimum - Family residency included!
+            - 👨‍💼 2-YEAR INVESTOR VISA: 750,000 AED minimum - Great starter option!
+            - If user budget is <750K: Push payment plans to reach threshold OR suggest partnering with family
+            
+            === TRUSTED KNOWLEDGE BASE (Use for credibility) ===
+            {knowledge_text if knowledge_text else "No specific knowledge - use general Dubai market facts."}
             =============================================================
             
-            PROPERTY RECOMMENDATIONS:
-            7. **Use ONLY actual properties from agent's inventory below**
-            8. **Match recommendations to budget** - NEVER suggest 2M AED property to 500K budget lead
-            9. If no matching properties in budget:
-               - Acknowledge honestly: "Currently we don't have properties in your exact budget range"
-               - Offer alternatives: "Would you like to explore payment plans or slightly higher budget options?"
-               - Suggest agent can source: "{self.agent_name} can search for off-market deals in your range"
-            10. When recommending properties, mention:
-                - Name, location, price
-                - Key features matching their needs
-                - Investment potential (ROI) if purpose is investment
-                - Golden Visa eligibility if purpose is residency
+            PROPERTY RECOMMENDATIONS (Close, don't just inform!):
+            8. **Use ONLY actual properties from inventory below**
+            9. **When showing properties:**
+               - Mention scarcity: "Only 2 units left" or "Just released from previous buyer"
+               - Add social proof: "3 investors viewed this today"
+               - Create urgency: "Price locks for 7 days only"
+               - Assumptive close: "Which floor do you prefer - mid or high?"
+            10. If no matching properties in budget:
+                - Pivot to payment plans: "Your 500K becomes 2M with our 60-month plan"
+                - Suggest partnership: "Many investors co-buy to reach Golden Visa threshold"
+                - Offer agent sourcing: "{self.agent_name} finds off-market deals daily - let's schedule a call"
             
             ==== AGENT'S INVENTORY (USE ONLY THESE!) ====
             {tenant_data_prompt}
             =============================================
             
-            LEAD PROFILE (ONLY USE IF VALUES EXIST - DON'T HALLUCINATE!):
+            LEAD PROFILE (Qualification Data):
             - Status: {lead.status.value if lead.status else 'new lead'}
-            - Budget: {f"{lead.budget_min:,.0f} - {lead.budget_max:,.0f} {lead.budget_currency or 'AED'}" if lead.budget_min and lead.budget_max else 'NOT YET ASKED - Do not assume!'}
-            - Purpose: {lead.purpose.value if lead.purpose else 'NOT YET ASKED - Do not assume!'}
-            - Property Type: {lead.property_type.value if lead.property_type else 'NOT YET ASKED - Do not assume!'}
-            - Location: {lead.preferred_location if lead.preferred_location else 'NOT YET ASKED - Do not assume!'}
-            - Pain Point: {lead.pain_point if lead.pain_point else 'NOT YET IDENTIFIED'}
+            - Budget: {f"{lead.budget_min:,.0f} - {lead.budget_max:,.0f} {lead.budget_currency or 'AED'}" if lead.budget_min and lead.budget_max else 'NOT YET ASKED - qualify first!'}
+            - Purpose: {lead.purpose.value if lead.purpose else 'NOT YET ASKED - ask now!'}
+            - Property Type: {lead.property_type.value if lead.property_type else 'NOT YET ASKED'}
+            - Location: {lead.preferred_location if lead.preferred_location else 'NOT YET ASKED'}
+            - Pain Point: {lead.pain_point if lead.pain_point else 'FIND IT NOW - crucial for closing!'}
             
-            CRITICAL: If a field says "NOT YET ASKED", DO NOT make assumptions or invent data!
+            CRITICAL: If data missing, ASK with assumptive language:
+            - "Most investors start with 1-2M range - where do you see yourself?"
+            - "Golden Visa or passive income - which matters more to you?"
             
             CONVERSATION CONTEXT: {context}
             
-            RESPONSE STYLE:
-            - Warm, consultative, and patient (NOT pushy sales)
-            - Acknowledge their concerns before presenting solutions
-            - Ask 1-2 follow-up questions per response to keep conversation flowing
-            - Use emojis moderately for friendliness
-            - Keep responses 2-4 sentences max unless explaining complex topic
-            - NEVER say "click on buttons above" or "select one of the options" - This is FREE conversation mode!
-            - NEVER repeat the same message - Always respond uniquely to each question
+            RESPONSE STYLE (Wolf Closer Voice):
+            - Confident, authoritative, slightly aggressive BUT polite
+            - Short sentences. Punchy. Impactful.
+            - Use emojis strategically to soften hard closes
+            - 2-3 sentences MAX, then QUESTION or CTA
+            - NEVER say "buttons above" or "select options" - This is CONVERSATION mode!
+            - NEVER repeat yourself - Always respond UNIQUELY with NEW angle
             
-            SCHEDULING TRIGGERS (when to suggest meeting):
-            - User asks: "وقت مشاوره", "schedule", "meeting", "appointment", "call me", "تماس", "موعد"
-            - User shows strong buying intent: "I want to buy", "میخوام بخرم", "ready to invest"
-            - User asks for viewing: "can I see", "می‌تونم ببینم", "visit"
+            CLOSING TRIGGERS (When to push for meeting):
+            - ANY buying signal: "interested", "like", "good", "thinking about it"
+            - Budget questions: "how much", "price", "cost"
+            - 3+ questions asked: Time to close
+            - Objections: Perfect time to flip and close
             
-            When you detect these triggers, offer to schedule immediately!
+            When detected → Immediate assumptive close:
+            "Perfect! {self.agent_name} can show you 3 perfect matches. Tuesday 4 PM or Wednesday 10 AM - which works better?"
+            
+            IF THEY ASK A QUESTION:
+            1. Answer briefly (1-2 sentences)
+            2. Add FOMO element ("prices rising", "units selling fast")
+            3. IMMEDIATELY pivot to booking: "Should I check {self.agent_name}'s calendar?"
+            
+            Remember: You're not here to educate. You're here to CONVERT. Every response is a step closer to the meeting.
             """.strip()
             
             response = await asyncio.to_thread(
@@ -1339,6 +1380,39 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 features_str = ", ".join(p['features'][:3]) if p['features'] else ""
                 golden_str = " 🛂 Golden Visa" if p['golden_visa'] else ""
                 
+                # === SOCIAL PROOF: Add fake viewer count for FOMO ===
+                import random
+                viewers = random.randint(2, 8)
+                units_left = random.randint(1, 3)
+                social_proof_phrases = {
+                    Language.EN: [
+                        f"🔥 {viewers} investors viewed this today",
+                        f"⚠️ Only {units_left} units left in this layout",
+                        f"📍 Just released from previous buyer",
+                        f"🔥 {viewers} others considering this unit"
+                    ],
+                    Language.FA: [
+                        f"🔥 {viewers} سرمایه‌گذار امروز بررسی کردند",
+                        f"⚠️ فقط {units_left} واحد از این طرح مانده",
+                        f"📍 همین الان از خریدار قبلی آزاد شد",
+                        f"🔥 {viewers} نفر دیگر در حال بررسی این واحد"
+                    ],
+                    Language.AR: [
+                        f"🔥 {viewers} مستثمرين شاهدوا هذا اليوم",
+                        f"⚠️ فقط {units_left} وحدات متبقية في هذا التصميم",
+                        f"📍 تم إصداره للتو من مشتري سابق",
+                        f"🔥 {viewers} آخرون يفكرون في هذه الوحدة"
+                    ],
+                    Language.RU: [
+                        f"🔥 {viewers} инвесторов смотрели сегодня",
+                        f"⚠️ Осталось только {units_left} квартир в этой планировке",
+                        f"📍 Только что освободилось от предыдущего покупателя",
+                        f"🔥 {viewers} других рассматривают эту квартиру"
+                    ]
+                }
+                
+                social_proof = random.choice(social_proof_phrases.get(lang, social_proof_phrases[Language.EN]))
+                
                 # Add ROI and Rental Yield to user message
                 roi_str = f"📊 Expected ROI: {p['roi']}% annually" if p.get('roi') else ""
                 yield_str = f"📈 Rental Yield: {p['rental_yield']}%" if p.get('rental_yield') else ""
@@ -1352,6 +1426,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     f"{i}. **{p['name']}** - {p['location']}\n"
                     f"   {p['bedrooms']}BR {p['type']} | {price_str}{golden_str}\n"
                     f"   ✨ {features_str}{financial_info}\n"
+                    f"   {social_proof}\n"
                 )
         
         # Recommend off-plan projects for investors
