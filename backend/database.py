@@ -268,7 +268,7 @@ class Lead(Base):
     telegram_chat_id = Column(String(100), nullable=True, index=True)  # Also used as telegram_user_id
     telegram_username = Column(String(100), nullable=True)
     whatsapp_phone = Column(String(50), nullable=True, index=True)  # WhatsApp phone number
-    language = Column(SQLEnum(Language), default=Language.EN)
+    language = Column(String(10), default="en")  # Store as string to avoid enum uppercase issue
     
     # Lead Status
     status = Column(SQLEnum(LeadStatus), default=LeadStatus.NEW)
@@ -335,6 +335,17 @@ class Lead(Base):
             return ConversationState(self.conversation_state)
         except (ValueError, KeyError):
             return ConversationState.START
+    
+    @property
+    def lang(self) -> Language:
+        """Get language as Language enum."""
+        if isinstance(self.language, Language):
+            return self.language
+        # Convert string to enum
+        try:
+            return Language(self.language)
+        except (ValueError, KeyError):
+            return Language.EN
 
 
 class AgentAvailability(Base):
@@ -622,7 +633,7 @@ async def get_or_create_lead(
                 telegram_username=telegram_username,
                 whatsapp_phone=whatsapp_phone,
                 source=source,
-                conversation_state=ConversationState.START
+                conversation_state="start"  # Use string instead of enum
             )
             session.add(lead)
             await session.commit()
@@ -644,6 +655,9 @@ async def update_lead(lead_id: int, **kwargs) -> Lead:
                 if hasattr(lead, key):
                     # Convert ConversationState enum to lowercase string value
                     if key == 'conversation_state' and isinstance(value, ConversationState):
+                        value = value.value
+                    # Convert Language enum to lowercase string value
+                    if key == 'language' and isinstance(value, Language):
                         value = value.value
                     setattr(lead, key, value)
             lead.updated_at = datetime.utcnow()

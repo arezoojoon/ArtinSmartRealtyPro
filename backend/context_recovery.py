@@ -141,12 +141,13 @@ async def save_context_to_redis(lead: Lead):
     """
     # conversation_state is now stored as string, not enum
     conv_state = lead.conversation_state if isinstance(lead.conversation_state, str) else lead.conversation_state.value
+    lang = lead.language if isinstance(lead.language, str) else lead.language.value
     context = {
         "conversation_state": conv_state,
         "filled_slots": lead.filled_slots or {},
         "pending_slot": lead.pending_slot,
         "conversation_data": lead.conversation_data or {},
-        "language": lead.language.value if lead.language else "fa"
+        "language": lang
     }
     
     await redis_manager.save_context(
