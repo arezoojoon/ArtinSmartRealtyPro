@@ -140,6 +140,7 @@ class ConversationState(str, Enum):
     """Optimized State Machine for High-Ticket Real Estate Sales"""
     START = "start"
     LANGUAGE_SELECT = "language_select"
+    COLLECTING_NAME = "collecting_name"  # Ask for customer's name after language
     
     # Phase 1: Warmup & Profiling (1-2 questions max)
     WARMUP = "warmup"  # Goal: Investment/Living/Residency

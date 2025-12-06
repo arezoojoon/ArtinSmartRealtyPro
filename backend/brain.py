@@ -1620,6 +1620,9 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         elif current_state == ConversationState.LANGUAGE_SELECT:
             return self._handle_language_select(lang, callback_data, lead_updates, message)
         
+        elif current_state == ConversationState.COLLECTING_NAME:
+            return await self._handle_collecting_name(lang, message, callback_data, lead, lead_updates)
+        
         # ===== NEW STATE MACHINE ROUTING =====
         elif current_state == ConversationState.WARMUP:
             return await self._handle_warmup(lang, message, callback_data, lead, lead_updates)
@@ -1710,23 +1713,80 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 lang = Language.EN
                 lead_updates["language"] = lang
         
-        # After language selection, go directly to WARMUP (new flow)
-        warmup_message = {
-            Language.EN: f"Great to meet you, {self.agent_name} here! 🎯\n\nAre you looking for Investment, Living, or Residency in Dubai?",
-            Language.FA: f"خوشحالم که با شما آشنا شدم، {self.agent_name} هستم! 🎯\n\nبه دنبال سرمایه‌گذاری، زندگی یا اقامت در دبی هستید؟",
-            Language.AR: f"سعيد بلقائك، أنا {self.agent_name}! 🎯\n\nهل تبحث عن الاستثمار أم العيش أم الإقامة في دبي؟",
-            Language.RU: f"Приятно познакомиться, я {self.agent_name}! 🎯\n\nВы ищете инвестиции, проживание или резиденцию в Дубае?"
+        # After language selection, ask for customer's name first
+        name_question = {
+            Language.EN: "Nice to meet you! 👋\n\nWhat's your name?",
+            Language.FA: "خوشحالم که با شما آشنا شدم! 👋\n\nاسم شما چیه؟",
+            Language.AR: "سعيد بلقائك! 👋\n\nما اسمك؟",
+            Language.RU: "Приятно познакомиться! 👋\n\nКак вас зовут?"
         }
         
         return BrainResponse(
-            message=warmup_message.get(lang, warmup_message[Language.EN]),
+            message=name_question.get(lang, name_question[Language.EN]),
+            next_state=ConversationState.COLLECTING_NAME,
+            lead_updates=lead_updates,
+            buttons=[]
+        )
+    
+    async def _handle_collecting_name(
+        self,
+        lang: Language,
+        message: Optional[str],
+        callback_data: Optional[str],
+        lead: Lead,
+        lead_updates: Dict
+    ) -> BrainResponse:
+        """
+        COLLECTING_NAME Phase: Ask for customer's name and personalize all future messages
+        This runs immediately after language selection
+        """
+        # Validate name input
+        if not message or len(message.strip()) < 2:
+            retry_msg = {
+                Language.EN: "Please tell me your name 😊",
+                Language.FA: "لطفاً اسمتون رو بگید 😊",
+                Language.AR: "من فضلك، أخبرني باسمك 😊",
+                Language.RU: "Пожалуйста, скажите мне ваше имя 😊"
+            }
+            return BrainResponse(
+                message=retry_msg.get(lang, retry_msg[Language.EN]),
+                next_state=ConversationState.COLLECTING_NAME,
+                lead_updates={},
+                buttons=[]
+            )
+        
+        # Save customer's name
+        customer_name = message.strip()
+        lead_updates["name"] = customer_name
+        
+        # Initialize conversation_data if needed
+        conversation_data = lead.conversation_data or {}
+        conversation_data["customer_name"] = customer_name
+        lead_updates["conversation_data"] = conversation_data
+        
+        # Personalized warmup message with name
+        warmup_msg = {
+            Language.EN: f"Great to meet you, {customer_name}! 🎯\n\nI'm {self.agent_name}, your Dubai real estate specialist.\n\nAre you looking for **Investment**, **Living**, or **Residency** in Dubai?",
+            Language.FA: f"{customer_name} عزیز، خوشحالم که آشنا شدیم! 🎯\n\nمن {self.agent_name} هستم، متخصص املاک دبی.\n\nبه دنبال **سرمایه‌گذاری**، **زندگی**، یا **اقامت** در دبی هستید؟",
+            Language.AR: f"سعيد بلقائك يا {customer_name}! 🎯\n\nأنا {self.agent_name}، أخصائي العقارات في دبي.\n\nهل تبحث عن **الاستثمار**، **السكن**، أو **الإقامة** في دبي؟",
+            Language.RU: f"Приятно познакомиться, {customer_name}! 🎯\n\nЯ {self.agent_name}, ваш специалист по недвижимости в Дубае.\n\nВы ищете **инвестиции**, **жильё** или **резиденцию** в Дубае?"
+        }
+        
+        # Goal buttons (Investment/Living/Residency)
+        goal_buttons = [
+            {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment" if lang == Language.EN else "استثمار" if lang == Language.AR else "Инвестиции"), 
+             "callback_data": "goal_investment"},
+            {"text": "🏡 " + ("زندگی" if lang == Language.FA else "Living" if lang == Language.EN else "سكن" if lang == Language.AR else "Жильё"), 
+             "callback_data": "goal_living"},
+            {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency" if lang == Language.EN else "إقامة" if lang == Language.AR else "Резиденция"), 
+             "callback_data": "goal_residency"}
+        ]
+        
+        return BrainResponse(
+            message=warmup_msg.get(lang, warmup_msg[Language.EN]),
             next_state=ConversationState.WARMUP,
             lead_updates=lead_updates,
-            buttons=[
-                {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
-                {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living"), "callback_data": "goal_living"},
-                {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
-            ]
+            buttons=goal_buttons
         )
     
     # ==================== NEW STATE MACHINE HANDLERS ====================
@@ -2155,11 +2215,17 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                         (200000, 500000), # 16,667 - 41,667 AED/month
                         (500000, None)    # 41,667+ AED/month
                     ]
+                    
+                    # Get customer name for personalization
+                    customer_name = conversation_data.get("customer_name", "")
+                    name_suffix = f", {customer_name}" if customer_name else ""
+                    name_suffix_fa = f"، {customer_name} عزیز" if customer_name else ""
+                    
                     budget_question = {
-                        Language.EN: "What's your monthly rental budget?",
-                        Language.FA: "بودجه اجاره ماهانه شما چقدر است؟",
-                        Language.AR: "ما هي ميزانية الإيجار الشهرية؟",
-                        Language.RU: "Каков ваш месячный бюджет на аренду?"
+                        Language.EN: f"What's your monthly rental budget{name_suffix}?",
+                        Language.FA: f"بودجه اجاره ماهانه شما چقدر است{name_suffix_fa}؟",
+                        Language.AR: f"ما هي ميزانية الإيجار الشهرية{name_suffix}؟",
+                        Language.RU: f"Каков ваш месячный бюджет на аренду{name_suffix}?"
                     }
                     
                     budget_buttons = []
@@ -2176,6 +2242,12 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     # BUY budget ranges (purchase price)
                     # Add Dubai advantages for purchase (especially for investment goal)
                     goal = conversation_data.get("goal", "")
+                    
+                    # Get customer name for personalization
+                    customer_name = conversation_data.get("customer_name", "")
+                    name_suffix = f", {customer_name}" if customer_name else ""
+                    name_suffix_fa = f"، {customer_name} عزیز" if customer_name else ""
+                    
                     dubai_benefits_prefix = ""
                     
                     if goal == "investment":
@@ -2194,10 +2266,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                         }
                     
                     budget_question = {
-                        Language.EN: dubai_benefits_prefix[Language.EN] + "What's your purchase budget?",
-                        Language.FA: dubai_benefits_prefix[Language.FA] + "بودجه خرید شما چقدر است؟",
-                        Language.AR: dubai_benefits_prefix[Language.AR] + "ما هي ميزانية الشراء؟",
-                        Language.RU: dubai_benefits_prefix[Language.RU] + "Каков ваш бюджет на покупку?"
+                        Language.EN: dubai_benefits_prefix[Language.EN] + f"What's your purchase budget{name_suffix}?",
+                        Language.FA: dubai_benefits_prefix[Language.FA] + f"بودجه خرید شما چقدر است{name_suffix_fa}؟",
+                        Language.AR: dubai_benefits_prefix[Language.AR] + f"ما هي ميزانية الشراء{name_suffix}؟",
+                        Language.RU: dubai_benefits_prefix[Language.RU] + f"Каков ваш бюджет на покупку{name_suffix}?"
                     }
                     
                     budget_buttons = []
@@ -2464,6 +2536,12 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         # Get property recommendations
         property_recs = await self.get_property_recommendations(lead)
         
+        # Get customer name for personalization
+        conversation_data = lead.conversation_data or {}
+        customer_name = conversation_data.get("customer_name", "")
+        name_prefix_en = f"{customer_name}, " if customer_name else ""
+        name_prefix_fa = f"{customer_name} عزیز، " if customer_name else ""
+        
         # Parse recommendations (simplified)
         if property_recs and "no properties" not in property_recs.lower():
             # Build comprehensive message with financial education
@@ -2475,10 +2553,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             }
             
             value_message = {
-                Language.EN: f"Perfect! Here are properties that match your criteria:\n\n{property_recs}{financial_benefits[Language.EN]}\n\n📋 Would you like to see the full details and financing calculator?",
-                Language.FA: f"عالی! اینها ملک‌هایی هستند که با معیارهای شما مطابقت دارند:\n\n{property_recs}{financial_benefits[Language.FA]}\n\n📋 می‌خواهید جزئیات کامل و ماشین‌حساب تامین مالی رو ببینید؟",
-                Language.AR: f"رائع! إليك العقارات التي تطابق معاييرك:\n\n{property_recs}{financial_benefits[Language.AR]}\n\n📋 هل تريد رؤية التفاصيل الكاملة وحاسبة التمويل؟",
-                Language.RU: f"Отлично! Вот объекты, которые соответствуют вашим критериям:\n\n{property_recs}{financial_benefits[Language.RU]}\n\n📋 Хотите увидеть полные детали и калькулятор финансирования?"
+                Language.EN: f"Perfect{f', {customer_name}' if customer_name else ''}! Here are properties that match your criteria:\n\n{property_recs}{financial_benefits[Language.EN]}\n\n📋 Would you like to see the full details and financing calculator?",
+                Language.FA: f"عالی{f'، {customer_name} عزیز' if customer_name else ''}! اینها ملک‌هایی هستند که با معیارهای شما مطابقت دارند:\n\n{property_recs}{financial_benefits[Language.FA]}\n\n📋 می‌خواهید جزئیات کامل و ماشین‌حساب تامین مالی رو ببینید؟",
+                Language.AR: f"رائع{f'، {customer_name}' if customer_name else ''}! إليك العقارات التي تطابق معاييرك:\n\n{property_recs}{financial_benefits[Language.AR]}\n\n📋 هل تريد رؤية التفاصيل الكاملة وحاسبة التمويل؟",
+                Language.RU: f"Отлично{f', {customer_name}' if customer_name else ''}! Вот объекты, которые соответствуют вашим критериям:\n\n{property_recs}{financial_benefits[Language.RU]}\n\n📋 Хотите увидеть полные детали и калькулятор финансирования?"
             }
             
             return BrainResponse(
@@ -2520,12 +2598,26 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         HARD_GATE Phase: Capture phone number for PDF delivery.
         This happens AFTER showing value, not before!
         """
+        # Get customer's name for personalization
+        conversation_data = lead.conversation_data or {}
+        customer_name = conversation_data.get("customer_name", "")
+        
+        # Personalized phone request based on whether we have customer's name
+        if customer_name:
+            phone_request_personalized = {
+                Language.EN: f"🔒 **Security Protocol Activated**\n\n{customer_name}, to access this EXCLUSIVE off-market ROI report and property details, our system requires verification.\n\n💎 This report contains:\n• Confidential pricing (not public)\n• Developer insider deals\n• Investment forecasts\n\n📝 **Please enter your phone number (WhatsApp preferred):**\n\n**Example:** +971505037158",
+                Language.FA: f"🔒 **پروتکل امنیتی فعال شد**\n\n{customer_name} عزیز، برای دسترسی به این گزارش ROI اختصاصی و جزئیات ملک، سیستم ما نیاز به تایید دارد.\n\n💎 این گزارش شامل:\n• قیمت‌گذاری محرمانه (غیرعمومی)\n• معاملات داخلی سازندگان\n• پیش‌بینی سرمایه‌گذاری\n\n📝 **لطفاً شماره تماستون رو وارد کنید (ترجیحاً واتساپ):**\n\n**مثال:** +971505037158",
+                Language.AR: f"🔒 **تم تفعيل بروتوكول الأمان**\n\n{customer_name}، للوصول إلى تقرير عائد الاستثمار الحصري وتفاصيل العقار، يتطلب نظامنا التحقق.\n\n💎 يحتوي هذا التقرير على:\n• تسعير سري (غير عام)\n• صفقات داخلية للمطورين\n• توقعات استثمارية\n\n📝 **الرجاء إدخال رقم هاتفك (يفضل واتساب):**\n\n**مثال:** +971505037158",
+                Language.RU: f"🔒 **Протокол безопасности активирован**\n\n{customer_name}, для доступа к ЭКСКЛЮЗИВНОМУ отчёту ROI и деталям объектов требуется верификация.\n\n💎 Отчёт содержит:\n• Конфиденциальные цены (не публичные)\n• Инсайдерские сделки застройщиков\n• Инвестиционные прогнозы\n\n📝 **Пожалуйста, введите номер телефона (предпочтительно WhatsApp):**\n\n**Пример:** +971505037158"
+            }
+        else:
+            # Fallback to original message if name not collected
+            phone_request_personalized = TRANSLATIONS["phone_request"]
+        
         # If user clicked "Yes, send PDF"
         if callback_data == "pdf_yes":
-            phone_request = TRANSLATIONS["phone_request"]
-            
             return BrainResponse(
-                message=phone_request.get(lang, phone_request[Language.EN]),
+                message=phone_request_personalized.get(lang, phone_request_personalized[Language.EN]),
                 next_state=ConversationState.HARD_GATE,
                 request_contact=True  # NEW: Show contact button in Telegram
             )
@@ -2533,10 +2625,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         # If user clicked "No, thanks"
         if callback_data == "pdf_no":
             engagement_message = {
-                Language.EN: "No problem! Do you have any questions about Dubai real estate?",
-                Language.FA: "مشکلی نیست! سوالی درباره املاک دبی دارید؟",
-                Language.AR: "لا مشكلة! هل لديك أي أسئلة عن العقارات في دبي؟",
-                Language.RU: "Без проблем! У вас есть вопросы о недвижимости в Дубае?"
+                Language.EN: f"No problem{f', {customer_name}' if customer_name else ''}! Do you have any questions about Dubai real estate?",
+                Language.FA: f"مشکلی نیست{f'، {customer_name} عزیز' if customer_name else ''}! سوالی درباره املاک دبی دارید؟",
+                Language.AR: f"لا مشكلة{f'، {customer_name}' if customer_name else ''}! هل لديك أي أسئلة عن العقارات في دبي؟",
+                Language.RU: f"Без проблем{f', {customer_name}' if customer_name else ''}! У вас есть вопросы о недвижимости в Дубае?"
             }
             
             return BrainResponse(
@@ -2565,10 +2657,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             if wants_photos:
                 # User wants to see photos - go to engagement instead of demanding phone
                 photo_response = {
-                    Language.EN: "Great! I understand you'd like to see property photos first. That makes total sense!\n\nWould you like to see our featured properties with full details?",
-                    Language.FA: "عالی! متوجه شدم که می‌خواهید اول عکس‌ها رو ببینید.\n\nمی‌خواهید ملک‌های برجسته‌ی ما رو با جزئیات کامل ببینید؟",
-                    Language.AR: "رائع! أفهم أنك تريد رؤية الصور أولاً. هذا منطقي تماماً!\n\nهل تريد رؤية ممتلكاتنا المميزة بالتفاصيل الكاملة؟",
-                    Language.RU: "Отлично! Я понимаю, что вы хотите сначала увидеть фотографии.\n\nХотите увидеть наши лучшие объекты со всеми деталями?"
+                    Language.EN: f"Great{f', {customer_name}' if customer_name else ''}! I understand you'd like to see property photos first. That makes total sense!\n\nWould you like to see our featured properties with full details?",
+                    Language.FA: f"عالی{f'، {customer_name} عزیز' if customer_name else ''}! متوجه شدم که می‌خواهید اول عکس‌ها رو ببینید.\n\nمی‌خواهید ملک‌های برجسته‌ی ما رو با جزئیات کامل ببینید؟",
+                    Language.AR: f"رائع{f'، {customer_name}' if customer_name else ''}! أفهم أنك تريد رؤية الصور أولاً. هذا منطقي تماماً!\n\nهل تريد رؤية ممتلكاتنا المميزة بالتفاصيل الكاملة؟",
+                    Language.RU: f"Отлично{f', {customer_name}' if customer_name else ''}! Я понимаю, что вы хотите сначала увидеть фотографии.\n\nХотите увидеть наши лучшие объекты со всеми деталями?"
                 }
                 
                 return BrainResponse(
@@ -2589,15 +2681,15 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 )
             
             # Try to validate as phone number
-            phone_response = await self._validate_phone_number(lang, message, lead_updates)
+            phone_response = await self._validate_phone_number(lang, message, lead_updates, customer_name)
             
             # If validation successful, move to ENGAGEMENT with PDF flag
             if phone_response.next_state == ConversationState.ENGAGEMENT:
                 pdf_sent_message = {
-                    Language.EN: "✅ Perfect! Thank you!\n\n📄 I'm preparing your personalized financing calculator and detailed ROI report now. It will be sent to you in a moment!\n\nIn the meantime, would you like to discuss your specific requirements? What's your main goal with Dubai real estate?",
-                    Language.FA: "✅ عالی! ممنون!\n\n📄 دارم ماشین‌حساب تامین مالی شخصی‌سازی شده و گزارش ROI کامل شما رو آماده می‌کنم. چند لحظه دیگه برات می‌فرستم!\n\nدر این بین، دوست داری درباره نیازهای خاصت صحبت کنیم؟ هدف اصلی شما از املاک دبی چیه؟",
-                    Language.AR: "✅ ممتاز! شكراً!\n\n📄 أقوم بإعداد حاسبة التمويل المخصصة وتقرير عائد الاستثمار الشامل الآن. سأرسله لك خلال لحظات!\n\nفي هذه الأثناء، هل تريد مناقشة متطلباتك المحددة؟ ما هو هدفك الرئيسي من عقارات دبي؟",
-                    Language.RU: "✅ Отлично! Спасибо!\n\n📄 Готовлю ваш персональный калькулятор финансирования и подробный отчёт ROI. Отправлю вам через мгновение!\n\nА пока, хотите обсудить ваши конкретные требования? Какая у вас главная цель с недвижимостью в Дубае?"
+                    Language.EN: f"✅ Perfect{f', {customer_name}' if customer_name else ''}! Thank you!\n\n📄 I'm preparing your personalized financing calculator and detailed ROI report now. It will be sent to you in a moment!\n\nIn the meantime, would you like to discuss your specific requirements? What's your main goal with Dubai real estate?",
+                    Language.FA: f"✅ عالی{f'، {customer_name} عزیز' if customer_name else ''}! ممنون!\n\n📄 دارم ماشین‌حساب تامین مالی شخصی‌سازی شده و گزارش ROI کامل شما رو آماده می‌کنم. چند لحظه دیگه برات می‌فرستم!\n\nدر این بین، دوست داری درباره نیازهای خاصت صحبت کنیم؟ هدف اصلی شما از املاک دبی چیه؟",
+                    Language.AR: f"✅ ممتاز{f'، {customer_name}' if customer_name else ''}! شكراً!\n\n📄 أقوم بإعداد حاسبة التمويل المخصصة وتقرير عائد الاستثمار الشامل الآن. سأرسله لك خلال لحظات!\n\nفي هذه الأثناء، هل تريد مناقشة متطلباتك المحددة؟ ما هو هدفك الرئيسي من عقارات دبي؟",
+                    Language.RU: f"✅ Отлично{f', {customer_name}' if customer_name else ''}! Спасибо!\n\n📄 Готовлю ваш персональный калькулятор финансирования и подробный отчёт ROI. Отправлю вам через мгновение!\n\nА пока, хотите обсудить ваши конкретные требования? Какая у вас главная цель с недвижимостью в Дубае?"
                 }
                 
                 # Add interactive prompt for voice/photo/location
@@ -2621,64 +2713,26 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 return phone_response
         
         # Default - show phone request with format
-        phone_request = TRANSLATIONS["phone_request"]
         return BrainResponse(
-            message=phone_request.get(lang, phone_request[Language.EN]),
+            message=phone_request_personalized.get(lang, phone_request_personalized[Language.EN]),
             next_state=ConversationState.HARD_GATE,
             request_contact=True
         )
     
     # ==================== PHONE VALIDATION (Used by HARD_GATE) ====================
     
-    async def _validate_phone_number(self, lang: Language, message: str, lead_updates: Dict) -> BrainResponse:
+    async def _validate_phone_number(self, lang: Language, message: str, lead_updates: Dict, customer_name: str = "") -> BrainResponse:
         """
-        Validate phone number and name with STRICT format enforcement.
-        Expected format: "Full Name – +971XXXXXXXXX"
+        Validate phone number (phone only, name already collected earlier).
+        Expected format: "+971XXXXXXXXX" (international format)
         """
         # DATA INTEGRITY: Sanitize input to prevent SQL injection
-        if not message or len(message) > 150:
+        if not message or len(message) > 30:
             error_msgs = {
-                Language.EN: "⚠️ Please use the correct format:\n\n`Full Name – +971XXXXXXXXX`\n\n**Example:** Arezoo Mohammadzadegan – +971505037158",
-                Language.FA: "⚠️ لطفاً از فرمت صحیح استفاده کنید:\n\n`نام کامل – +971XXXXXXXXX`\n\n**مثال:** عارضو محمدزادگان – +971505037158",
-                Language.AR: "⚠️ الرجاء استخدام التنسيق الصحيح:\n\n`الاسم الكامل – +971XXXXXXXXX`\n\n**مثال:** أريزو محمدزادگان – +971505037158",
-                Language.RU: "⚠️ Пожалуйста, используйте правильный формат:\n\n`Полное Имя – +971XXXXXXXXX`\n\n**Пример:** Arezoo Mohammadzadegan – +971505037158"
-            }
-            return BrainResponse(
-                message=error_msgs.get(lang, error_msgs[Language.EN]),
-                next_state=ConversationState.HARD_GATE,
-                request_contact=True
-            )
-        
-        # Try to parse "Name – Phone" format (allow various dash types: -, –, —, -)
-        # Pattern: text (dash) phone number
-        name_phone_pattern = r'^(.+?)\s*[-–—]\s*(\+?\d[\d\s\-\(\)\.]+)$'
-        match = re.match(name_phone_pattern, message.strip())
-        
-        if not match:
-            # Format doesn't match - provide clear example
-            error_msgs = {
-                Language.EN: "⚠️ **Incorrect format!**\n\nPlease use exactly:\n\n`Your Full Name – +971XXXXXXXXX`\n\n**Example:**\nArezoo Mohammadzadegan – +971505037158\n\n(Make sure to include the dash – between name and number)",
-                Language.FA: "⚠️ **فرمت اشتباه!**\n\nلطفاً دقیقاً از این فرمت استفاده کنید:\n\n`نام کامل شما – +971XXXXXXXXX`\n\n**مثال:**\nعارضو محمدزادگان – +971505037158\n\n(حتماً خط تیره – را بین نام و شماره قرار دهید)",
-                Language.AR: "⚠️ **تنسيق غير صحيح!**\n\nالرجاء استخدام بالضبط:\n\n`اسمك الكامل – +971XXXXXXXXX`\n\n**مثال:**\nأريزو محمدزادگان – +971505037158\n\n(تأكد من إدراج الشرطة – بين الاسم والرقم)",
-                Language.RU: "⚠️ **Неправильный формат!**\n\nИспользуйте точно:\n\n`Ваше Полное Имя – +971XXXXXXXXX`\n\n**Пример:**\nArezoo Mohammadzadegan – +971505037158\n\n(Убедитесь, что поставили тире – между именем и номером)"
-            }
-            return BrainResponse(
-                message=error_msgs.get(lang, error_msgs[Language.EN]),
-                next_state=ConversationState.HARD_GATE,
-                request_contact=True
-            )
-        
-        # Extract name and phone
-        name_raw = match.group(1).strip()
-        phone_raw = match.group(2).strip()
-        
-        # Validate name (at least 2 characters, no numbers)
-        if len(name_raw) < 2 or re.search(r'\d{3,}', name_raw):
-            error_msgs = {
-                Language.EN: "⚠️ Please enter your **full name** (minimum 2 characters, no numbers).\n\n**Example:** Arezoo Mohammadzadegan – +971505037158",
-                Language.FA: "⚠️ لطفاً **نام کامل** خود را وارد کنید (حداقل ۲ کاراکتر، بدون عدد).\n\n**مثال:** عارضو محمدزادگان – +971505037158",
-                Language.AR: "⚠️ الرجاء إدخال **اسمك الكامل** (حد أدنى 2 حرف، بدون أرقام).\n\n**مثال:** أريزو محمدزادگان – +971505037158",
-                Language.RU: "⚠️ Пожалуйста, введите ваше **полное имя** (минимум 2 символа, без цифр).\n\n**Пример:** Arezoo Mohammadzadegan – +971505037158"
+                Language.EN: f"⚠️ Please enter your phone number{f', {customer_name}' if customer_name else ''}:\n\n**Example:** +971505037158",
+                Language.FA: f"⚠️ لطفاً شماره تماستون رو وارد کنید{f'، {customer_name} عزیز' if customer_name else ''}:\n\n**مثال:** +971505037158",
+                Language.AR: f"⚠️ الرجاء إدخال رقم هاتفك{f'، {customer_name}' if customer_name else ''}:\n\n**مثال:** +971505037158",
+                Language.RU: f"⚠️ Пожалуйста, введите номер телефона{f', {customer_name}' if customer_name else ''}:\n\n**Пример:** +971505037158"
             }
             return BrainResponse(
                 message=error_msgs.get(lang, error_msgs[Language.EN]),
@@ -2687,7 +2741,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             )
         
         # Clean phone number: remove spaces, dashes, parentheses, dots
-        cleaned_phone = re.sub(r'[\s\-\(\)\.]', '', phone_raw)
+        cleaned_phone = re.sub(r'[\s\-\(\)\.]', '', message.strip())
         
         # Add + if missing
         if not cleaned_phone.startswith('+'):
@@ -2717,7 +2771,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             if valid:
                 phone_number = cleaned_phone if cleaned_phone.startswith('+') else f'+{cleaned_phone}'
                 lead_updates["phone"] = phone_number
-                lead_updates["name"] = name_raw  # Store full name
+                # Name already collected in COLLECTING_NAME state, no need to collect again
                 lead_updates["status"] = LeadStatus.CONTACTED
                 
                 return BrainResponse(
@@ -2728,10 +2782,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         # Invalid phone - provide example
         error_msgs = {
-            Language.EN: "⚠️ Phone number format is incorrect.\n\nPlease use international format:\n\n**Examples:**\nAli Rezaei – +971501234567 (UAE)\nSara Ahmadi – +989123456789 (Iran)\nMohammed Al-Said – +966501234567 (Saudi)",
-            Language.FA: "⚠️ فرمت شماره تلفن اشتباه است.\n\nلطفاً از فرمت بین‌المللی استفاده کنید:\n\n**مثال‌ها:**\nعلی رضایی – +971501234567 (امارات)\nسارا احمدی – +989123456789 (ایران)\nمحمد السعید – +966501234567 (عربستان)",
-            Language.AR: "⚠️ تنسيق رقم الهاتف غير صحيح.\n\nالرجاء استخدام التنسيق الدولي:\n\n**أمثلة:**\nعلي رضائي – +971501234567 (الإمارات)\nسارة أحمدي – +989123456789 (إيران)\nمحمد السعيد – +966501234567 (السعودية)",
-            Language.RU: "⚠️ Неверный формат номера телефона.\n\nИспользуйте международный формат:\n\n**Примеры:**\nAli Rezaei – +971501234567 (ОАЭ)\nSara Ahmadi – +989123456789 (Иран)\nMohammed Al-Said – +966501234567 (Саудия)"
+            Language.EN: f"⚠️ Phone number format is incorrect{f', {customer_name}' if customer_name else ''}.\n\nPlease use international format:\n\n**Examples:**\n+971501234567 (UAE)\n+989123456789 (Iran)\n+966501234567 (Saudi)",
+            Language.FA: f"⚠️ فرمت شماره تلفن اشتباه است{f'، {customer_name} عزیز' if customer_name else ''}.\n\nلطفاً از فرمت بین‌المللی استفاده کنید:\n\n**مثال‌ها:**\n+971501234567 (امارات)\n+989123456789 (ایران)\n+966501234567 (عربستان)",
+            Language.AR: f"⚠️ تنسيق رقم الهاتف غير صحيح{f'، {customer_name}' if customer_name else ''}.\n\nالرجاء استخدام التنسيق الدولي:\n\n**أمثلة:**\n+971501234567 (الإمارات)\n+989123456789 (إيران)\n+966501234567 (السعودية)",
+            Language.RU: f"⚠️ Неверный формат номера телефона{f', {customer_name}' if customer_name else ''}.\n\nИспользуйте международный формат:\n\n**Примеры:**\n+971501234567 (ОАЭ)\n+989123456789 (Иран)\n+966501234567 (Саудия)"
         }
         return BrainResponse(
             message=error_msgs.get(lang, error_msgs[Language.EN]),
