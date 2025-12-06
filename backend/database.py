@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey, Enum as SQLEnum, JSON, Float, create_engine,
     UniqueConstraint
 )
+from sqlalchemy.types import TypeDecorator, VARCHAR
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
@@ -141,9 +142,6 @@ class ConversationState(str, Enum):
     START = "start"
     LANGUAGE_SELECT = "language_select"
     COLLECTING_NAME = "collecting_name"  # Ask for customer's name after language
-    
-    def __str__(self):
-        return self.value
     
     # Phase 1: Warmup & Profiling (1-2 questions max)
     WARMUP = "warmup"  # Goal: Investment/Living/Residency
@@ -309,7 +307,7 @@ class Lead(Base):
     fomo_messages_sent = Column(Integer, default=0)  # Track FOMO messages sent
     
     # Conversation State (for state machine)
-    conversation_state = Column(SQLEnum(ConversationState), default=ConversationState.START)
+    conversation_state = Column(String(50), default="start")  # Store as string to avoid enum uppercase issue
     conversation_data = Column(JSON, default=dict)  # Temporary data during qualification
     filled_slots = Column(JSON, default=dict)  # Tracks which slots are filled: {goal: True, budget: True, ...}
     pending_slot = Column(String(50), nullable=True)  # Current slot being filled (for context retention)
@@ -326,6 +324,17 @@ class Lead(Base):
     # Relationships
     tenant = relationship("Tenant", back_populates="leads")
     appointments = relationship("Appointment", back_populates="lead", cascade="all, delete-orphan")
+    
+    @property
+    def state(self) -> ConversationState:
+        """Get conversation_state as ConversationState enum."""
+        if isinstance(self.conversation_state, ConversationState):
+            return self.conversation_state
+        # Convert string to enum
+        try:
+            return ConversationState(self.conversation_state)
+        except (ValueError, KeyError):
+            return ConversationState.START
 
 
 class AgentAvailability(Base):
@@ -633,6 +642,9 @@ async def update_lead(lead_id: int, **kwargs) -> Lead:
         if lead:
             for key, value in kwargs.items():
                 if hasattr(lead, key):
+                    # Convert ConversationState enum to lowercase string value
+                    if key == 'conversation_state' and isinstance(value, ConversationState):
+                        value = value.value
                     setattr(lead, key, value)
             lead.updated_at = datetime.utcnow()
             lead.last_interaction = datetime.utcnow()
