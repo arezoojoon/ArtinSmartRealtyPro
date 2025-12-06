@@ -142,6 +142,9 @@ class ConversationState(str, Enum):
     LANGUAGE_SELECT = "language_select"
     COLLECTING_NAME = "collecting_name"  # Ask for customer's name after language
     
+    def __str__(self):
+        return self.value
+    
     # Phase 1: Warmup & Profiling (1-2 questions max)
     WARMUP = "warmup"  # Goal: Investment/Living/Residency
     
