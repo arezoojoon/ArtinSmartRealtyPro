@@ -1153,7 +1153,8 @@ def generate_wolf_report_fa(chat_count: int, total_leads: int, hot_leads: list, 
             
             hot_leads_text += f"{i}. [{name}]({wa_link}) - بودجه: {budget}\n"
     else:
-        hot_leads_text = "   (هنوز لید داغی نیست - در حال ساخت خط...)"\n    
+        hot_leads_text = "   (هنوز لید داغی نیست - در حال ساخت خط...)"
+    
     return f"""☀️ **گزارش صبحگاهی گرگ فروش** ☕️
 
 📊 **آمار دیشب:** {chat_count} مکالمه | {total_leads} واجد شرایط
