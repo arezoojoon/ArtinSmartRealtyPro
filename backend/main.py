@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 # Setup logger
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header, UploadFile, File, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -1366,7 +1366,7 @@ async def delete_schedule_slot(
 @app.post("/api/tenants/{tenant_id}/schedule")
 async def create_schedule_slots(
     tenant_id: int,
-    schedule_request: ScheduleSlotsRequest,
+    schedule_request: ScheduleSlotsRequest = Body(...),
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
