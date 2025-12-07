@@ -1191,7 +1191,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             YOUR GOAL: GET THE MEETING OR PHONE NUMBER. EVERYTHING ELSE IS SECONDARY.
             
             🧠 WOLF CLOSER RULES (FOLLOW STRICTLY):
-            1. ALWAYS respond in {lead.language.value.upper()} language
+            1. ALWAYS respond in {lead.language.upper() if isinstance(lead.language, str) else lead.language.value.upper()} language
             
             2. **NEVER end with a statement.** ALWAYS end with a QUESTION or CALL TO ACTION.
                - ❌ Bad: "The price is 2M AED."
