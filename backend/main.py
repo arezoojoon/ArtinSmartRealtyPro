@@ -1970,6 +1970,7 @@ async def upload_property_pdf(
     tenant_id: int,
     file: UploadFile = File(...),
     extract_text: bool = Query(False, description="Extract text from PDF for auto-fill"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1980,25 +1981,35 @@ async def upload_property_pdf(
     - file_url: URL to access the PDF
     - extracted_data: Dict with parsed property information (if extract_text=True)
     """
+    logger.info(f"PDF upload request: tenant_id={tenant_id}, filename={file.filename}, extract_text={extract_text}")
+    
     # Verify tenant exists
     result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
     tenant = result.scalar_one_or_none()
     if not tenant:
+        logger.error(f"Tenant {tenant_id} not found for PDF upload")
         raise HTTPException(status_code=404, detail="Tenant not found")
     
     # Validate file type
     if not file.content_type or file.content_type != 'application/pdf':
+        logger.error(f"Invalid file type: {file.content_type}")
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file type. Expected PDF, got {file.content_type}"
         )
     
     # Read file data
-    file_data = await file.read()
+    try:
+        file_data = await file.read()
+        logger.info(f"PDF file read successfully: {len(file_data)} bytes")
+    except Exception as e:
+        logger.error(f"Failed to read PDF file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
     
     # Validate file size (max 10MB for PDFs)
     file_size_mb = len(file_data) / 1024 / 1024
     if file_size_mb > 10:
+        logger.error(f"PDF file too large: {file_size_mb:.2f}MB")
         raise HTTPException(
             status_code=400,
             detail=f"File size ({file_size_mb:.2f}MB) exceeds maximum allowed (10MB)"
@@ -2012,12 +2023,18 @@ async def upload_property_pdf(
     unique_filename = f"{tenant_id}_{timestamp}_{secrets.token_hex(4)}_{safe_filename}"
     
     # Save PDF to upload directory
-    pdf_dir = os.path.join(UPLOAD_DIR, "pdfs")
-    os.makedirs(pdf_dir, exist_ok=True)
-    file_path = os.path.join(pdf_dir, unique_filename)
-    
-    with open(file_path, "wb") as f:
-        f.write(file_data)
+    try:
+        pdf_dir = os.path.join(UPLOAD_DIR, "pdfs")
+        os.makedirs(pdf_dir, exist_ok=True)
+        file_path = os.path.join(pdf_dir, unique_filename)
+        
+        with open(file_path, "wb") as f:
+            f.write(file_data)
+        
+        logger.info(f"PDF saved successfully: {file_path}")
+    except Exception as e:
+        logger.error(f"Failed to save PDF file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
     
     # Generate URL
     file_url = f"/uploads/pdfs/{unique_filename}"
@@ -2034,6 +2051,7 @@ async def upload_property_pdf(
     if extract_text:
         try:
             import PyPDF2
+            logger.info(f"Extracting text from PDF: {file_path}")
             
             # Extract text from PDF
             with open(file_path, "rb") as pdf_file:
@@ -2041,6 +2059,8 @@ async def upload_property_pdf(
                 text = ""
                 for page in pdf_reader.pages:
                     text += page.extract_text() + "\n"
+            
+            logger.info(f"Extracted {len(text)} characters from PDF")
             
             # Basic extraction patterns (can be enhanced with AI later)
             extracted_data = {}
@@ -2076,10 +2096,11 @@ async def upload_property_pdf(
             response["extracted_data"] = extracted_data
             response["extracted_text_preview"] = text[:500] + "..." if len(text) > 500 else text
             
-        except ImportError:
+        except ImportError as e:
+            logger.warning(f"PyPDF2 not installed: {e}")
             response["warning"] = "PyPDF2 not installed. Text extraction unavailable. Install with: pip install PyPDF2"
         except Exception as e:
-            logger.warning(f"PDF text extraction failed: {e}")
+            logger.error(f"PDF text extraction failed: {e}", exc_info=True)
             response["warning"] = f"Text extraction failed: {str(e)}"
     
     return response
