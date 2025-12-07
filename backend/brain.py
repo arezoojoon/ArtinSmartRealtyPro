@@ -1199,9 +1199,9 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             ===== LEAD INFORMATION (DO NOT FORGET THIS) =====
             Lead Name: {lead.name or 'Not provided yet'}
             Phone Number: {lead.phone or 'Not provided yet - CRITICAL: If they gave phone/contact, acknowledge it!'}
-            Language: {lead.language.value if lead.language else 'EN'}
-            Current State: {lead.conversation_state.value if lead.conversation_state else 'START'}
-            Purpose: {lead.purpose.value if lead.purpose else 'Unknown'}
+            Language: {lead.language if lead.language else 'EN'}
+            Current State: {lead.conversation_state.value if hasattr(lead.conversation_state, 'value') else lead.conversation_state or 'START'}
+            Purpose: {lead.purpose.value if hasattr(lead.purpose, 'value') else lead.purpose or 'Unknown'}
             Budget: {lead.budget_min or 'Not set'} - {lead.budget_max or 'Not set'} AED
             Location Preference: {lead.location or 'Any'}
             Bedrooms: {lead.bedrooms or 'Any'}
