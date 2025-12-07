@@ -1361,6 +1361,27 @@ async def create_schedule_slots(
     
     await verify_tenant_access(credentials, tenant_id, db)
     
+    # Validate all slots before deletion
+    from datetime import time as dt_time
+    for i, slot_data in enumerate(schedule_request.slots):
+        try:
+            # Validate time format
+            start_hour, start_min = map(int, slot_data.start_time.split(':'))
+            end_hour, end_min = map(int, slot_data.end_time.split(':'))
+            
+            if start_hour < 0 or start_hour > 23 or start_min < 0 or start_min > 59:
+                raise ValueError("Invalid start time")
+            if end_hour < 0 or end_hour > 23 or end_min < 0 or end_min > 59:
+                raise ValueError("Invalid end time")
+            
+            # Validate day of week
+            DayOfWeek(slot_data.day_of_week.lower())
+        except (ValueError, KeyError) as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid slot at index {i}: {str(e)}. Ensure day_of_week is valid (monday-sunday) and times are in HH:MM format."
+            )
+    
     # Delete all existing slots (bookings are in Appointment table, so safe to delete templates)
     await db.execute(
         delete(AgentAvailability).where(
@@ -1372,27 +1393,32 @@ async def create_schedule_slots(
     created_slots = []
     
     for slot_data in schedule_request.slots:
-        # Parse time strings
-        from datetime import time as dt_time
-        start_hour, start_min = map(int, slot_data.start_time.split(':'))
-        end_hour, end_min = map(int, slot_data.end_time.split(':'))
-        
-        # Convert string day to enum
-        day_enum = DayOfWeek(slot_data.day_of_week.lower())
-        
-        new_slot = AgentAvailability(
-            tenant_id=tenant_id,
-            day_of_week=day_enum,
-            start_time=dt_time(start_hour, start_min),
-            end_time=dt_time(end_hour, end_min),
-            appointment_type=AppointmentType.VIEWING,  # Default to viewing
-            is_booked=False  # This field is deprecated but kept for backward compatibility
-        )
-        db.add(new_slot)
-        created_slots.append(new_slot)
+        try:
+            # Parse time strings
+            start_hour, start_min = map(int, slot_data.start_time.split(':'))
+            end_hour, end_min = map(int, slot_data.end_time.split(':'))
+            
+            # Convert string day to enum
+            day_enum = DayOfWeek(slot_data.day_of_week.lower())
+            
+            new_slot = AgentAvailability(
+                tenant_id=tenant_id,
+                day_of_week=day_enum,
+                start_time=dt_time(start_hour, start_min),
+                end_time=dt_time(end_hour, end_min),
+                appointment_type=AppointmentType.VIEWING,  # Default to viewing
+                is_booked=False  # This field is deprecated but kept for backward compatibility
+            )
+            db.add(new_slot)
+            created_slots.append(new_slot)
+        except Exception as e:
+            logger.error(f"❌ Error creating slot: {str(e)}")
+            await db.rollback()
+            raise HTTPException(status_code=400, detail=f"Failed to create slot: {str(e)}")
     
     await db.commit()
     
+    logger.info(f"✅ Successfully created {len(created_slots)} schedule slots for tenant {tenant_id}")
     return {
         "status": "success",
         "created_count": len(created_slots),
@@ -1766,18 +1792,38 @@ async def create_property(
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="Tenant not found")
         
+        # Extract data and handle enum fields
+        property_dict = property_data.model_dump()
+        
+        # Ensure enums are properly converted to lowercase strings
+        if 'property_type' in property_dict and property_dict['property_type']:
+            if isinstance(property_dict['property_type'], PropertyType):
+                property_dict['property_type'] = property_dict['property_type'].value.lower()
+            elif isinstance(property_dict['property_type'], str):
+                property_dict['property_type'] = property_dict['property_type'].lower()
+        
+        if 'transaction_type' in property_dict and property_dict['transaction_type']:
+            if isinstance(property_dict['transaction_type'], TransactionType):
+                property_dict['transaction_type'] = property_dict['transaction_type'].value.lower()
+            elif isinstance(property_dict['transaction_type'], str):
+                property_dict['transaction_type'] = property_dict['transaction_type'].lower()
+        
         property_obj = TenantProperty(
             tenant_id=tenant_id,
-            **property_data.model_dump()
+            **property_dict
         )
         db.add(property_obj)
         await db.commit()
         await db.refresh(property_obj)
         
+        logger.info(f"✅ Property created successfully for tenant {tenant_id}: {property_obj.id}")
         return property_obj
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Failed to create property: {str(e)}", exc_info=True)
-        raise
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=f"Failed to create property: {str(e)}")
 
 
 @app.put("/api/tenants/{tenant_id}/properties/{property_id}", response_model=TenantPropertyResponse)
