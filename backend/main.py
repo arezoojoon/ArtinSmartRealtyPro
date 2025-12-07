@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, or_, delete
@@ -265,9 +265,21 @@ class LeadUpdate(BaseModel):
 
 
 class ScheduleSlotCreate(BaseModel):
-    day_of_week: DayOfWeek
+    day_of_week: str  # Accept string, will convert to enum in endpoint
     start_time: str = Field(..., description="Time in HH:MM format")
     end_time: str = Field(..., description="Time in HH:MM format")
+    
+    @field_validator('day_of_week')
+    @classmethod
+    def validate_day_of_week(cls, v: str) -> str:
+        """Validate and normalize day of week to lowercase."""
+        if isinstance(v, str):
+            v = v.lower()
+        # Verify it's a valid day
+        valid_days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        if v not in valid_days:
+            raise ValueError(f'day_of_week must be one of: {", ".join(valid_days)}')
+        return v
 
 
 class ScheduleSlotsRequest(BaseModel):
@@ -1346,9 +1358,12 @@ async def create_schedule_slots(
         start_hour, start_min = map(int, slot_data.start_time.split(':'))
         end_hour, end_min = map(int, slot_data.end_time.split(':'))
         
+        # Convert string day to enum
+        day_enum = DayOfWeek(slot_data.day_of_week.lower())
+        
         new_slot = AgentAvailability(
             tenant_id=tenant_id,
-            day_of_week=slot_data.day_of_week,
+            day_of_week=day_enum,
             start_time=dt_time(start_hour, start_min),
             end_time=dt_time(end_hour, end_min),
             appointment_type=AppointmentType.VIEWING,  # Default to viewing
