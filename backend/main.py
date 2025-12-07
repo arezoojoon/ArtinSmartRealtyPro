@@ -1149,63 +1149,6 @@ async def update_lead_endpoint(
 
 # ==================== SCHEDULING ENDPOINTS ====================
 
-@app.post("/api/tenants/{tenant_id}/schedule", response_model=ScheduleSlotResponse)
-async def create_schedule_slot(
-    tenant_id: int,
-    slot_data: ScheduleSlotCreate,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-):
-    """Create a new availability slot for an agent. Requires authentication."""
-    await verify_tenant_access(credentials, tenant_id, db)
-    
-    # Parse times
-    try:
-        start = datetime.strptime(slot_data.start_time, "%H:%M").time()
-        end = datetime.strptime(slot_data.end_time, "%H:%M").time()
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid time format. Use HH:MM")
-    
-    if start >= end:
-        raise HTTPException(status_code=400, detail="Start time must be before end time")
-    
-    # Check for overlapping slots
-    result = await db.execute(
-        select(AgentAvailability).where(
-            AgentAvailability.tenant_id == tenant_id,
-            AgentAvailability.day_of_week == slot_data.day_of_week
-        )
-    )
-    existing_slots = result.scalars().all()
-    
-    for existing in existing_slots:
-        # Check for overlap
-        if not (end <= existing.start_time or start >= existing.end_time):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Slot overlaps with existing slot: {existing.start_time} - {existing.end_time}"
-            )
-    
-    # Create slot
-    slot = AgentAvailability(
-        tenant_id=tenant_id,
-        day_of_week=slot_data.day_of_week,
-        start_time=start,
-        end_time=end
-    )
-    db.add(slot)
-    await db.commit()
-    await db.refresh(slot)
-    
-    return ScheduleSlotResponse(
-        id=slot.id,
-        day_of_week=slot.day_of_week,
-        start_time=slot.start_time.strftime("%H:%M"),
-        end_time=slot.end_time.strftime("%H:%M"),
-        is_booked=slot.is_booked
-    )
-
-
 @app.get("/api/tenants/{tenant_id}/schedule", response_model=List[ScheduleSlotResponse])
 async def list_schedule_slots(
     tenant_id: int,
