@@ -406,7 +406,7 @@ const LeadTable = ({ leads, onExport }) => (
 
 const Dashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('dashboard');
-    const tenantId = user?.tenant_id || 1;
+    const tenantId = user?.tenant_id || parseInt(localStorage.getItem('tenantId')) || 1;
     const token = user?.token || localStorage.getItem('token');
     const [stats, setStats] = useState(null);
     const [leads, setLeads] = useState([]);

@@ -378,6 +378,7 @@ class TenantPropertyResponse(BaseModel):
     id: int
     name: str
     property_type: PropertyType
+    transaction_type: Optional[TransactionType] = None
     location: str
     price: Optional[float]
     bedrooms: Optional[int]
@@ -396,6 +397,15 @@ class TenantPropertyResponse(BaseModel):
 
     class Config:
         from_attributes = True
+    
+    @field_serializer('property_type', 'transaction_type')
+    def serialize_enums_lowercase(self, value: Optional[Enum]) -> Optional[str]:
+        """Convert enum values to lowercase strings for database compatibility."""
+        if value is None:
+            return None
+        if isinstance(value, Enum):
+            return value.value.lower() if hasattr(value, 'value') else value.name.lower()
+        return str(value).lower() if value else None
 
 
 class TenantProjectCreate(BaseModel):
@@ -2019,7 +2029,7 @@ async def upload_property_pdf(
     tenant_id: int,
     file: UploadFile = File(...),
     extract_text: bool = Query(False, description="Extract text from PDF for auto-fill"),
-    current_user: dict = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -2030,6 +2040,9 @@ async def upload_property_pdf(
     - file_url: URL to access the PDF
     - extracted_data: Dict with parsed property information (if extract_text=True)
     """
+    # Verify tenant access
+    await verify_tenant_access(credentials, tenant_id, db)
+    
     try:
         logger.info(f"📄 PDF Upload: tenant_id={tenant_id}, filename={file.filename}, content_type={file.content_type}")
         logger.info(f"📄 Extract text flag: {extract_text}")
