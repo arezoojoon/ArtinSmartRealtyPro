@@ -2045,108 +2045,108 @@ async def upload_property_pdf(
         except Exception as e:
             logger.error(f"❌ Failed to read PDF file: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
-    
-    # Validate file size (max 10MB for PDFs)
-    file_size_mb = len(file_data) / 1024 / 1024
-    if file_size_mb > 10:
-        logger.error(f"PDF file too large: {file_size_mb:.2f}MB")
-        raise HTTPException(
-            status_code=400,
-            detail=f"File size ({file_size_mb:.2f}MB) exceeds maximum allowed (10MB)"
-        )
-    
-    # Generate safe filename
-    import re
-    import secrets
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename or 'property')
-    unique_filename = f"{tenant_id}_{timestamp}_{secrets.token_hex(4)}_{safe_filename}"
-    
-    # Save PDF to upload directory
-    try:
-        pdf_dir = os.path.join(UPLOAD_DIR, "pdfs")
-        os.makedirs(pdf_dir, exist_ok=True)
-        file_path = os.path.join(pdf_dir, unique_filename)
         
-        with open(file_path, "wb") as f:
-            f.write(file_data)
+        # Validate file size (max 10MB for PDFs)
+        file_size_mb = len(file_data) / 1024 / 1024
+        if file_size_mb > 10:
+            logger.error(f"PDF file too large: {file_size_mb:.2f}MB")
+            raise HTTPException(
+                status_code=400,
+                detail=f"File size ({file_size_mb:.2f}MB) exceeds maximum allowed (10MB)"
+            )
         
-        logger.info(f"PDF saved successfully: {file_path}")
-    except Exception as e:
-        logger.error(f"Failed to save PDF file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
-    
-    # Generate URL
-    file_url = f"/uploads/pdfs/{unique_filename}"
-    
-    response = {
-        "status": "success",
-        "message": "PDF uploaded successfully",
-        "file_url": file_url,
-        "filename": unique_filename,
-        "size_mb": round(file_size_mb, 2)
-    }
-    
-    # Optional: Extract text from PDF for auto-fill
-    if extract_text:
+        # Generate safe filename
+        import re
+        import secrets
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename or 'property')
+        unique_filename = f"{tenant_id}_{timestamp}_{secrets.token_hex(4)}_{safe_filename}"
+        
+        # Save PDF to upload directory
         try:
-            import PyPDF2
-            logger.info(f"Extracting text from PDF: {file_path}")
+            pdf_dir = os.path.join(UPLOAD_DIR, "pdfs")
+            os.makedirs(pdf_dir, exist_ok=True)
+            file_path = os.path.join(pdf_dir, unique_filename)
             
-            # Extract text from PDF
-            with open(file_path, "rb") as pdf_file:
-                pdf_reader = PyPDF2.PdfReader(pdf_file)
-                text = ""
-                for page in pdf_reader.pages:
-                    text += page.extract_text() + "\n"
+            with open(file_path, "wb") as f:
+                f.write(file_data)
             
-            logger.info(f"Extracted {len(text)} characters from PDF")
-            
-            # Basic extraction patterns (can be enhanced with AI later)
-            extracted_data = {}
-            
-            # Extract price (AED amounts)
-            price_match = re.search(r'AED\s*([\d,]+)', text, re.IGNORECASE)
-            if price_match:
-                price_str = price_match.group(1).replace(',', '')
-                extracted_data["price"] = float(price_str)
-            
-            # Extract bedrooms
-            bed_match = re.search(r'(\d+)\s*(bed|bedroom|BR)', text, re.IGNORECASE)
-            if bed_match:
-                extracted_data["bedrooms"] = int(bed_match.group(1))
-            
-            # Extract area (sqft)
-            area_match = re.search(r'([\d,]+)\s*(sq\.?\s*ft|sqft|square feet)', text, re.IGNORECASE)
-            if area_match:
-                area_str = area_match.group(1).replace(',', '')
-                extracted_data["area_sqft"] = float(area_str)
-            
-            # Extract location mentions (Dubai areas)
-            dubai_areas = [
-                "Downtown Dubai", "Dubai Marina", "Palm Jumeirah", "JBR", "Business Bay",
-                "JLT", "Jumeirah Lake Towers", "Arabian Ranches", "Dubai Hills",
-                "City Walk", "DIFC", "Burj Khalifa", "Emirates Hills", "Meydan"
-            ]
-            for area in dubai_areas:
-                if area.lower() in text.lower():
-                    extracted_data["location"] = area
-                    break
-            
-            response["extracted_data"] = extracted_data
-            response["extracted_text_preview"] = text[:500] + "..." if len(text) > 500 else text
-            logger.info(f"✅ Text extraction successful: {len(extracted_data)} fields extracted")
-            
-        except ImportError as e:
-            logger.warning(f"⚠️ PyPDF2 not installed: {e}")
-            response["warning"] = "PyPDF2 not installed. Text extraction unavailable. Install with: pip install PyPDF2"
+            logger.info(f"PDF saved successfully: {file_path}")
         except Exception as e:
-            logger.error(f"❌ PDF text extraction failed: {e}", exc_info=True)
-            response["warning"] = f"Text extraction failed: {str(e)}"
-    
-    logger.info(f"✅ PDF upload completed successfully for tenant {tenant_id}")
-    return response
-    
+            logger.error(f"Failed to save PDF file: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+        
+        # Generate URL
+        file_url = f"/uploads/pdfs/{unique_filename}"
+        
+        response = {
+            "status": "success",
+            "message": "PDF uploaded successfully",
+            "file_url": file_url,
+            "filename": unique_filename,
+            "size_mb": round(file_size_mb, 2)
+        }
+        
+        # Optional: Extract text from PDF for auto-fill
+        if extract_text:
+            try:
+                import PyPDF2
+                logger.info(f"Extracting text from PDF: {file_path}")
+                
+                # Extract text from PDF
+                with open(file_path, "rb") as pdf_file:
+                    pdf_reader = PyPDF2.PdfReader(pdf_file)
+                    text = ""
+                    for page in pdf_reader.pages:
+                        text += page.extract_text() + "\n"
+                
+                logger.info(f"Extracted {len(text)} characters from PDF")
+                
+                # Basic extraction patterns (can be enhanced with AI later)
+                extracted_data = {}
+                
+                # Extract price (AED amounts)
+                price_match = re.search(r'AED\s*([\d,]+)', text, re.IGNORECASE)
+                if price_match:
+                    price_str = price_match.group(1).replace(',', '')
+                    extracted_data["price"] = float(price_str)
+                
+                # Extract bedrooms
+                bed_match = re.search(r'(\d+)\s*(bed|bedroom|BR)', text, re.IGNORECASE)
+                if bed_match:
+                    extracted_data["bedrooms"] = int(bed_match.group(1))
+                
+                # Extract area (sqft)
+                area_match = re.search(r'([\d,]+)\s*(sq\.?\s*ft|sqft|square feet)', text, re.IGNORECASE)
+                if area_match:
+                    area_str = area_match.group(1).replace(',', '')
+                    extracted_data["area_sqft"] = float(area_str)
+                
+                # Extract location mentions (Dubai areas)
+                dubai_areas = [
+                    "Downtown Dubai", "Dubai Marina", "Palm Jumeirah", "JBR", "Business Bay",
+                    "JLT", "Jumeirah Lake Towers", "Arabian Ranches", "Dubai Hills",
+                    "City Walk", "DIFC", "Burj Khalifa", "Emirates Hills", "Meydan"
+                ]
+                for area in dubai_areas:
+                    if area.lower() in text.lower():
+                        extracted_data["location"] = area
+                        break
+                
+                response["extracted_data"] = extracted_data
+                response["extracted_text_preview"] = text[:500] + "..." if len(text) > 500 else text
+                logger.info(f"✅ Text extraction successful: {len(extracted_data)} fields extracted")
+                
+            except ImportError as e:
+                logger.warning(f"⚠️ PyPDF2 not installed: {e}")
+                response["warning"] = "PyPDF2 not installed. Text extraction unavailable. Install with: pip install PyPDF2"
+            except Exception as e:
+                logger.error(f"❌ PDF text extraction failed: {e}", exc_info=True)
+                response["warning"] = f"Text extraction failed: {str(e)}"
+        
+        logger.info(f"✅ PDF upload completed successfully for tenant {tenant_id}")
+        return response
+        
     except Exception as outer_error:
         logger.error(f"❌ PDF upload failed with unexpected error: {outer_error}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(outer_error)}")
