@@ -155,14 +155,24 @@ const Settings = ({ tenantId, token }) => {
         setSchedule([...schedule, {
             day_of_week: 'monday',
             start_time: '09:00',
-            end_time: '10:00',
-            appointment_type: 'viewing',
-            is_booked: false
+            end_time: '10:00'
         }]);
     };
 
     const removeTimeSlot = (index) => {
         setSchedule(schedule.filter((_, i) => i !== index));
+    };
+
+    const generateTimeOptions = () => {
+        const options = [];
+        for (let h = 0; h < 24; h++) {
+            for (let m = 0; m < 60; m += 30) {
+                const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                const label = `${String(h % 12 || 12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+                options.push({ value: time, label });
+            }
+        }
+        return options;
     };
 
     const updateTimeSlot = (index, field, value) => {
@@ -176,21 +186,36 @@ const Settings = ({ tenantId, token }) => {
             setSaving(true);
             setError(null);
             
+            // Clean slots - remove appointment_type field that backend doesn't accept
+            const cleanedSlots = schedule.map(({ day_of_week, start_time, end_time }) => ({
+                day_of_week,
+                start_time,
+                end_time
+            }));
+            
             const response = await fetch(`${API_BASE_URL}/api/tenants/${tenantId}/schedule`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 },
-                body: JSON.stringify({ slots: schedule })
+                body: JSON.stringify({ slots: cleanedSlots })
             });
 
-            if (!response.ok) throw new Error('Failed to save schedule');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Failed to save schedule');
+            }
             
-            setSuccess('Schedule saved successfully!');
+            setSuccess('✅ Schedule saved successfully!');
+            setTimeout(() => setSuccess(null), 3000);
+            
+            // Clear and refetch to prevent duplicates
+            setSchedule([]);
             await fetchSchedule();
         } catch (err) {
             setError(err.message);
+            setTimeout(() => setError(null), 5000);
         } finally {
             setSaving(false);
         }
@@ -215,6 +240,24 @@ const Settings = ({ tenantId, token }) => {
 
     return (
         <div className="space-y-6">
+            {/* Success/Error Notifications */}
+            {success && (
+                <div className="fixed top-4 right-4 z-50 glass-card border-2 border-green-500/50 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+                    <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                        <Check className="text-green-400" size={20} />
+                    </div>
+                    <p className="text-white font-medium">{success}</p>
+                </div>
+            )}
+            {error && (
+                <div className="fixed top-4 right-4 z-50 glass-card border-2 border-red-500/50 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+                    <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                        <span className="text-red-400 text-xl">⚠</span>
+                    </div>
+                    <p className="text-white font-medium">{error}</p>
+                </div>
+            )}
+            
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -665,30 +708,26 @@ const Settings = ({ tenantId, token }) => {
                                     <option value="sunday">Sunday</option>
                                 </select>
 
-                                <input
-                                    type="time"
+                                <select
                                     value={slot.start_time}
                                     onChange={(e) => updateTimeSlot(index, 'start_time', e.target.value)}
                                     className="bg-navy-900 text-white rounded px-3 py-2 border border-white/10"
-                                />
+                                >
+                                    {generateTimeOptions().map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
 
-                                <span className="text-gray-400">to</span>
+                                <span className="text-gray-400">→</span>
 
-                                <input
-                                    type="time"
+                                <select
                                     value={slot.end_time}
                                     onChange={(e) => updateTimeSlot(index, 'end_time', e.target.value)}
                                     className="bg-navy-900 text-white rounded px-3 py-2 border border-white/10"
-                                />
-
-                                <select
-                                    value={slot.appointment_type || 'viewing'}
-                                    onChange={(e) => updateTimeSlot(index, 'appointment_type', e.target.value)}
-                                    className="bg-navy-900 text-white rounded px-3 py-2 border border-white/10"
                                 >
-                                    <option value="viewing">Viewing</option>
-                                    <option value="online">Online</option>
-                                    <option value="office">Office</option>
+                                    {generateTimeOptions().map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
                                 </select>
 
                                 <button
@@ -700,6 +739,31 @@ const Settings = ({ tenantId, token }) => {
                                 </button>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {schedule.length > 0 && (
+                    <div className="mt-6 flex items-center gap-4">
+                        <button
+                            onClick={saveSchedule}
+                            disabled={saving}
+                            className="flex items-center gap-2 bg-gold-500 hover:bg-gold-600 text-navy-900 px-6 py-3 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {saving ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-navy-900 border-t-transparent rounded-full animate-spin"></div>
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={18} />
+                                    Save Schedule
+                                </>
+                            )}
+                        </button>
+                        <p className="text-gray-400 text-sm">
+                            {schedule.length} time slot{schedule.length !== 1 ? 's' : ''} configured
+                        </p>
                     </div>
                 )}
 
