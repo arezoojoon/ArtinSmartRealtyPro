@@ -1970,7 +1970,7 @@ async def upload_property_pdf(
     tenant_id: int,
     file: UploadFile = File(...),
     extract_text: bool = Query(False, description="Extract text from PDF for auto-fill"),
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
