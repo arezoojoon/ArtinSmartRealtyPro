@@ -270,6 +270,11 @@ class ScheduleSlotCreate(BaseModel):
     end_time: str = Field(..., description="Time in HH:MM format")
 
 
+class ScheduleSlotsRequest(BaseModel):
+    """Request body for creating multiple schedule slots."""
+    slots: List[ScheduleSlotCreate]
+
+
 class ScheduleSlotResponse(BaseModel):
     id: int
     day_of_week: DayOfWeek
@@ -1314,7 +1319,7 @@ async def delete_schedule_slot(
 @app.post("/api/tenants/{tenant_id}/schedule")
 async def create_schedule_slots(
     tenant_id: int,
-    slots: dict,
+    request: ScheduleSlotsRequest,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1333,21 +1338,20 @@ async def create_schedule_slots(
     )
     
     # Create new slots
-    slot_list = slots.get("slots", [])
     created_slots = []
     
-    for slot_data in slot_list:
+    for slot_data in request.slots:
         # Parse time strings
         from datetime import time as dt_time
-        start_hour, start_min = map(int, slot_data['start_time'].split(':'))
-        end_hour, end_min = map(int, slot_data['end_time'].split(':'))
+        start_hour, start_min = map(int, slot_data.start_time.split(':'))
+        end_hour, end_min = map(int, slot_data.end_time.split(':'))
         
         new_slot = AgentAvailability(
             tenant_id=tenant_id,
-            day_of_week=DayOfWeek[slot_data['day_of_week'].upper()],
+            day_of_week=slot_data.day_of_week,
             start_time=dt_time(start_hour, start_min),
             end_time=dt_time(end_hour, end_min),
-            appointment_type=AppointmentType[slot_data.get('appointment_type', 'viewing').upper()],
+            appointment_type=AppointmentType.VIEWING,  # Default to viewing
             is_booked=False  # This field is deprecated but kept for backward compatibility
         )
         db.add(new_slot)
