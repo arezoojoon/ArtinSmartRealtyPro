@@ -210,9 +210,8 @@ const Settings = ({ tenantId, token }) => {
             setSuccess('✅ Schedule saved successfully!');
             setTimeout(() => setSuccess(null), 3000);
             
-            // Clear and refetch to prevent duplicates
-            setSchedule([]);
-            await fetchSchedule();
+            // Don't refetch - backend replaces all slots, so our local state is already correct
+            // Refetching would cause duplicates because of async timing
         } catch (err) {
             setError(err.message);
             setTimeout(() => setError(null), 5000);
