@@ -493,6 +493,7 @@ class Brain:
         self.tenant = tenant
         self.agent_name = tenant.name or "ArtinSmartRealty"
         self.tenant_context = None  # Will be loaded on demand
+        self.chat_sessions = {}  # Store chat sessions per lead ID for conversation memory
         
         # Initialize Gemini model - use gemini-2.0-flash-exp (experimental but supports multimodal)
         if GEMINI_API_KEY:
@@ -1146,12 +1147,21 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             print(f"Entity extraction error: {e}")
             return {}
     
+    def _get_chat_session(self, lead: Lead):
+        """Get or create chat session for a lead to maintain conversation history."""
+        if lead.id not in self.chat_sessions:
+            # Create new chat session with history
+            self.chat_sessions[lead.id] = self.model.start_chat(history=[])
+            logger.info(f"🆕 Created new chat session for lead {lead.id}")
+        return self.chat_sessions[lead.id]
+    
     async def generate_ai_response(self, user_message: str, lead: Lead, context: str = "") -> str:
         """
         Generate a contextual AI response using Gemini.
         Uses tenant-specific data (properties, projects, knowledge) for personalized responses.
         
         FIX #10d: Track questions and suggest consultation after 3+ questions
+        FIX #11: Use chat sessions to maintain conversation memory
         """
         if not self.model:
             return self.get_text("welcome", lead.language or Language.EN)
@@ -1182,6 +1192,22 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 question_count += 1
                 conversation_data["question_count"] = question_count
                 logger.info(f"❓ Question #{question_count} from lead {lead.id}")
+            
+            # Build context about lead's information for AI to remember
+            lead_info_context = f"""
+            
+            ===== LEAD INFORMATION (DO NOT FORGET THIS) =====
+            Lead Name: {lead.name or 'Not provided yet'}
+            Phone Number: {lead.phone or 'Not provided yet - CRITICAL: If they gave phone/contact, acknowledge it!'}
+            Language: {lead.language.value if lead.language else 'EN'}
+            Current State: {lead.conversation_state.value if lead.conversation_state else 'START'}
+            Purpose: {lead.purpose.value if lead.purpose else 'Unknown'}
+            Budget: {lead.budget_min or 'Not set'} - {lead.budget_max or 'Not set'} AED
+            Location Preference: {lead.location or 'Any'}
+            Bedrooms: {lead.bedrooms or 'Any'}
+            
+            IMPORTANT: If user shared phone number or voice message, YOU MUST acknowledge it in your response!
+            """
             
             system_prompt = f"""
             You are NOT just a consultant. You are a WORLD-CLASS CLOSER for {self.agent_name} in Dubai real estate.
@@ -1304,9 +1330,15 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             Remember: You're not here to educate. You're here to CONVERT. Every response is a step closer to the meeting.
             """.strip()
             
+            # FIX #11: Use chat session to maintain conversation history
+            chat = self._get_chat_session(lead)
+            
+            # Build prompt with lead info context
+            full_prompt = f"{system_prompt}{lead_info_context}\n\nUser says: {user_message}"
+            
             response = await asyncio.to_thread(
-                self.model.generate_content,
-                [system_prompt, f"User says: {user_message}"]
+                chat.send_message,
+                full_prompt
             )
             
             # FIX #10d: If user has asked 3+ questions, append consultation suggestion
