@@ -21,13 +21,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, Field, EmailStr, field_validator, field_serializer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, or_, delete
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import openpyxl
+from enum import Enum
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 import jwt
@@ -247,6 +248,15 @@ class LeadResponse(BaseModel):
 
     class Config:
         from_attributes = True
+    
+    @field_serializer('language', 'conversation_state')
+    def serialize_enums_lowercase(self, value: Optional[Enum]) -> Optional[str]:
+        """Convert enum values to lowercase strings for database compatibility."""
+        if value is None:
+            return None
+        if isinstance(value, Enum):
+            return value.value.lower() if hasattr(value, 'value') else value.name.lower()
+        return str(value).lower() if value else None
 
 
 class LeadUpdate(BaseModel):
