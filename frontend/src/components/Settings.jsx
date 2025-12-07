@@ -57,7 +57,8 @@ const Settings = ({ tenantId, token }) => {
 
     useEffect(() => {
         fetchSettings();
-        fetchSchedule();
+        // Don't auto-load schedule to prevent duplicate accumulation
+        // User must explicitly click "Load Current Schedule" or start fresh
     }, [tenantId]);
 
     const fetchSettings = async () => {
@@ -671,6 +672,15 @@ const Settings = ({ tenantId, token }) => {
                         <p className="text-gray-400 text-sm mt-1">Set your consultation time slots</p>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={fetchSchedule}
+                            disabled={loadingSchedule}
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+                            title="Load existing schedule from database"
+                        >
+                            <Clock size={16} />
+                            {loadingSchedule ? 'Loading...' : 'Load Current Schedule'}
+                        </button>
                         {schedule.length > 0 && (
                             <button
                                 onClick={() => setSchedule([])}
