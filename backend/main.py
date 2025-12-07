@@ -1336,6 +1336,8 @@ async def create_schedule_slots(
         logger.error(f"❌ Unexpected error in auth: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Authorization error: {str(e)}")
     
+    logger.info(f"✅ Authentication passed for tenant {tenant_id}")
+    
     # Validate all slots before deletion
     from datetime import time as dt_time
     for i, slot_data in enumerate(schedule_request.slots):
@@ -1387,7 +1389,8 @@ async def create_schedule_slots(
             db.add(new_slot)
             created_slots.append(new_slot)
         except Exception as e:
-            logger.error(f"❌ Error creating slot: {str(e)}")
+            logger.error(f"❌ Error creating slot: {str(e)}", exc_info=True)
+            logger.error(f"❌ Slot data that failed: {slot_data.model_dump()}")
             await db.rollback()
             raise HTTPException(status_code=400, detail=f"Failed to create slot: {str(e)}")
     
