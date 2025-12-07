@@ -536,6 +536,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add exception handler for Pydantic validation errors
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    logger.error(f"❌ Validation Error on {request.url}: {exc.errors()}")
+    logger.error(f"❌ Request body: {await request.body()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(await request.body())}
+    )
+
 # CORS Middleware - Use environment variable for allowed origins in production
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
@@ -1340,6 +1353,9 @@ async def create_schedule_slots(
     Deletes all existing slot templates and creates new ones.
     Note: This doesn't affect existing Appointment records.
     """
+    logger.info(f"📅 Schedule API called with {len(request.slots)} slots")
+    logger.info(f"📅 Request data: {request.model_dump()}")
+    
     await verify_tenant_access(credentials, tenant_id, db)
     
     # Delete all existing slots (bookings are in Appointment table, so safe to delete templates)
