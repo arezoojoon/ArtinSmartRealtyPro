@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+echo "🚀 Starting deployment..."
+
+# 1. Install dependencies
+cd /opt/ArtinSmartRealty/backend
+python3 -m venv venv 2>/dev/null || true
+source venv/bin/activate
+pip install -r requirements.txt -q
+
+# 2. Database migration
+python -m alembic upgrade head
+
+# 3. Restart service
+cd /opt/ArtinSmartRealty
+docker-compose down
+docker-compose up -d --build
+
+# 4. Show logs
+docker-compose logs -f --tail=50
+
+echo "✅ Deployment complete!"
