@@ -2072,13 +2072,13 @@ async def upload_property_pdf(
             logger.error(f"❌ Failed to read PDF file: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
         
-        # Validate file size (max 10MB for PDFs)
+        # Validate file size (max 50MB for PDFs - matches nginx limit)
         file_size_mb = len(file_data) / 1024 / 1024
-        if file_size_mb > 10:
+        if file_size_mb > 50:
             logger.error(f"PDF file too large: {file_size_mb:.2f}MB")
             raise HTTPException(
                 status_code=400,
-                detail=f"File size ({file_size_mb:.2f}MB) exceeds maximum allowed (10MB)"
+                detail=f"File size ({file_size_mb:.2f}MB) exceeds maximum allowed (50MB)"
             )
         
         # Generate safe filename
