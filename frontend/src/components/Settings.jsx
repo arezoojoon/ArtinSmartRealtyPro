@@ -670,13 +670,25 @@ const Settings = ({ tenantId, token }) => {
                         </h3>
                         <p className="text-gray-400 text-sm mt-1">Set your consultation time slots</p>
                     </div>
-                    <button
-                        onClick={addTimeSlot}
-                        className="flex items-center gap-2 bg-navy-800 hover:bg-navy-700 text-gold-500 px-4 py-2 rounded-lg transition-colors"
-                    >
-                        <Plus size={16} />
-                        Add Time Slot
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {schedule.length > 0 && (
+                            <button
+                                onClick={() => setSchedule([])}
+                                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg transition-colors border border-red-500/30"
+                                title="Clear all slots"
+                            >
+                                <Trash2 size={16} />
+                                Clear All
+                            </button>
+                        )}
+                        <button
+                            onClick={addTimeSlot}
+                            className="flex items-center gap-2 bg-navy-800 hover:bg-navy-700 text-gold-500 px-4 py-2 rounded-lg transition-colors"
+                        >
+                            <Plus size={16} />
+                            Add Time Slot
+                        </button>
+                    </div>
                 </div>
 
                 {loadingSchedule ? (
