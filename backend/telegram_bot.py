@@ -681,15 +681,6 @@ class TelegramBotHandler:
         if transcript:
             await update_lead(lead.id, voice_transcript=transcript)
             logger.info(f"🎤 Voice transcript saved for lead {lead.id}: {transcript[:100]}...")
-            
-            # FIX #12: Notify AI chat session about voice message
-            if hasattr(self.brain, 'chat_sessions') and lead.id in self.brain.chat_sessions:
-                chat = self.brain.chat_sessions[lead.id]
-                await asyncio.to_thread(
-                    chat.send_message,
-                    f"[SYSTEM UPDATE] User just sent a voice message. Transcript: \"{transcript}\". Acknowledge this in your next response!"
-                )
-                logger.info(f"✅ Notified AI chat session about voice message for lead {lead.id}")
         
         # Save context to Redis after voice processing
         await save_context_to_redis(lead)
@@ -781,15 +772,6 @@ class TelegramBotHandler:
         if contact.phone_number:
             await update_lead(lead.id, phone=contact.phone_number)
             logger.info(f"📞 Lead {lead.id} shared phone number: {contact.phone_number}")
-            
-            # FIX #12: Notify AI chat session about phone number
-            if hasattr(self.brain, 'chat_sessions') and lead.id in self.brain.chat_sessions:
-                chat = self.brain.chat_sessions[lead.id]
-                await asyncio.to_thread(
-                    chat.send_message,
-                    f"[SYSTEM UPDATE] User just shared their phone number: {contact.phone_number}. Acknowledge this in your next response!"
-                )
-                logger.info(f"✅ Notified AI chat session about phone number for lead {lead.id}")
         
         # Process as if they entered the phone number
         response = await self.brain.process_message(lead, contact.phone_number)

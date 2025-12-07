@@ -539,32 +539,12 @@ app = FastAPI(
 # Add exception handler for Pydantic validation errors
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 import json
-
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # Log schedule API requests
-        if "/schedule" in str(request.url):
-            body = await request.body()
-            logger.info(f"📥 Schedule Request: {request.method} {request.url}")
-            logger.info(f"📥 Headers: {dict(request.headers)}")
-            logger.info(f"📥 Body: {body.decode('utf-8') if body else 'empty'}")
-            # Re-create request with body (since we consumed it)
-            from starlette.datastructures import Headers
-            async def receive():
-                return {"type": "http.request", "body": body}
-            request = Request(request.scope, receive)
-        
-        response = await call_next(request)
-        return response
-
-app.add_middleware(RequestLoggingMiddleware)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    logger.error(f"❌ Validation Error on {request.url}")
+    # Log validation errors with request details
+    logger.error(f"❌ Validation Error on {request.method} {request.url}")
     logger.error(f"❌ Errors: {exc.errors()}")
     return JSONResponse(
         status_code=422,
@@ -1375,8 +1355,9 @@ async def create_schedule_slots(
     Deletes all existing slot templates and creates new ones.
     Note: This doesn't affect existing Appointment records.
     """
-    logger.info(f"📅 Schedule API called with {len(schedule_request.slots)} slots")
-    logger.info(f"📅 Request data: {schedule_request.model_dump()}")
+    logger.info(f"📅 Schedule API: Received request for tenant {tenant_id}")
+    logger.info(f"📅 Request payload: {schedule_request.model_dump()}")
+    logger.info(f"📅 Number of slots: {len(schedule_request.slots)}")
     
     await verify_tenant_access(credentials, tenant_id, db)
     
@@ -2038,30 +2019,32 @@ async def upload_property_pdf(
     - file_url: URL to access the PDF
     - extracted_data: Dict with parsed property information (if extract_text=True)
     """
-    logger.info(f"PDF upload request: tenant_id={tenant_id}, filename={file.filename}, extract_text={extract_text}")
-    
-    # Verify tenant exists
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
-        logger.error(f"Tenant {tenant_id} not found for PDF upload")
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    
-    # Validate file type
-    if not file.content_type or file.content_type != 'application/pdf':
-        logger.error(f"Invalid file type: {file.content_type}")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file type. Expected PDF, got {file.content_type}"
-        )
-    
-    # Read file data
     try:
-        file_data = await file.read()
-        logger.info(f"PDF file read successfully: {len(file_data)} bytes")
-    except Exception as e:
-        logger.error(f"Failed to read PDF file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
+        logger.info(f"📄 PDF Upload: tenant_id={tenant_id}, filename={file.filename}, content_type={file.content_type}")
+        logger.info(f"📄 Extract text flag: {extract_text}")
+        
+        # Verify tenant exists
+        result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            logger.error(f"❌ Tenant {tenant_id} not found for PDF upload")
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Validate file type
+        if not file.content_type or file.content_type != 'application/pdf':
+            logger.error(f"❌ Invalid file type: {file.content_type}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type. Expected PDF, got {file.content_type}"
+            )
+        
+        # Read file data
+        try:
+            file_data = await file.read()
+            logger.info(f"✅ PDF file read successfully: {len(file_data)} bytes ({len(file_data)/1024/1024:.2f}MB)")
+        except Exception as e:
+            logger.error(f"❌ Failed to read PDF file: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
     
     # Validate file size (max 10MB for PDFs)
     file_size_mb = len(file_data) / 1024 / 1024
@@ -2152,15 +2135,21 @@ async def upload_property_pdf(
             
             response["extracted_data"] = extracted_data
             response["extracted_text_preview"] = text[:500] + "..." if len(text) > 500 else text
+            logger.info(f"✅ Text extraction successful: {len(extracted_data)} fields extracted")
             
         except ImportError as e:
-            logger.warning(f"PyPDF2 not installed: {e}")
+            logger.warning(f"⚠️ PyPDF2 not installed: {e}")
             response["warning"] = "PyPDF2 not installed. Text extraction unavailable. Install with: pip install PyPDF2"
         except Exception as e:
-            logger.error(f"PDF text extraction failed: {e}", exc_info=True)
+            logger.error(f"❌ PDF text extraction failed: {e}", exc_info=True)
             response["warning"] = f"Text extraction failed: {str(e)}"
     
+    logger.info(f"✅ PDF upload completed successfully for tenant {tenant_id}")
     return response
+    
+    except Exception as outer_error:
+        logger.error(f"❌ PDF upload failed with unexpected error: {outer_error}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(outer_error)}")
 
 
 @app.delete("/api/tenants/{tenant_id}/properties/{property_id}/images/{filename}")
