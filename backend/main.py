@@ -539,15 +539,36 @@ app = FastAPI(
 # Add exception handler for Pydantic validation errors
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+import json
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Log schedule API requests
+        if "/schedule" in str(request.url):
+            body = await request.body()
+            logger.info(f"📥 Schedule Request: {request.method} {request.url}")
+            logger.info(f"📥 Headers: {dict(request.headers)}")
+            logger.info(f"📥 Body: {body.decode('utf-8') if body else 'empty'}")
+            # Re-create request with body (since we consumed it)
+            from starlette.datastructures import Headers
+            async def receive():
+                return {"type": "http.request", "body": body}
+            request = Request(request.scope, receive)
+        
+        response = await call_next(request)
+        return response
+
+app.add_middleware(RequestLoggingMiddleware)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    body = await request.body()
-    logger.error(f"❌ Validation Error on {request.url.path}: {exc.errors()}")
-    logger.error(f"❌ Request body: {body.decode('utf-8')}")
+    logger.error(f"❌ Validation Error on {request.url}")
+    logger.error(f"❌ Errors: {exc.errors()}")
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "body": body.decode('utf-8')}
+        content={"detail": exc.errors()}
     )
 
 # CORS Middleware - Use environment variable for allowed origins in production
