@@ -861,13 +861,15 @@ const PropertiesManagement = ({ tenantId }) => {
                                         {
                                             method: 'POST',
                                             body: uploadFormData,
-                                            headers: {
-                                                'Authorization': `Bearer ${localStorage.getItem('token')}`
-                                            }
+                                            headers: getAuthHeaders()
                                         }
                                     );
 
-                                    if (!uploadResponse.ok) throw new Error('Upload failed');
+                                    if (!uploadResponse.ok) {
+                                        const errorText = await uploadResponse.text();
+                                        console.error('PDF upload failed:', uploadResponse.status, errorText);
+                                        throw new Error(`Upload failed: ${uploadResponse.status} ${errorText}`);
+                                    }
 
                                     const uploadData = await uploadResponse.json();
                                     
