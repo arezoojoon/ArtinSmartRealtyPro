@@ -1312,13 +1312,18 @@ async def create_schedule_slots(
         logger.info(f"📅 Schedule API: Received request for tenant {tenant_id}")
         logger.info(f"📅 Request payload: {schedule_request.model_dump()}")
         logger.info(f"📅 Number of slots: {len(schedule_request.slots)}")
+        logger.info(f"📅 Credentials present: {credentials is not None}")
+        
+        if not credentials:
+            logger.error("❌ No credentials provided - Authorization header missing or invalid")
+            raise HTTPException(status_code=401, detail="Missing Authorization header. Use: Authorization: Bearer <token>")
         
         await verify_tenant_access(credentials, tenant_id, db)
     except HTTPException as e:
         logger.error(f"❌ Auth check failed: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"❌ Unexpected error in auth: {str(e)}")
+        logger.error(f"❌ Unexpected error in auth: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Authorization error: {str(e)}")
     
     # Validate all slots before deletion
