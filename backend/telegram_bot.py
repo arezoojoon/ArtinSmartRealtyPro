@@ -339,7 +339,7 @@ class TelegramBotHandler:
             pending_slot=None  # Clear pending slot
         )
         # CRITICAL: Update lead object in memory too!
-        lead.conversation_state = ConversationState.START
+        lead.conversation_state = ConversationState.START.value  # Store string value, not enum
         lead.language = None  # Reset language to show language selection
         lead.conversation_data = {}
         lead.filled_slots = {}

@@ -643,7 +643,7 @@ async def get_or_create_lead(
 
 
 async def update_lead(lead_id: int, **kwargs) -> Lead:
-    """Update lead fields."""
+    """Update lead fields. Automatically converts enums to lowercase string values."""
     async with async_session() as session:
         result = await session.execute(
             select(Lead).where(Lead.id == lead_id)
@@ -655,10 +655,19 @@ async def update_lead(lead_id: int, **kwargs) -> Lead:
                 if hasattr(lead, key):
                     # Convert ConversationState enum to lowercase string value
                     if key == 'conversation_state' and isinstance(value, ConversationState):
-                        value = value.value
+                        value = value.value.lower()  # Ensure lowercase
                     # Convert Language enum to lowercase string value
                     if key == 'language' and isinstance(value, Language):
-                        value = value.value
+                        value = value.value.lower()  # Ensure lowercase
+                    # Convert Purpose enum to lowercase string value
+                    if key == 'purpose' and isinstance(value, Purpose):
+                        value = value.value.lower()  # Ensure lowercase
+                    # Convert TransactionType enum to lowercase string value
+                    if key == 'transaction_type' and isinstance(value, TransactionType):
+                        value = value.value.lower()  # Ensure lowercase
+                    # Convert PropertyType enum to lowercase string value
+                    if key == 'property_type' and isinstance(value, PropertyType):
+                        value = value.value.lower()  # Ensure lowercase
                     setattr(lead, key, value)
             lead.updated_at = datetime.utcnow()
             lead.last_interaction = datetime.utcnow()
