@@ -1366,7 +1366,7 @@ async def delete_schedule_slot(
 @app.post("/api/tenants/{tenant_id}/schedule")
 async def create_schedule_slots(
     tenant_id: int,
-    request: ScheduleSlotsRequest,
+    schedule_request: ScheduleSlotsRequest,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1375,8 +1375,8 @@ async def create_schedule_slots(
     Deletes all existing slot templates and creates new ones.
     Note: This doesn't affect existing Appointment records.
     """
-    logger.info(f"📅 Schedule API called with {len(request.slots)} slots")
-    logger.info(f"📅 Request data: {request.model_dump()}")
+    logger.info(f"📅 Schedule API called with {len(schedule_request.slots)} slots")
+    logger.info(f"📅 Request data: {schedule_request.model_dump()}")
     
     await verify_tenant_access(credentials, tenant_id, db)
     
@@ -1390,7 +1390,7 @@ async def create_schedule_slots(
     # Create new slots
     created_slots = []
     
-    for slot_data in request.slots:
+    for slot_data in schedule_request.slots:
         # Parse time strings
         from datetime import time as dt_time
         start_hour, start_min = map(int, slot_data.start_time.split(':'))
