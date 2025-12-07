@@ -114,6 +114,7 @@ function App() {
       ...user,
       tenant_id: selectedTenant.id,
       name: selectedTenant.name,
+      token: user.token,  // Pass Super Admin token for API calls
     };
     return (
       <div>

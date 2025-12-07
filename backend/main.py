@@ -1383,8 +1383,7 @@ async def create_schedule_slots(
                 day_of_week=day_enum,
                 start_time=dt_time(start_hour, start_min),
                 end_time=dt_time(end_hour, end_min),
-                appointment_type=AppointmentType.VIEWING,  # Default to viewing
-                is_booked=False  # This field is deprecated but kept for backward compatibility
+                is_booked=False
             )
             db.add(new_slot)
             created_slots.append(new_slot)
