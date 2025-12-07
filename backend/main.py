@@ -1308,11 +1308,18 @@ async def create_schedule_slots(
     Deletes all existing slot templates and creates new ones.
     Note: This doesn't affect existing Appointment records.
     """
-    logger.info(f"📅 Schedule API: Received request for tenant {tenant_id}")
-    logger.info(f"📅 Request payload: {schedule_request.model_dump()}")
-    logger.info(f"📅 Number of slots: {len(schedule_request.slots)}")
-    
-    await verify_tenant_access(credentials, tenant_id, db)
+    try:
+        logger.info(f"📅 Schedule API: Received request for tenant {tenant_id}")
+        logger.info(f"📅 Request payload: {schedule_request.model_dump()}")
+        logger.info(f"📅 Number of slots: {len(schedule_request.slots)}")
+        
+        await verify_tenant_access(credentials, tenant_id, db)
+    except HTTPException as e:
+        logger.error(f"❌ Auth check failed: {e.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in auth: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Authorization error: {str(e)}")
     
     # Validate all slots before deletion
     from datetime import time as dt_time
