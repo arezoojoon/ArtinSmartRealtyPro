@@ -542,11 +542,12 @@ from fastapi.responses import JSONResponse
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    logger.error(f"❌ Validation Error on {request.url}: {exc.errors()}")
-    logger.error(f"❌ Request body: {await request.body()}")
+    body = await request.body()
+    logger.error(f"❌ Validation Error on {request.url.path}: {exc.errors()}")
+    logger.error(f"❌ Request body: {body.decode('utf-8')}")
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "body": str(await request.body())}
+        content={"detail": exc.errors(), "body": body.decode('utf-8')}
     )
 
 # CORS Middleware - Use environment variable for allowed origins in production
