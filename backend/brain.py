@@ -1203,8 +1203,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             Current State: {lead.conversation_state.value if hasattr(lead.conversation_state, 'value') else lead.conversation_state or 'START'}
             Purpose: {lead.purpose.value if hasattr(lead.purpose, 'value') else lead.purpose or 'Unknown'}
             Budget: {lead.budget_min or 'Not set'} - {lead.budget_max or 'Not set'} AED
-            Location Preference: {lead.location or 'Any'}
-            Bedrooms: {lead.bedrooms or 'Any'}
+            Location Preference: {lead.preferred_location or 'Any'}
+            Bedrooms: {lead.bedrooms_min or 'Any'} - {lead.bedrooms_max or 'Any'}
             
             IMPORTANT: If user shared phone number or voice message, YOU MUST acknowledge it in your response!
             """
