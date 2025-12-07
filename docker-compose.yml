@@ -84,6 +84,11 @@ services:
     restart: unless-stopped
     networks:
       - artinrealty-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   # Nginx Reverse Proxy (Production)
   nginx:
@@ -97,9 +102,10 @@ services:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
     depends_on:
-      - backend
-      - frontend
-    restart: unless-stopped
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     networks:
       - artinrealty-network
 
