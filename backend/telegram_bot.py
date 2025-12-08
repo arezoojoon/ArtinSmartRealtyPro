@@ -533,7 +533,8 @@ class TelegramBotHandler:
                 'Sunday': {'en': '📅 Sun', 'fa': '📅 یکشنبه', 'ar': '📅 الأحد', 'ru': '📅 Вс'}
             }
             
-            lang_key = {'en': 'en', 'fa': 'fa', 'ar': 'ar', 'ru': 'ru'}.get(lang.value, 'fa')
+            # Handle both Language enum and string
+            lang_key = lang if isinstance(lang, str) else lang.value
             
             for day_name in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']:
                 if day_name in slots_by_day:
