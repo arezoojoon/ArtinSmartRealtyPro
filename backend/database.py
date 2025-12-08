@@ -712,7 +712,8 @@ async def get_available_slots(tenant_id: int, day_of_week: Optional[DayOfWeek] =
             )
             
             # Dynamically set is_booked for this week's occurrence
-            slot.is_booked = appointment_check.scalar_one_or_none() is not None
+            # Use first() instead of scalar_one_or_none() to handle multiple bookings
+            slot.is_booked = appointment_check.first() is not None
         
         return slots
 
