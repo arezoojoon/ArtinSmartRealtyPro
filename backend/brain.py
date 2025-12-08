@@ -1497,8 +1497,18 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         """
         # Detect language from message (always check for language change)
         detected_lang = self.detect_language(message)
-        # Use .state property to convert string to enum
-        current_state = lead.state if lead.conversation_state else ConversationState.START
+        # CRITICAL: Access conversation_state directly, NOT via .state property
+        # The .state property can return cached values on detached objects
+        if lead.conversation_state:
+            try:
+                if isinstance(lead.conversation_state, ConversationState):
+                    current_state = lead.conversation_state
+                else:
+                    current_state = ConversationState(lead.conversation_state)
+            except (ValueError, KeyError):
+                current_state = ConversationState.START
+        else:
+            current_state = ConversationState.START
         
         # ===== SENTIMENT DETECTION - CHECK FOR NEGATIVE TONE =====
         # If user expresses frustration/anger, immediately offer human support
