@@ -4,7 +4,6 @@ export const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) 
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'leads', icon: Users, label: 'Lead Pipeline' },
-    { id: 'calendar', icon: CalendarDays, label: 'Calendar' },
     { id: 'properties', icon: Building2, label: 'Properties' },
     { id: 'analytics', icon: BarChart3, label: 'Analytics' },
     { id: 'qr', icon: QrCode, label: 'QR Generator' },

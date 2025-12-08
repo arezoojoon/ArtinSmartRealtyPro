@@ -878,7 +878,7 @@ const PropertiesManagement = ({ tenantId }) => {
                                         name: uploadData.extracted_data?.name || file.name.replace('.pdf', ''),
                                         property_type: 'APARTMENT',
                                         transaction_type: 'BUY',
-                                        location: uploadData.extracted_data?.location || 'Dubai', // Default location if not extracted
+                                        location: uploadData.extracted_data?.location || '',
                                         price: uploadData.extracted_data?.price || null,
                                         bedrooms: uploadData.extracted_data?.bedrooms || null,
                                         area_sqft: uploadData.extracted_data?.area_sqft || null,

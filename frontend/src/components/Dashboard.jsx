@@ -14,8 +14,7 @@ import {
     TrendingUp,
     TrendingDown,
     X,
-    Download,
-    CalendarDays
+    Download
 } from 'lucide-react';
 import { Layout } from './Layout';
 import SettingsPage from './Settings';
@@ -45,9 +44,6 @@ const PURPOSE_LABELS = {
   living: '🏡 Living',
   residency: '🛂 Residency/Visa',
 };
-
-const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 // ==================== API HELPERS ====================
 
@@ -179,163 +175,6 @@ const PipelineColumn = ({ title, leads, colorClass, onLeadClick }) => (
     </div>
 );
 
-// Weekly Calendar Component with Glassmorphism
-const WeeklyCalendar = ({ slots, onAddSlot, onDeleteSlot, compactMode = false, onOpenFullCalendar }) => {
-    const [showModal, setShowModal] = useState(false);
-    const [selectedDay, setSelectedDay] = useState(DAYS_OF_WEEK[0]);
-    const [newSlot, setNewSlot] = useState({ start_time: '09:00', end_time: '10:00' });
-
-    // Calculate current week dates
-    const getWeekDates = () => {
-        const today = new Date();
-        const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const monday = new Date(today);
-        
-        // Calculate Monday of current week
-        const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-        monday.setDate(today.getDate() - daysFromMonday);
-        
-        return DAYS_OF_WEEK.map((_, index) => {
-            const date = new Date(monday);
-            date.setDate(monday.getDate() + index);
-            return {
-                dayName: DAY_LABELS[index],
-                date: date,
-                formatted: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            };
-        });
-    };
-
-    const weekDates = getWeekDates();
-
-    const handleAddSlot = () => {
-        onAddSlot({
-            day_of_week: selectedDay,
-            start_time: newSlot.start_time,
-            end_time: newSlot.end_time,
-        });
-        setShowModal(false);
-        setNewSlot({ start_time: '09:00', end_time: '10:00' });
-    };
-
-    const handleSetAvailability = () => {
-        if (compactMode && onOpenFullCalendar) {
-            // در حالت compact، به جای باز کردن modal، به تب Calendar برو
-            onOpenFullCalendar();
-        } else {
-            // در حالت عادی، modal را باز کن
-            setShowModal(true);
-        }
-    };
-
-    return (
-        <div className="glass-card rounded-2xl p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="text-white font-semibold text-lg flex items-center gap-2">
-                    <CalendarDays size={20} className="text-gold-500" />
-                    {compactMode ? 'وقت‌های خالی شما' : 'Weekly Availability'}
-                </h3>
-                <button
-                    onClick={handleSetAvailability}
-                    className="btn-gold flex items-center gap-2"
-                >
-                    <Plus size={16} />
-                    {compactMode ? '🗓️ مدیریت تقویم' : 'Set Availability'}
-                </button>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-3">
-                {DAYS_OF_WEEK.map((day, index) => {
-                    const daySlots = slots.filter(s => s.day_of_week === day);
-                    const dayInfo = weekDates[index];
-                    return (
-                        <div key={day} className="glass-card rounded-xl p-3 min-h-[140px]">
-                            <p className="text-gold-500 text-xs font-bold text-center mb-1 uppercase">
-                                {dayInfo.dayName}
-                            </p>
-                            <p className="text-gray-400 text-xs text-center mb-3">
-                                {dayInfo.formatted}
-                            </p>
-                            {daySlots.map(slot => (
-                                <div
-                                    key={slot.id}
-                                    className={`${slot.is_booked ? 'badge-red' : 'bg-gold-500 text-navy-900'} rounded-lg px-2 py-1.5 text-xs mb-2 flex justify-between items-center font-medium`}
-                                >
-                                    <span>{slot.start_time} - {slot.end_time}</span>
-                                    {!slot.is_booked && (
-                                        <button onClick={() => onDeleteSlot(slot.id)} className="hover:opacity-70">
-                                            <X size={12} />
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                            {daySlots.length === 0 && (
-                                <p className="text-gray-600 text-xs text-center">No slots</p>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Add Slot Modal */}
-            {showModal && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-                    <div className="glass-card rounded-2xl p-6 w-96 border-2 border-gold-500/30">
-                        <h3 className="text-white font-bold text-lg mb-4">Add Available Slot</h3>
-                        
-                        <label className="text-gray-400 text-sm block mb-2">Day of Week</label>
-                        <select
-                            value={selectedDay}
-                            onChange={e => setSelectedDay(e.target.value)}
-                            className="w-full bg-navy-800 text-white rounded-lg px-3 py-2.5 mb-4 border border-white/10 focus:border-gold-500 outline-none"
-                        >
-                            {DAYS_OF_WEEK.map((day, i) => (
-                                <option key={day} value={day}>{DAY_LABELS[i]}</option>
-                            ))}
-                        </select>
-                        
-                        <div className="flex gap-3 mb-6">
-                            <div className="flex-1">
-                                <label className="text-gray-400 text-sm block mb-2">Start Time</label>
-                                <input
-                                    type="time"
-                                    value={newSlot.start_time}
-                                    onChange={e => setNewSlot({ ...newSlot, start_time: e.target.value })}
-                                    className="w-full bg-navy-800 text-white rounded-lg px-3 py-2 border border-white/10 focus:border-gold-500 outline-none"
-                                />
-                            </div>
-                            <div className="flex-1">
-                                <label className="text-gray-400 text-sm block mb-2">End Time</label>
-                                <input
-                                    type="time"
-                                    value={newSlot.end_time}
-                                    onChange={e => setNewSlot({ ...newSlot, end_time: e.target.value })}
-                                    className="w-full bg-navy-800 text-white rounded-lg px-3 py-2 border border-white/10 focus:border-gold-500 outline-none"
-                                />
-                            </div>
-                        </div>
-                        
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="flex-1 px-4 py-2 rounded-lg border border-white/10 text-white hover:bg-white/5 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleAddSlot}
-                                className="flex-1 px-4 py-2 rounded-lg bg-gold-500 text-navy-900 font-semibold hover:bg-gold-400 transition-colors"
-                            >
-                                Add Slot
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
 // Lead Table
 // Lead Table Component with Glassmorphism
 const LeadTable = ({ leads, onExport }) => (
@@ -410,21 +249,18 @@ const Dashboard = ({ user, onLogout }) => {
     const token = user?.token || localStorage.getItem('token');
     const [stats, setStats] = useState(null);
     const [leads, setLeads] = useState([]);
-    const [slots, setSlots] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     const fetchDashboardData = useCallback(async () => {
         try {
             setLoading(true);
-            const [statsData, leadsData, slotsData] = await Promise.all([
+            const [statsData, leadsData] = await Promise.all([
                 api.get(`/api/tenants/${tenantId}/dashboard/stats`),
                 api.get(`/api/tenants/${tenantId}/leads`),
-                api.get(`/api/tenants/${tenantId}/schedule`),
             ]);
             setStats(statsData);
             setLeads(leadsData);
-            setSlots(slotsData);
             setError(null);
         } catch (err) {
             console.error('Failed to fetch dashboard data:', err);
@@ -437,32 +273,6 @@ const Dashboard = ({ user, onLogout }) => {
     useEffect(() => {
         fetchDashboardData();
     }, [fetchDashboardData]);
-
-    const handleAddSlot = async (slotData) => {
-        try {
-            // Get existing slots and add the new one
-            const allSlots = [...slots, slotData];
-            
-            // Backend expects { "slots": [array] } format
-            await api.post(`/api/tenants/${tenantId}/schedule`, {
-                slots: allSlots
-            });
-            fetchDashboardData();
-        } catch (err) {
-            console.error('Failed to add slot:', err);
-            alert('Failed to add slot. Check for time conflicts.');
-        }
-    };
-
-    const handleDeleteSlot = async (slotId) => {
-        try {
-            await api.delete(`/api/tenants/${tenantId}/schedule/${slotId}`);
-            fetchDashboardData();
-        } catch (err) {
-            console.error('Failed to delete slot:', err);
-            alert('Failed to delete slot.');
-        }
-    };
 
     const handleExportLeads = () => {
         window.open(`${API_BASE_URL}/api/tenants/${tenantId}/leads/export`, '_blank');
@@ -594,18 +404,6 @@ const Dashboard = ({ user, onLogout }) => {
                 <div className="animate-fade-in">
                     <h1 className="text-3xl font-bold text-white mb-6">Lead Management</h1>
                     <LeadTable leads={leads} onExport={handleExportLeads} />
-                </div>
-            )}
-
-            {/* Calendar Tab */}
-            {activeTab === 'calendar' && (
-                <div className="animate-fade-in">
-                    <h1 className="text-3xl font-bold text-white mb-6">Availability Calendar</h1>
-                    <WeeklyCalendar
-                        slots={slots}
-                        onAddSlot={handleAddSlot}
-                        onDeleteSlot={handleDeleteSlot}
-                    />
                 </div>
             )}
 
