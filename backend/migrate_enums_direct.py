@@ -11,10 +11,13 @@ async def migrate_enums():
     """Migrate enum values from lowercase to UPPERCASE by adding new values and updating data."""
     
     # Get database connection string from environment
-    db_user = os.getenv("POSTGRES_USER", "artinrealty_user")
-    db_pass = os.getenv("POSTGRES_PASSWORD", "your_secure_password_here")
+    # These match the environment variables in docker-compose.yml
+    db_user = os.getenv("POSTGRES_USER", "postgres")
+    db_pass = os.getenv("POSTGRES_PASSWORD", "postgres")
     db_name = os.getenv("POSTGRES_DB", "artinrealty_db")
-    db_host = os.getenv("DATABASE_HOST", "db")
+    db_host = os.getenv("POSTGRES_HOST", "db")
+    
+    print(f"Connecting to database: {db_name}@{db_host} as {db_user}")
     
     conn = await asyncpg.connect(
         user=db_user,
