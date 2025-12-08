@@ -5,12 +5,12 @@ Run this script to add UPPERCASE enum values and migrate existing data.
 
 import asyncio
 from sqlalchemy import text
-from database import async_engine
+from database import engine
 
 async def migrate_enums():
     """Migrate enum values from lowercase to UPPERCASE by adding new values and updating data."""
     
-    async with async_engine.begin() as conn:
+    async with engine.begin() as conn:
         try:
             print("=" * 60)
             print("ENUM MIGRATION TO UPPERCASE")
