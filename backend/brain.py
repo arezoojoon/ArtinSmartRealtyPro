@@ -1945,8 +1945,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             # 🔥 NEW FLOW: Investment/Residency → Residential/Commercial → Budget 0-750k
             #              Living → Rent/Buy
             
-            # Get user's first name for personalization
-            user_name = lead.first_name or "دوست من" if lang == Language.FA else "my friend"
+            # Get user's name for personalization
+            user_name = lead.name or ("دوست من" if lang == Language.FA else "my friend")
             
             if goal == "investment" or goal == "residency":
                 # Auto-set transaction type to BUY (investment/residency = always buy)
@@ -2321,8 +2321,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 # After transaction type is selected, ask property category (Residential vs Commercial)
                 # This helps determine budget ranges and property types
                 
-                # Get user's first name for personalization
-                user_name = lead.first_name or conversation_data.get("customer_name", "")
+                # Get user's name for personalization
+                user_name = lead.name or conversation_data.get("customer_name", "")
                 name_part = f" {user_name}" if user_name else ""
                 name_part_fa = f" {user_name} عزیز" if user_name else ""
                 
