@@ -63,10 +63,13 @@ async def migrate_enums():
                             print(f"  Warning for {value}: {e}")
                         await conn.rollback()
                 print(f"✓ {enum_name} enum updated")
-            
-            print("\n" + "=" * 60)
-            print("Step 2: Updating data to use UPPERCASE values...")
-            print("=" * 60 + "\n")
+        
+        # Step 2: Update data with a fresh connection
+        print("\n" + "=" * 60)
+        print("Step 2: Updating data to use UPPERCASE values...")
+        print("=" * 60 + "\n")
+        
+        async with engine.begin() as conn:
             
             # Now update the data - these need to be done carefully
             data_updates = [
@@ -216,19 +219,17 @@ async def migrate_enums():
                 result = await conn.execute(text(update_sql))
                 rows_updated = result.rowcount if hasattr(result, 'rowcount') else 0
                 print(f"✓ Updated {rows_updated} {field} values to {enum_name}")
-                await conn.commit()
             
             print("\n" + "=" * 60)
             print("✅ ALL ENUM VALUES SUCCESSFULLY MIGRATED TO UPPERCASE!")
             print("=" * 60)
             print("\nMigration completed successfully. All changes committed.")
             
-        except Exception as e:
-            await conn.rollback()
-            print(f"\n❌ Migration failed: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
+    except Exception as e:
+        print(f"\n❌ Migration failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 if __name__ == "__main__":
     asyncio.run(migrate_enums())
