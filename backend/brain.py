@@ -1631,6 +1631,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         # State Machine Logic
         if current_state == ConversationState.START:
+            # CRITICAL FIX: If user clicked a language button (callback_data), process it immediately
+            if callback_data and callback_data.startswith("lang_"):
+                return self._handle_language_select(lang, callback_data, lead_updates, message)
+            
             # If user types a language name instead of clicking button, handle it
             if message and not callback_data:
                 # Check if message contains language request
