@@ -1772,18 +1772,18 @@ async def create_property(
         # Extract data and handle enum fields
         property_dict = property_data.model_dump()
         
-        # Ensure enums are properly converted to lowercase strings
+        # Ensure enums are properly converted to uppercase strings (matching database enum values)
         if 'property_type' in property_dict and property_dict['property_type']:
             if isinstance(property_dict['property_type'], PropertyType):
-                property_dict['property_type'] = property_dict['property_type'].value.lower()
+                property_dict['property_type'] = property_dict['property_type'].value.upper()
             elif isinstance(property_dict['property_type'], str):
-                property_dict['property_type'] = property_dict['property_type'].lower()
+                property_dict['property_type'] = property_dict['property_type'].upper()
         
         if 'transaction_type' in property_dict and property_dict['transaction_type']:
             if isinstance(property_dict['transaction_type'], TransactionType):
-                property_dict['transaction_type'] = property_dict['transaction_type'].value.lower()
+                property_dict['transaction_type'] = property_dict['transaction_type'].value.upper()
             elif isinstance(property_dict['transaction_type'], str):
-                property_dict['transaction_type'] = property_dict['transaction_type'].lower()
+                property_dict['transaction_type'] = property_dict['transaction_type'].upper()
         
         property_obj = TenantProperty(
             tenant_id=tenant_id,
