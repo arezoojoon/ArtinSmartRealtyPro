@@ -412,12 +412,15 @@ class TelegramBotHandler:
         telegram_id = str(update.effective_chat.id)
         callback_data = query.data
         
-        # CRITICAL FIX #7: Refresh lead to ensure latest state from database
+        # CRITICAL FIX #7: Refresh lead state from database (avoid detached object issues)
         async with async_session() as session:
             result = await session.execute(select(Lead).where(Lead.id == lead.id))
             fresh_lead = result.scalars().first()
             if fresh_lead:
-                lead = fresh_lead
+                # Update state attributes on current lead object (keep it attached)
+                lead.conversation_state = fresh_lead.conversation_state
+                lead.language = fresh_lead.language
+                lead.conversation_data = fresh_lead.conversation_data
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
         
         # FIX #6: Ghost Protocol - Update last interaction timestamp
@@ -588,13 +591,16 @@ class TelegramBotHandler:
         message_text = update.message.text
         telegram_id = str(update.effective_chat.id)
         
-        # CRITICAL FIX #7: Refresh lead to ensure latest state from database
-        # (prevents stale state from previous message's update)
+        # CRITICAL FIX #7: Refresh lead state from database (avoid detached object issues)
+        # DO NOT replace the lead object - just update its state attributes
         async with async_session() as session:
             result = await session.execute(select(Lead).where(Lead.id == lead.id))
             fresh_lead = result.scalars().first()
             if fresh_lead:
-                lead = fresh_lead
+                # Update state attributes on the current lead object (keep it attached)
+                lead.conversation_state = fresh_lead.conversation_state
+                lead.language = fresh_lead.language
+                lead.conversation_data = fresh_lead.conversation_data
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
         
         # CRITICAL: Ghost Protocol - Update last interaction timestamp on EVERY message
@@ -631,12 +637,18 @@ class TelegramBotHandler:
         """Handle voice messages with slot filling protection."""
         lead = await self._get_or_create_lead(update)
         
-        # CRITICAL FIX #7: Refresh lead to ensure latest state from database
+        # CRITICAL FIX #7: Refresh lead state from database (avoid detached object issues)
         async with async_session() as session:
             result = await session.execute(select(Lead).where(Lead.id == lead.id))
             fresh_lead = result.scalars().first()
             if fresh_lead:
-                lead = fresh_lead
+                # Update state attributes on current lead object (keep it attached)
+                lead.conversation_state = fresh_lead.conversation_state
+                lead.language = fresh_lead.language
+                lead.conversation_data = fresh_lead.conversation_data
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
+        
+        # ZOMBIE STATE PROTECTION: If in SLOT_FILLING with pending button selection, guide them
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
         
         # ZOMBIE STATE PROTECTION: If in SLOT_FILLING with pending button selection, guide them
