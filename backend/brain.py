@@ -440,6 +440,7 @@ class BrainResponse:
     should_generate_roi: bool = False
     request_contact: bool = False  # NEW: Request phone number with contact button (Telegram)
     metadata: Optional[Dict[str, Any]] = None  # NEW: Additional metadata (e.g., send_pdf flag)
+    media_files: Optional[List[Dict[str, Any]]] = None  # NEW: Media files to send [{type: 'photo'|'pdf', url: str, name: str}]
 
 
 # ==================== LOTTERY HELPERS ====================
@@ -2609,12 +2610,30 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     request_contact=True
                 )
             
-            # 2. DETECT PHOTO/IMAGE REQUEST
-            photo_keywords = ["photo", "picture", "image", "عکس", "تصویر", "صورة", "фото"]
+            # 2. DETECT PHOTO/IMAGE/PDF REQUEST
+            photo_keywords = ["photo", "picture", "image", "عکس", "تصویر", "صورة", "фото", "pdf", "پی دی اف", "بی دی اف", "پی دی ای", "برشور", "brochure", "catalog", "کاتالوگ"]
             if any(kw in message_lower for kw in photo_keywords):
-                logger.info(f"📸 Photo request detected from lead {lead.id}")
-                # Get property recommendations and extract photos
+                logger.info(f"📸 Photo/PDF request detected from lead {lead.id}")
+                # Get property recommendations and check for media
                 property_recs = await self.get_property_recommendations(lead)
+                
+                # Try to find properties/projects with media files
+                properties = self.tenant_context.get("properties", [])
+                projects = self.tenant_context.get("projects", [])
+                
+                # Collect all media (images and PDFs)
+                media_files = []
+                for p in (properties + projects)[:5]:  # First 5 items
+                    # Check for brochure PDF
+                    if p.get('brochure_pdf'):
+                        media_files.append({"type": "pdf", "url": p['brochure_pdf'], "name": p['name']})
+                    # Check for primary image
+                    elif p.get('primary_image'):
+                        media_files.append({"type": "photo", "url": p['primary_image'], "name": p['name']})
+                    # Check for first image in list
+                    elif p.get('image_urls') and len(p['image_urls']) > 0:
+                        media_files.append({"type": "photo", "url": p['image_urls'][0], "name": p['name']})
+                
                 photo_msg = {
                     Language.EN: f"Here are photos of matching properties:\n\n{property_recs}\n\nWould you like to schedule a viewing?",
                     Language.FA: f"اینم عکس‌های املاک مچ شده:\n\n{property_recs}\n\nمی‌خواهید بازدید رزرو کنید؟",
@@ -2627,7 +2646,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     lead_updates=lead_updates,
                     buttons=[
                         {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
-                    ]
+                    ],
+                    media_files=media_files  # Pass media to telegram_bot for sending
                 )
             
             # 3. DETECT QUESTION (contains "?")

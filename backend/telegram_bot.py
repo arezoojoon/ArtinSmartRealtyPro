@@ -186,6 +186,28 @@ class TelegramBotHandler:
             logger.info(f"🔘 Building keyboard with {len(response.buttons)} buttons: {[b['text'] for b in response.buttons]}")
             reply_markup = self._build_inline_keyboard(response.buttons)
         
+        # Send media files FIRST if present (photos/PDFs)
+        if response.media_files:
+            logger.info(f"📎 Sending {len(response.media_files)} media files for lead {lead.id}")
+            for media in response.media_files[:10]:  # Max 10 files
+                try:
+                    if media.get('type') == 'pdf' and media.get('url'):
+                        await context.bot.send_document(
+                            chat_id=chat_id,
+                            document=media['url'],
+                            caption=f"📄 {media.get('name', 'Property Brochure')}"
+                        )
+                        logger.info(f"✅ Sent PDF: {media.get('name')}")
+                    elif media.get('type') == 'photo' and media.get('url'):
+                        await context.bot.send_photo(
+                            chat_id=chat_id,
+                            photo=media['url'],
+                            caption=f"🏠 {media.get('name', 'Property Photo')}"
+                        )
+                        logger.info(f"✅ Sent photo: {media.get('name')}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to send media {media.get('name')}: {e}")
+        
         # Send message
         if update.callback_query:
             # Edit existing message for callback queries
