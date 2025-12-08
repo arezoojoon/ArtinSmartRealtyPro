@@ -773,7 +773,7 @@ async def book_slot(slot_id: int, lead_id: int) -> bool:
         # Create Appointment record
         appointment = Appointment(
             lead_id=lead_id,
-            appointment_type=AppointmentType.CONSULTATION,
+            appointment_type=AppointmentType.ONLINE,  # Consultation appointments are online
             scheduled_date=scheduled_datetime,
             duration_minutes=60,
             is_confirmed=True,
