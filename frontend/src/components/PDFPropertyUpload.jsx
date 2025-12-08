@@ -46,8 +46,8 @@ const PDFPropertyUpload = ({ tenantId, onPropertyCreated }) => {
             // Step 2: Auto-create property with extracted data
             const propertyData = {
                 name: uploadData.extracted_data?.name || file.name.replace('.pdf', ''),
-                property_type: 'APARTMENT', // Default
-                transaction_type: 'BUY',
+                property_type: 'apartment',  // Lowercase to match API enum
+                transaction_type: 'buy',     // Lowercase to match API enum
                 location: uploadData.extracted_data?.location || '',
                 price: uploadData.extracted_data?.price || null,
                 bedrooms: uploadData.extracted_data?.bedrooms || null,

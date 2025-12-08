@@ -55,8 +55,8 @@ const PropertiesManagement = ({ tenantId }) => {
     const [editingProperty, setEditingProperty] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
-        property_type: 'APARTMENT',
-        transaction_type: 'BUY',
+        property_type: 'apartment',  // Lowercase to match API enum values
+        transaction_type: 'buy',     // Lowercase to match API enum values
         location: '',
         address: '',
         price: '',
@@ -172,8 +172,8 @@ const PropertiesManagement = ({ tenantId }) => {
             setEditingProperty(property);
             setFormData({
                 name: property.name || '',
-                property_type: property.property_type || 'APARTMENT',
-                transaction_type: property.transaction_type || 'BUY',
+                property_type: property.property_type?.toLowerCase() || 'apartment',  // Ensure lowercase
+                transaction_type: property.transaction_type?.toLowerCase() || 'buy',  // Ensure lowercase
                 location: property.location || '',
                 address: property.address || '',
                 price: property.price || '',
@@ -197,8 +197,8 @@ const PropertiesManagement = ({ tenantId }) => {
             setEditingProperty(null);
             setFormData({
                 name: '',
-                property_type: 'APARTMENT',
-                transaction_type: 'BUY',
+                property_type: 'apartment',  // Lowercase to match API
+                transaction_type: 'buy',     // Lowercase to match API
                 location: '',
                 address: '',
                 price: '',
@@ -876,8 +876,8 @@ const PropertiesManagement = ({ tenantId }) => {
                                     // Auto-create property
                                     const propertyData = {
                                         name: uploadData.extracted_data?.name || file.name.replace('.pdf', ''),
-                                        property_type: 'APARTMENT',
-                                        transaction_type: 'BUY',
+                                        property_type: 'apartment',  // Lowercase
+                                        transaction_type: 'buy',     // Lowercase
                                         location: uploadData.extracted_data?.location || '',
                                         price: uploadData.extracted_data?.price || null,
                                         bedrooms: uploadData.extracted_data?.bedrooms || null,

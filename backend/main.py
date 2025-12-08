@@ -249,13 +249,18 @@ class LeadResponse(BaseModel):
     class Config:
         from_attributes = True
     
-    @field_serializer('language', 'conversation_state')
-    def serialize_enums_lowercase(self, value: Optional[Enum]) -> Optional[str]:
-        """Convert enum values to lowercase strings for database compatibility."""
+    @field_serializer('language', 'status', 'transaction_type', 'property_type', 'payment_method', 'purpose', 'conversation_state')
+    def serialize_all_enums_lowercase(self, value: Optional[Enum]) -> Optional[str]:
+        """Convert ALL enum values to lowercase strings for API compatibility.
+        
+        Database stores enum NAMES (uppercase: 'FA', 'APARTMENT', 'BUY'),
+        but API expects enum VALUES (lowercase: 'fa', 'apartment', 'buy').
+        """
         if value is None:
             return None
         if isinstance(value, Enum):
-            return value.value.lower() if hasattr(value, 'value') else value.name.lower()
+            # Use .value if available (lowercase), else .name.lower()
+            return value.value if hasattr(value, 'value') else value.name.lower()
         return str(value).lower() if value else None
 
 
@@ -400,11 +405,15 @@ class TenantPropertyResponse(BaseModel):
     
     @field_serializer('property_type', 'transaction_type')
     def serialize_enums_lowercase(self, value: Optional[Enum]) -> Optional[str]:
-        """Convert enum values to lowercase strings for database compatibility."""
+        """Convert enum values to lowercase strings for API/database compatibility.
+        
+        Database stores enum NAMES (uppercase: 'APARTMENT', 'BUY'),
+        but API expects enum VALUES (lowercase: 'apartment', 'buy').
+        """
         if value is None:
             return None
         if isinstance(value, Enum):
-            return value.value.lower() if hasattr(value, 'value') else value.name.lower()
+            return value.value if hasattr(value, 'value') else value.name.lower()
         return str(value).lower() if value else None
 
 
