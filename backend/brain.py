@@ -360,12 +360,13 @@ BUDGET_OPTIONS = {
     Language.RU: ["До 500 тыс. AED", "500 тыс. - 1 млн AED", "1 - 2 млн AED", "2 - 5 млн AED", "5+ млн AED"]
 }
 
+# NEW: 0-750k budget ranges for investment/buy (as per user requirement)
 BUDGET_RANGES = {
-    0: (0, 500000),
-    1: (500000, 1000000),
-    2: (1000000, 2000000),
-    3: (2000000, 5000000),
-    4: (5000000, None)
+    0: (0, 150000),        # 0-150k AED
+    1: (150000, 300000),   # 150k-300k AED
+    2: (300000, 500000),   # 300k-500k AED
+    3: (500000, 750000),   # 500k-750k AED
+    4: (750000, None)      # 750k+ AED (for edge cases)
 }
 
 # Rental budget ranges (annual values in AED)
@@ -1874,23 +1875,27 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             lead_updates["conversation_data"] = conversation_data
             lead_updates["filled_slots"] = filled_slots
             
-            # 🔥 INVESTMENT LOGIC FIX: Investment always means BUY (never rent for investment)
-            if goal == "investment":
-                # Auto-set transaction type to BUY
+            # 🔥 NEW FLOW: Investment/Residency → Residential/Commercial → Budget 0-750k
+            #              Living → Rent/Buy
+            
+            # Get user's first name for personalization
+            user_name = lead.first_name or "دوست من" if lang == Language.FA else "my friend"
+            
+            if goal == "investment" or goal == "residency":
+                # Auto-set transaction type to BUY (investment/residency = always buy)
                 conversation_data["transaction_type"] = "buy"
                 filled_slots["transaction_type"] = True
                 lead_updates["conversation_data"] = conversation_data
                 lead_updates["filled_slots"] = filled_slots
                 lead_updates["transaction_type"] = TransactionType.BUY
-                lead_updates["purpose"] = Purpose.INVESTMENT
+                lead_updates["purpose"] = Purpose.INVESTMENT if goal == "investment" else Purpose.RESIDENCY
                 
-                # Skip "Buy or Rent?" question entirely - go directly to property category
-                # Add Dubai investment benefits to build excitement
-                investment_intro = {
-                    Language.EN: "🚀 Excellent choice! Dubai is a GOLDMINE for investors right now!\n\n💰 **Why Dubai Real Estate:**\n• 7-10% Annual Rental Yield (vs 3% globally)\n• Zero Income Tax on rental profits\n• Property values growing 8-12% yearly\n• Off-plan payment plans from 25% down\n\nLet's find your wealth-building property! What type?",
-                    Language.FA: "🚀 انتخاب عالی! دبی الان یک معدن طلا برای سرمایه‌گذاراست!\n\n💰 **چرا املاک دبی:**\n• بازده سالانه ۷-۱۰٪ (در مقابل ۳٪ جهانی)\n• مالیات صفر روی سود اجاره\n• رشد ارزش املاک ۸-۱۲٪ سالانه\n• پلن‌های پرداخت از ۲۵٪ پیش پرداخت\n\nبیا ملک ثروت‌سازت رو پیدا کنیم! چه نوع ملکی؟",
-                    Language.AR: "🚀 اختيار ممتاز! دبي منجم ذهب للمستثمرين الآن!\n\n💰 **لماذا عقارات دبي:**\n• عائد إيجار سنوي 7-10% (مقابل 3% عالميًا)\n• صفر ضريبة دخل على أرباح الإيجار\n• قيمة العقارات تنمو 8-12% سنويًا\n• خطط سداد من 25% مقدم\n\nلنجد عقارك لبناء الثروة! ما النوع؟",
-                    Language.RU: "🚀 Отличный выбор! Дубай сейчас ЗОЛОТАЯ ЖИЛА для инвесторов!\n\n💰 **Почему недвижимость Дубая:**\n• 7-10% годовая арендная доходность (против 3% в мире)\n• Ноль налогов на доход от аренды\n• Рост стоимости 8-12% в год\n• Планы рассрочки от 25% первого взноса\n\nДавайте найдём объект для роста капитала! Какой тип?"
+                # Ask: Residential or Commercial? (with name + voice encouragement)
+                category_question = {
+                    Language.EN: f"🚀 Great choice, {user_name}! Dubai is perfect for that!\n\n💰 **Investment Benefits:**\n• 7-10% Annual ROI\n• Zero Tax on Profits\n• Golden Visa eligible\n\n🎤 **Tip:** You can send me a voice message anytime!\n\n📸 Also, do you have a photo of your dream property? Share it!\n\nNow, Residential or Commercial?",
+                    Language.FA: f"🚀 انتخاب عالی {user_name}! دبی برای این کامل مناسبه!\n\n💰 **مزایای سرمایه‌گذاری:**\n• بازده سالانه ۷-۱۰٪\n• مالیات صفر روی سود\n• ویزای طلایی\n\n🎤 **نکته:** هر وقت خواستی میتونی ویس بفرستی!\n\n📸 راستی، عکس ملک رویاییت رو داری؟ بفرست!\n\nحالا، مسکونی یا تجاری؟",
+                    Language.AR: f"🚀 اختيار ممتاز {user_name}! دبي مثالية لذلك!\n\n💰 **فوائد الاستثمار:**\n• عائد سنوي 7-10%\n• صفر ضريبة على الأرباح\n• تأشيرة ذهبية\n\n🎤 **نصيحة:** يمكنك إرسال رسالة صوتية في أي وقت!\n\n📸 أيضًا، هل لديك صورة لعقارك المثالي؟ شاركها!\n\nالآن، سكني أم تجاري؟",
+                    Language.RU: f"🚀 Отличный выбор, {user_name}! Дубай идеален для этого!\n\n💰 **Преимущества инвестиций:**\n• Годовой ROI 7-10%\n• Ноль налогов на прибыль\n• Золотая виза\n\n🎤 **Совет:** Вы можете отправить голосовое сообщение!\n\n📸 Есть фото вашей мечты? Поделитесь!\n\nТеперь, жилая или коммерческая?"
                 }
                 
                 category_buttons = [
@@ -1901,7 +1906,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 ]
                 
                 return BrainResponse(
-                    message=investment_intro.get(lang, investment_intro[Language.EN]),
+                    message=category_question.get(lang, category_question[Language.EN]),
                     next_state=ConversationState.SLOT_FILLING,
                     lead_updates=lead_updates | {
                         "conversation_data": conversation_data,
@@ -1911,32 +1916,30 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     buttons=category_buttons
                 )
             
-            # For living/residency goals, ask transaction type (buy/rent)
-            # Set purpose based on goal
+            # For LIVING goal, ask transaction type (buy/rent)
             if goal == "living":
                 lead_updates["purpose"] = Purpose.LIVING
-            elif goal == "residency":
-                lead_updates["purpose"] = Purpose.RESIDENCY
-            
-            transaction_question = {
-                Language.EN: f"Perfect! Are you looking to buy or rent?",
-                Language.FA: f"عالی! می‌خواهید بخرید یا اجاره کنید؟",
-                Language.AR: f"ممتاز! هل تريد الشراء أم الإيجار؟",
-                Language.RU: f"Отлично! Вы хотите купить или арендовать?"
-            }
-            
-            # Show Buy/Rent buttons
-            transaction_buttons = [
-                {"text": "🏠 " + ("خرید" if lang == Language.FA else "Buy"), "callback_data": "transaction_buy"},
-                {"text": "🔑 " + ("اجاره" if lang == Language.FA else "Rent"), "callback_data": "transaction_rent"}
-            ]
-            
-            return BrainResponse(
-                message=transaction_question.get(lang, transaction_question[Language.EN]),
-                next_state=ConversationState.SLOT_FILLING,
-                lead_updates=lead_updates | {"pending_slot": "transaction_type"},
-                buttons=transaction_buttons
-            )
+                
+                # Ask: Buy or Rent? (with name + voice encouragement)
+                transaction_question = {
+                    Language.EN: f"Perfect {user_name}! Living in Dubai is amazing!\n\n🎤 **Tip:** Send me a voice message anytime!\n\n📸 Got a photo of your dream home? Share it!\n\nAre you looking to **Buy** or **Rent**?",
+                    Language.FA: f"عالی {user_name}! زندگی تو دبی فوق‌العادست!\n\n🎤 **نکته:** هر وقت خواستی ویس بفرست!\n\n📸 عکس خونه رویاییت رو داری؟ بفرست!\n\nمی‌خوای **بخری** یا **اجاره** کنی؟",
+                    Language.AR: f"ممتاز {user_name}! العيش في دبي رائع!\n\n🎤 **نصيحة:** أرسل رسالة صوتية في أي وقت!\n\n📸 عندك صورة منزل أحلامك؟ شاركها!\n\nهل تريد **الشراء** أم **الإيجار**؟",
+                    Language.RU: f"Отлично {user_name}! Жить в Дубае потрясающе!\n\n🎤 **Совет:** Отправь голосовое сообщение!\n\n📸 Есть фото дома мечты? Поделись!\n\nВы хотите **купить** или **арендовать**?"
+                }
+                
+                # Show Buy/Rent buttons
+                transaction_buttons = [
+                    {"text": "🏠 " + ("خرید" if lang == Language.FA else "Buy" if lang == Language.EN else "شراء" if lang == Language.AR else "Купить"), "callback_data": "transaction_buy"},
+                    {"text": "🔑 " + ("اجاره" if lang == Language.FA else "Rent" if lang == Language.EN else "إيجار" if lang == Language.AR else "Аренда"), "callback_data": "transaction_rent"}
+                ]
+                
+                return BrainResponse(
+                    message=transaction_question.get(lang, transaction_question[Language.EN]),
+                    next_state=ConversationState.SLOT_FILLING,
+                    lead_updates=lead_updates | {"pending_slot": "transaction_type"},
+                    buttons=transaction_buttons
+                )
         
         # If text message, use AI to answer FAQ - but DON'T re-ask the goal question
         # They'll click the button when ready
