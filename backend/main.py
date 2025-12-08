@@ -1200,6 +1200,26 @@ async def list_schedule_slots(
         'friday': 4, 'saturday': 5, 'sunday': 6
     }
     
+    # 🚀 PERFORMANCE FIX: Fetch all appointments for this tenant ONCE (prevent N+1 queries)
+    # Calculate date range for next 7 days to cover all possible slot occurrences
+    date_start = now.date()
+    date_end = date_start + timedelta(days=7)
+    
+    appointments_result = await db.execute(
+        select(Appointment).where(
+            Appointment.lead_id.in_(
+                select(Lead.id).where(Lead.tenant_id == tenant_id)
+            ),
+            Appointment.scheduled_date >= datetime.combine(date_start, datetime.min.time()),
+            Appointment.scheduled_date < datetime.combine(date_end, datetime.min.time()),
+            Appointment.is_cancelled == False
+        )
+    )
+    appointments = appointments_result.scalars().all()
+    
+    # Create a set of booked datetimes for O(1) lookup
+    booked_datetimes = {appt.scheduled_date for appt in appointments}
+    
     slot_responses = []
     for s in slots:
         target_weekday = day_mapping.get(s.day_of_week.value.lower(), 0)
@@ -1211,18 +1231,8 @@ async def list_schedule_slots(
         next_occurrence = now + timedelta(days=days_ahead)
         scheduled_datetime = datetime.combine(next_occurrence.date(), s.start_time)
         
-        # Check if this specific date/time is booked
-        appointment_check = await db.execute(
-            select(Appointment).where(
-                Appointment.lead_id.in_(
-                    select(Lead.id).where(Lead.tenant_id == tenant_id)
-                ),
-                Appointment.scheduled_date == scheduled_datetime,
-                Appointment.is_cancelled == False
-            )
-        )
-        
-        is_booked = appointment_check.scalar_one_or_none() is not None
+        # 🚀 Check if booked using in-memory set (O(1) instead of database query)
+        is_booked = scheduled_datetime in booked_datetimes
         
         # Filter if available_only requested
         if available_only and is_booked:
