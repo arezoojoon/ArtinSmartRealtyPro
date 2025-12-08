@@ -588,15 +588,19 @@ class TelegramBotHandler:
         message_text = update.message.text
         telegram_id = str(update.effective_chat.id)
         
-        #  CRITICAL FIX #8: Refresh lead object by using fresh instance from database
-        # The lead from _get_or_create_lead() is detached. We must use fresh_lead directly.
+        #  CRITICAL FIX #9: Refresh lead and COPY attributes to preserve data after session closes
+        # We must copy the fresh state to the original lead object before session closes
         async with async_session() as session:
             result = await session.execute(select(Lead).where(Lead.id == lead.id))
             fresh_lead = result.scalars().first()
             if fresh_lead:
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
-                # REPLACE the lead reference entirely - don't copy attributes!
-                lead = fresh_lead
+                # Copy the ACTUAL conversation_state value (string) to the lead object
+                # This ensures the value persists after session closes
+                lead.conversation_state = fresh_lead.conversation_state
+                lead.language = fresh_lead.language
+                lead.conversation_data = fresh_lead.conversation_data
+                logger.info(f"✅ Copied state to lead object: {lead.conversation_state}")
         
         # CRITICAL: Ghost Protocol - Update last interaction timestamp on EVERY message
         if redis_manager.redis_client:

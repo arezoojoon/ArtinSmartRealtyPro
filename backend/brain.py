@@ -1497,6 +1497,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         """
         # Detect language from message (always check for language change)
         detected_lang = self.detect_language(message)
+        
+        # CRITICAL: Access conversation_state DIRECTLY and log the raw value
+        logger.info(f"🔍 RAW lead.conversation_state = {lead.conversation_state} (type: {type(lead.conversation_state)})")
+        
         # CRITICAL: Access conversation_state directly, NOT via .state property
         # The .state property can return cached values on detached objects
         if lead.conversation_state:
@@ -1509,6 +1513,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 current_state = ConversationState.START
         else:
             current_state = ConversationState.START
+        
+        logger.info(f"🎯 FINAL current_state = {current_state}")
         
         # ===== SENTIMENT DETECTION - CHECK FOR NEGATIVE TONE =====
         # If user expresses frustration/anger, immediately offer human support
