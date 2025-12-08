@@ -368,12 +368,11 @@ BUDGET_OPTIONS = {
 
 # BUY/INVESTMENT Budget Ranges (0-750k focus as per product requirements)
 # Used for: Investment, Residency, and Living → Buy flows
+# BUY Budget Ranges - Aligned with UAE Golden Visa requirements
+# Golden Visa eligibility: Property investment 750,000 AED or more
 BUDGET_RANGES = {
-    0: (0, 150000),        # Entry-level: 0-150k AED (studios, small apartments)
-    1: (150000, 300000),   # Mid-range: 150k-300k AED (1-2BR apartments)
-    2: (300000, 500000),   # Upper-mid: 300k-500k AED (2-3BR, premium locations)
-    3: (500000, 750000),   # Premium: 500k-750k AED (villas, penthouses)
-    4: (750000, None)      # Luxury: 750k+ AED (high-end properties)
+    0: (0, 750000),        # Standard Purchase: 0-750k AED (no Golden Visa)
+    1: (750000, None)      # Golden Visa Eligible: 750k+ AED (2-year residency)
 }
 
 # RENTAL Budget Ranges (annual values stored, displayed as monthly)

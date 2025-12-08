@@ -861,6 +861,10 @@ async def get_tenant_properties(
         )
         
         if property_type:
+            # Handle both enum and string property_type values
+            if isinstance(property_type, str):
+                # Convert string to PropertyType enum (case-insensitive)
+                property_type = PropertyType[property_type.upper()]
             query = query.where(TenantProperty.property_type == property_type)
         if min_price:
             query = query.where(TenantProperty.price >= min_price)
