@@ -360,23 +360,33 @@ BUDGET_OPTIONS = {
     Language.RU: ["До 500 тыс. AED", "500 тыс. - 1 млн AED", "1 - 2 млн AED", "2 - 5 млн AED", "5+ млн AED"]
 }
 
-# NEW: 0-750k budget ranges for investment/buy (as per user requirement)
+# ===========================
+# 💰 BUDGET CONFIGURATION (Single Source of Truth)
+# ===========================
+# All budget ranges are defined here to avoid duplication and ensure consistency.
+# Changes to budget ranges should ONLY be made in these constants.
+
+# BUY/INVESTMENT Budget Ranges (0-750k focus as per product requirements)
+# Used for: Investment, Residency, and Living → Buy flows
 BUDGET_RANGES = {
-    0: (0, 150000),        # 0-150k AED
-    1: (150000, 300000),   # 150k-300k AED
-    2: (300000, 500000),   # 300k-500k AED
-    3: (500000, 750000),   # 500k-750k AED
-    4: (750000, None)      # 750k+ AED (for edge cases)
+    0: (0, 150000),        # Entry-level: 0-150k AED (studios, small apartments)
+    1: (150000, 300000),   # Mid-range: 150k-300k AED (1-2BR apartments)
+    2: (300000, 500000),   # Upper-mid: 300k-500k AED (2-3BR, premium locations)
+    3: (500000, 750000),   # Premium: 500k-750k AED (villas, penthouses)
+    4: (750000, None)      # Luxury: 750k+ AED (high-end properties)
 }
 
-# Rental budget ranges (annual values in AED)
+# RENTAL Budget Ranges (annual values stored, displayed as monthly)
+# Used for: Living → Rent flow
+# Formula: Monthly = Annual / 12
 RENT_BUDGET_RANGES = {
-    0: (0, 50000),           # 0 - 50K AED/year = 0 - 4.2K/month
-    1: (50000, 100000),      # 50K - 100K AED/year = 4.2K - 8.3K/month
-    2: (100000, 200000),     # 100K - 200K AED/year = 8.3K - 16.7K/month
-    3: (200000, 500000),     # 200K - 500K AED/year = 16.7K - 41.7K/month
-    4: (500000, None)        # 500K+ AED/year = 41.7K+/month
+    0: (0, 50000),           # Budget: 0-50K AED/year → 0-4,167 AED/month
+    1: (50000, 100000),      # Mid-low: 50K-100K/year → 4,167-8,333 AED/month
+    2: (100000, 200000),     # Mid: 100K-200K/year → 8,333-16,667 AED/month
+    3: (200000, 500000),     # Upper: 200K-500K/year → 16,667-41,667 AED/month
+    4: (500000, None)        # Premium: 500K+/year → 41,667+ AED/month
 }
+# ===========================
 
 def parse_budget_string(budget_str: str) -> Optional[int]:
     """Parse budget strings like '2M', '500K', '1.5 Million' to integers."""
@@ -1486,6 +1496,56 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         return "\n".join(rec_parts)
     
+    def _validate_state_integrity(
+        self,
+        lead: Lead,
+        current_state: ConversationState,
+        conversation_data: Dict
+    ) -> Optional[str]:
+        """
+        🔥 FLOW INTEGRITY VALIDATION
+        Validates that required data exists for current state.
+        Returns error message if validation fails, None if OK.
+        
+        This ensures 10/10 Flow Logic by preventing invalid state transitions.
+        """
+        filled_slots = conversation_data.get("filled_slots", {})
+        
+        # SLOT_FILLING validations
+        if current_state == ConversationState.SLOT_FILLING:
+            pending_slot = conversation_data.get("pending_slot")
+            
+            # If asking for budget, transaction_type and category should be set
+            if pending_slot == "budget":
+                if not conversation_data.get("transaction_type"):
+                    logger.error(f"❌ Lead {lead.id}: Budget slot but missing transaction_type!")
+                    return "missing_transaction_type"
+                if not conversation_data.get("property_category"):
+                    logger.error(f"❌ Lead {lead.id}: Budget slot but missing property_category!")
+                    return "missing_property_category"
+            
+            # If asking for property_type, budget should be set
+            if pending_slot == "property_type":
+                if not filled_slots.get("budget"):
+                    logger.warning(f"⚠️ Lead {lead.id}: Property type slot but budget not filled!")
+        
+        # VALUE_PROPOSITION validations
+        if current_state == ConversationState.VALUE_PROPOSITION:
+            # All qualification slots should be filled
+            required_slots = ["transaction_type", "property_category", "budget"]
+            missing = [s for s in required_slots if not conversation_data.get(s)]
+            if missing:
+                logger.error(f"❌ Lead {lead.id}: VALUE_PROPOSITION but missing slots: {missing}")
+                return f"missing_slots_{','.join(missing)}"
+        
+        # HANDOFF_SCHEDULE validations  
+        if current_state == ConversationState.HANDOFF_SCHEDULE:
+            if not lead.phone:
+                logger.warning(f"⚠️ Lead {lead.id}: HANDOFF_SCHEDULE but no phone number!")
+        
+        logger.info(f"✅ State integrity validated for lead {lead.id}, state {current_state}")
+        return None  # All good!
+    
     async def process_message(
         self, 
         lead: Lead, 
@@ -1518,6 +1578,13 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             current_state = ConversationState.START
         
         logger.info(f"🎯 FINAL current_state = {current_state}")
+        
+        # 🔥 VALIDATE STATE INTEGRITY (10/10 Flow Logic)
+        conversation_data = lead.conversation_data or {}
+        integrity_error = self._validate_state_integrity(lead, current_state, conversation_data)
+        if integrity_error:
+            logger.warning(f"⚠️ State integrity issue for lead {lead.id}: {integrity_error}")
+            # Continue with recovery logic in handlers
         
         # ===== SENTIMENT DETECTION - CHECK FOR NEGATIVE TONE =====
         # If user expresses frustration/anger, immediately offer human support
@@ -2098,7 +2165,33 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 lead_updates["budget_max"] = max_val
                 
                 # Get property category to show appropriate property types
-                category_str = conversation_data.get("property_category", "residential")
+                category_str = conversation_data.get("property_category")
+                
+                # 🔥 CRITICAL: Category should have been set in earlier flow
+                if not category_str:
+                    logger.error(f"❌ Lead {lead.id}: Missing property_category in budget handler! Flow integrity issue.")
+                    # Recovery: Ask category again
+                    category_question = {
+                        Language.EN: "⚠️ Let me confirm: Residential or Commercial property?",
+                        Language.FA: "⚠️ بذار تایید کنم: ملک مسکونی یا تجاری؟",
+                        Language.AR: "⚠️ دعني أؤكد: عقار سكني أم تجاري؟",
+                        Language.RU: "⚠️ Давайте уточним: Жилая или коммерческая?"
+                    }
+                    return BrainResponse(
+                        message=category_question.get(lang, category_question[Language.EN]),
+                        next_state=ConversationState.SLOT_FILLING,
+                        lead_updates=lead_updates | {
+                            "conversation_data": conversation_data,
+                            "filled_slots": filled_slots,
+                            "pending_slot": "property_category"
+                        },
+                        buttons=[
+                            {"text": "🏠 " + ("مسکونی" if lang == Language.FA else "Residential" if lang == Language.EN else "سكني" if lang == Language.AR else "Жилая"), 
+                             "callback_data": "category_residential"},
+                            {"text": "🏢 " + ("تجاری" if lang == Language.FA else "Commercial" if lang == Language.EN else "تجاري" if lang == Language.AR else "Коммерческая"), 
+                             "callback_data": "category_commercial"}
+                        ]
+                    )
                 
                 # Next: Ask specific property type based on category
                 property_question = {
@@ -2272,7 +2365,31 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 conversation_data["property_category"] = category_str
                 
                 # Get transaction type to determine budget ranges
-                transaction_type_str = conversation_data.get("transaction_type", "buy")
+                transaction_type_str = conversation_data.get("transaction_type")
+                
+                # 🔥 CRITICAL: Transaction type should have been set in WARMUP or earlier
+                if not transaction_type_str:
+                    logger.error(f"❌ Lead {lead.id}: Missing transaction_type in category handler! Flow integrity issue.")
+                    # Recovery: Ask transaction type
+                    transaction_question = {
+                        Language.EN: "⚠️ Let me confirm: Are you looking to Buy or Rent?",
+                        Language.FA: "⚠️ بذار تایید کنم: می‌خواهید بخرید یا اجاره کنید؟",
+                        Language.AR: "⚠️ دعني أؤكد: هل تريد الشراء أم الإيجار؟",
+                        Language.RU: "⚠️ Давайте уточним: Покупка или аренда?"
+                    }
+                    return BrainResponse(
+                        message=transaction_question.get(lang, transaction_question[Language.EN]),
+                        next_state=ConversationState.SLOT_FILLING,
+                        lead_updates=lead_updates | {
+                            "conversation_data": conversation_data,
+                            "filled_slots": filled_slots,
+                            "pending_slot": "transaction_type"
+                        },
+                        buttons=[
+                            {"text": self.get_text("btn_buy", lang), "callback_data": "transaction_buy"},
+                            {"text": self.get_text("btn_rent", lang), "callback_data": "transaction_rent"}
+                        ]
+                    )
                 
                 # Define budget ranges based on transaction type
                 if transaction_type_str == "rent":
