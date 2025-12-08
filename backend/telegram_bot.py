@@ -412,16 +412,13 @@ class TelegramBotHandler:
         telegram_id = str(update.effective_chat.id)
         callback_data = query.data
         
-        # CRITICAL FIX #7: Refresh lead state from database (avoid detached object issues)
+        # CRITICAL FIX #8: Refresh lead object - use fresh instance directly
         async with async_session() as session:
             result = await session.execute(select(Lead).where(Lead.id == lead.id))
             fresh_lead = result.scalars().first()
             if fresh_lead:
-                # Update state attributes on current lead object (keep it attached)
-                lead.conversation_state = fresh_lead.conversation_state
-                lead.language = fresh_lead.language
-                lead.conversation_data = fresh_lead.conversation_data
-                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
+                lead = fresh_lead  # Replace object reference
         
         # FIX #6: Ghost Protocol - Update last interaction timestamp
         if redis_manager.redis_client:
@@ -591,17 +588,15 @@ class TelegramBotHandler:
         message_text = update.message.text
         telegram_id = str(update.effective_chat.id)
         
-        # CRITICAL FIX #7: Refresh lead state from database (avoid detached object issues)
-        # DO NOT replace the lead object - just update its state attributes
+        #  CRITICAL FIX #8: Refresh lead object by using fresh instance from database
+        # The lead from _get_or_create_lead() is detached. We must use fresh_lead directly.
         async with async_session() as session:
             result = await session.execute(select(Lead).where(Lead.id == lead.id))
             fresh_lead = result.scalars().first()
             if fresh_lead:
-                # Update state attributes on the current lead object (keep it attached)
-                lead.conversation_state = fresh_lead.conversation_state
-                lead.language = fresh_lead.language
-                lead.conversation_data = fresh_lead.conversation_data
-                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
+                # REPLACE the lead reference entirely - don't copy attributes!
+                lead = fresh_lead
         
         # CRITICAL: Ghost Protocol - Update last interaction timestamp on EVERY message
         if redis_manager.redis_client:
@@ -637,19 +632,13 @@ class TelegramBotHandler:
         """Handle voice messages with slot filling protection."""
         lead = await self._get_or_create_lead(update)
         
-        # CRITICAL FIX #7: Refresh lead state from database (avoid detached object issues)
+        # CRITICAL FIX #8: Refresh lead object - use fresh instance directly
         async with async_session() as session:
             result = await session.execute(select(Lead).where(Lead.id == lead.id))
             fresh_lead = result.scalars().first()
             if fresh_lead:
-                # Update state attributes on current lead object (keep it attached)
-                lead.conversation_state = fresh_lead.conversation_state
-                lead.language = fresh_lead.language
-                lead.conversation_data = fresh_lead.conversation_data
-                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
-        
-        # ZOMBIE STATE PROTECTION: If in SLOT_FILLING with pending button selection, guide them
-                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
+                lead = fresh_lead  # Replace object reference
         
         # ZOMBIE STATE PROTECTION: If in SLOT_FILLING with pending button selection, guide them
         if lead.conversation_state == ConversationState.SLOT_FILLING and lead.pending_slot:
@@ -770,13 +759,13 @@ class TelegramBotHandler:
         """Handle shared contact (phone number)."""
         lead = await self._get_or_create_lead(update)
         
-        # CRITICAL FIX #7: Refresh lead to ensure latest state from database
+        # CRITICAL FIX #8: Refresh lead object - use fresh instance directly
         async with async_session() as session:
             result = await session.execute(select(Lead).where(Lead.id == lead.id))
             fresh_lead = result.scalars().first()
             if fresh_lead:
-                lead = fresh_lead
-                logger.info(f"🔄 Refreshed lead {lead.id}, state={lead.conversation_state}")
+                logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
+                lead = fresh_lead  # Replace object reference
         
         contact = update.message.contact
         
