@@ -36,10 +36,6 @@ async def add_enum_values():
                 "FRIDAY", "SATURDAY", "SUNDAY"
             ]),
             ("SubscriptionStatus", "subscriptionstatus", ["TRIAL", "ACTIVE", "SUSPENDED", "CANCELLED"]),
-            ("PainPoint", "painpoint", [
-                "INFLATION_RISK", "VISA_INSECURITY", "RENTAL_INSTABILITY",
-                "FOMO_MARKET", "FAMILY_PRESSURE", "FUTURE_UNCERTAINTY"
-            ]),
         ]
         
         for enum_name, enum_type, values in enum_updates:
@@ -141,20 +137,8 @@ async def update_data():
             """),
             ("leads.pain_point", """
                 UPDATE leads 
-                SET pain_point = CASE pain_point::text
-                    WHEN 'inflation_risk' THEN 'INFLATION_RISK'
-                    WHEN 'visa_insecurity' THEN 'VISA_INSECURITY'
-                    WHEN 'rental_instability' THEN 'RENTAL_INSTABILITY'
-                    WHEN 'fomo_market' THEN 'FOMO_MARKET'
-                    WHEN 'family_pressure' THEN 'FAMILY_PRESSURE'
-                    WHEN 'future_uncertainty' THEN 'FUTURE_UNCERTAINTY'
-                    ELSE pain_point::text
-                END::painpoint
+                SET pain_point = UPPER(pain_point)
                 WHERE pain_point IS NOT NULL
-                AND pain_point::text IN (
-                    'inflation_risk', 'visa_insecurity', 'rental_instability',
-                    'fomo_market', 'family_pressure', 'future_uncertainty'
-                )
             """),
             ("appointments.appointment_type", """
                 UPDATE appointments 
