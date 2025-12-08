@@ -1508,10 +1508,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 if isinstance(lead.conversation_state, ConversationState):
                     current_state = lead.conversation_state
                 else:
-                    # CRITICAL FIX: Convert lowercase string to UPPERCASE before creating enum
-                    # Database stores "collecting_name", enum expects "COLLECTING_NAME"
-                    state_str = str(lead.conversation_state).upper()
-                    current_state = ConversationState(state_str)
+                    # Convert string to enum (strings are already lowercase matching enum)
+                    current_state = ConversationState(lead.conversation_state)
             except (ValueError, KeyError) as e:
                 logger.error(f"❌ Failed to convert state '{lead.conversation_state}' to enum: {e}")
                 current_state = ConversationState.START

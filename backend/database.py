@@ -45,127 +45,127 @@ Base = declarative_base()
 # ==================== ENUMS ====================
 
 class Language(str, Enum):
-    EN = "EN"
-    FA = "FA"
-    AR = "AR"
-    RU = "RU"
+    EN = "en"
+    FA = "fa"
+    AR = "ar"
+    RU = "ru"
 
 
 class LeadStatus(str, Enum):
-    NEW = "NEW"
-    CONTACTED = "CONTACTED"
-    QUALIFIED = "QUALIFIED"
-    VIEWING_SCHEDULED = "VIEWING_SCHEDULED"
-    NEGOTIATING = "NEGOTIATING"
-    CLOSED_WON = "CLOSED_WON"
-    CLOSED_LOST = "CLOSED_LOST"
+    NEW = "new"
+    CONTACTED = "contacted"
+    QUALIFIED = "qualified"
+    VIEWING_SCHEDULED = "viewing_scheduled"
+    NEGOTIATING = "negotiating"
+    CLOSED_WON = "closed_won"
+    CLOSED_LOST = "closed_lost"
 
 
 class TransactionType(str, Enum):
-    BUY = "BUY"
-    RENT = "RENT"
+    BUY = "buy"
+    RENT = "rent"
 
 
 class PropertyType(str, Enum):
-    APARTMENT = "APARTMENT"
-    VILLA = "VILLA"
-    PENTHOUSE = "PENTHOUSE"
-    TOWNHOUSE = "TOWNHOUSE"
-    STUDIO = "STUDIO"
-    COMMERCIAL = "COMMERCIAL"
-    LAND = "LAND"
+    APARTMENT = "apartment"
+    VILLA = "villa"
+    PENTHOUSE = "penthouse"
+    TOWNHOUSE = "townhouse"
+    STUDIO = "studio"
+    COMMERCIAL = "commercial"
+    LAND = "land"
 
 
 class PaymentMethod(str, Enum):
-    CASH = "CASH"
-    INSTALLMENT = "INSTALLMENT"
-    MORTGAGE = "MORTGAGE"
+    CASH = "cash"
+    INSTALLMENT = "installment"
+    MORTGAGE = "mortgage"
 
 
 class Purpose(str, Enum):
-    INVESTMENT = "INVESTMENT"
-    LIVING = "LIVING"
-    RESIDENCY = "RESIDENCY"  # Golden Visa
+    INVESTMENT = "investment"
+    LIVING = "living"
+    RESIDENCY = "residency"  # Golden Visa
 
 
 class AppointmentType(str, Enum):
-    ONLINE = "ONLINE"
-    OFFICE = "OFFICE"
-    VIEWING = "VIEWING"
+    ONLINE = "online"
+    OFFICE = "office"
+    VIEWING = "viewing"
 
 
 class DayOfWeek(str, Enum):
-    MONDAY = "MONDAY"
-    TUESDAY = "TUESDAY"
-    WEDNESDAY = "WEDNESDAY"
-    THURSDAY = "THURSDAY"
-    FRIDAY = "FRIDAY"
-    SATURDAY = "SATURDAY"
-    SUNDAY = "SUNDAY"
+    MONDAY = "monday"
+    TUESDAY = "tuesday"
+    WEDNESDAY = "wednesday"
+    THURSDAY = "thursday"
+    FRIDAY = "friday"
+    SATURDAY = "saturday"
+    SUNDAY = "sunday"
 
 
 class SubscriptionStatus(str, Enum):
-    TRIAL = "TRIAL"
-    ACTIVE = "ACTIVE"
-    SUSPENDED = "SUSPENDED"
-    CANCELLED = "CANCELLED"
+    TRIAL = "trial"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    CANCELLED = "cancelled"
 
 
 class FeatureFlag(str, Enum):
     """Available features that can be enabled/disabled per tenant"""
-    RAG_SYSTEM = "RAG_SYSTEM"  # Retrieval-Augmented Generation (Knowledge Base)
-    VOICE_AI = "VOICE_AI"  # Voice call automation
-    ADVANCED_ANALYTICS = "ADVANCED_ANALYTICS"  # Advanced reporting & insights
-    WHATSAPP_BOT = "WHATSAPP_BOT"  # WhatsApp integration
-    TELEGRAM_BOT = "TELEGRAM_BOT"  # Telegram integration
-    BROADCAST_MESSAGES = "BROADCAST_MESSAGES"  # Mass messaging
-    LOTTERY_SYSTEM = "LOTTERY_SYSTEM"  # Gamification - lottery
-    CALENDAR_BOOKING = "CALENDAR_BOOKING"  # Appointment scheduling
-    LEAD_EXPORT = "LEAD_EXPORT"  # Export leads to CSV/Excel
-    API_ACCESS = "API_ACCESS"  # REST API access
-    CUSTOM_BRANDING = "CUSTOM_BRANDING"  # White-label branding
-    MULTI_LANGUAGE = "MULTI_LANGUAGE"  # 4 language support (FA/EN/AR/RU)
+    RAG_SYSTEM = "rag_system"  # Retrieval-Augmented Generation (Knowledge Base)
+    VOICE_AI = "voice_ai"  # Voice call automation
+    ADVANCED_ANALYTICS = "advanced_analytics"  # Advanced reporting & insights
+    WHATSAPP_BOT = "whatsapp_bot"  # WhatsApp integration
+    TELEGRAM_BOT = "telegram_bot"  # Telegram integration
+    BROADCAST_MESSAGES = "broadcast_messages"  # Mass messaging
+    LOTTERY_SYSTEM = "lottery_system"  # Gamification - lottery
+    CALENDAR_BOOKING = "calendar_booking"  # Appointment scheduling
+    LEAD_EXPORT = "lead_export"  # Export leads to CSV/Excel
+    API_ACCESS = "api_access"  # REST API access
+    CUSTOM_BRANDING = "custom_branding"  # White-label branding
+    MULTI_LANGUAGE = "multi_language"  # 4 language support (FA/EN/AR/RU)
 
 
 class PainPoint(str, Enum):
     """Pain points for Pain & Solution technique"""
-    INFLATION_RISK = "INFLATION_RISK"  # Currency devaluation fear
-    VISA_INSECURITY = "VISA_INSECURITY"  # Residency instability
-    ASSET_PROTECTION = "ASSET_PROTECTION"  # Want to protect wealth
-    RENTAL_INCOME = "RENTAL_INCOME"  # Want passive income
-    FAMILY_FUTURE = "FAMILY_FUTURE"  # Children's education/future
-    TAX_OPTIMIZATION = "TAX_OPTIMIZATION"  # Tax-free benefits
+    INFLATION_RISK = "inflation_risk"  # Currency devaluation fear
+    VISA_INSECURITY = "visa_insecurity"  # Residency instability
+    ASSET_PROTECTION = "asset_protection"  # Want to protect wealth
+    RENTAL_INCOME = "rental_income"  # Want passive income
+    FAMILY_FUTURE = "family_future"  # Children's education/future
+    TAX_OPTIMIZATION = "tax_optimization"  # Tax-free benefits
 
 
 class ConversationState(str, Enum):
     """Optimized State Machine for High-Ticket Real Estate Sales"""
-    START = "START"
-    LANGUAGE_SELECT = "LANGUAGE_SELECT"
-    COLLECTING_NAME = "COLLECTING_NAME"  # Ask for customer's name after language
+    START = "start"
+    LANGUAGE_SELECT = "language_select"
+    COLLECTING_NAME = "collecting_name"  # Ask for customer's name after language
     
     # Phase 1: Warmup & Profiling (1-2 questions max)
-    WARMUP = "WARMUP"  # Goal: Investment/Living/Residency
+    WARMUP = "warmup"  # Goal: Investment/Living/Residency
     
     # Phase 1.5: Capture Contact (Get phone number immediately after warmup)
-    CAPTURE_CONTACT = "CAPTURE_CONTACT"  # گرفتن شماره بلافاصله
+    CAPTURE_CONTACT = "capture_contact"  # گرفتن شماره بلافاصله
     
     # Phase 2: Slot Filling (Qualify with context retention)
-    SLOT_FILLING = "SLOT_FILLING"  # Collect: budget, property_type, location
+    SLOT_FILLING = "slot_filling"  # Collect: budget, property_type, location
     
     # Phase 3: Value Proposition (Show matching properties)
-    VALUE_PROPOSITION = "VALUE_PROPOSITION"  # Present solutions based on slots
+    VALUE_PROPOSITION = "value_proposition"  # Present solutions based on slots
     
     # Phase 4: Hard Gate (Capture contact)
-    HARD_GATE = "HARD_GATE"  # Get phone for PDF/Follow-up
+    HARD_GATE = "hard_gate"  # Get phone for PDF/Follow-up
     
     # Phase 5: Engagement (Free conversation with context)
-    ENGAGEMENT = "ENGAGEMENT"  # Answer questions, handle objections
+    ENGAGEMENT = "engagement"  # Answer questions, handle objections
     
     # Phase 6: Handoff (Schedule or Urgent Alert)
-    HANDOFF_SCHEDULE = "HANDOFF_SCHEDULE"  # Book appointment
-    HANDOFF_URGENT = "HANDOFF_URGENT"  # Hot lead - immediate notification
+    HANDOFF_SCHEDULE = "handoff_schedule"  # Book appointment
+    HANDOFF_URGENT = "handoff_urgent"  # Hot lead - immediate notification
     
-    COMPLETED = "COMPLETED"
+    COMPLETED = "completed"
 
 
 # ==================== MODELS ====================
@@ -643,7 +643,7 @@ async def get_or_create_lead(
 
 
 async def update_lead(lead_id: int, **kwargs) -> Lead:
-    """Update lead fields. Automatically converts enums to UPPERCASE string values."""
+    """Update lead fields. Enums are stored as-is (lowercase values matching enum definitions)."""
     async with async_session() as session:
         result = await session.execute(
             select(Lead).where(Lead.id == lead_id)
@@ -653,21 +653,9 @@ async def update_lead(lead_id: int, **kwargs) -> Lead:
         if lead:
             for key, value in kwargs.items():
                 if hasattr(lead, key):
-                    # Convert ConversationState enum to UPPERCASE string value (matching enum definition)
-                    if key == 'conversation_state' and isinstance(value, ConversationState):
-                        value = value.value  # Already uppercase in enum
-                    # Convert Language enum to UPPERCASE string value
-                    if key == 'language' and isinstance(value, Language):
-                        value = value.value  # Already uppercase in enum
-                    # Convert Purpose enum to UPPERCASE string value
-                    if key == 'purpose' and isinstance(value, Purpose):
-                        value = value.value  # Already uppercase in enum
-                    # Convert TransactionType enum to UPPERCASE string value
-                    if key == 'transaction_type' and isinstance(value, TransactionType):
-                        value = value.value  # Already uppercase in enum
-                    # Convert PropertyType enum to UPPERCASE string value
-                    if key == 'property_type' and isinstance(value, PropertyType):
-                        value = value.value  # Already uppercase in enum
+                    # Convert enum to its string value if needed
+                    if isinstance(value, Enum):
+                        value = value.value
                     setattr(lead, key, value)
             lead.updated_at = datetime.utcnow()
             lead.last_interaction = datetime.utcnow()
