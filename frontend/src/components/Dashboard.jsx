@@ -387,15 +387,6 @@ const Dashboard = ({ user, onLogout }) => {
                             </div>
                         </div>
                     </div>
-
-                    {/* Calendar Widget */}
-                    <WeeklyCalendar
-                        slots={slots}
-                        onAddSlot={handleAddSlot}
-                        onDeleteSlot={handleDeleteSlot}
-                        compactMode={true}
-                        onOpenFullCalendar={() => setActiveTab('calendar')}
-                    />
                 </div>
             )}
 

@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, CalendarDays, Building2, BarChart3, Settings, LogOut, QrCode, Send, BookOpen, Gift } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, BarChart3, Settings, LogOut, QrCode, Send, BookOpen, Gift } from 'lucide-react';
 
 export const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) => {
   const menuItems = [

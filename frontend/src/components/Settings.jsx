@@ -317,7 +317,7 @@ const Settings = ({ tenantId, token }) => {
                     }`}
                 >
                     <Clock size={16} className="inline mr-2" />
-                    Working Hours
+                    Availability
                 </button>
             </div>
             
@@ -667,9 +667,9 @@ const Settings = ({ tenantId, token }) => {
                     <div>
                         <h3 className="text-white font-semibold flex items-center gap-2">
                             <Clock size={20} className="text-gold-500" />
-                            Weekly Availability
+                            Consultation Schedule
                         </h3>
-                        <p className="text-gray-400 text-sm mt-1">Set your consultation time slots</p>
+                        <p className="text-gray-400 text-sm mt-1">Configure your weekly availability for client meetings</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
