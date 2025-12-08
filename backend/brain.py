@@ -2086,11 +2086,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 if callback_data.startswith("rent_budget_"):
                     idx = int(callback_data.replace("rent_budget_", ""))
                     # RENTAL budget ranges (stored as annual rent in DB)
-                    rent_budget_ranges = [
-                        (0, 50000), (50000, 100000), (100000, 200000), 
-                        (200000, 500000), (500000, None)
-                    ]
-                    min_val, max_val = rent_budget_ranges[idx]
+                    min_val, max_val = RENT_BUDGET_RANGES[idx]
                 else:
                     idx = int(callback_data.replace("buy_budget_", ""))
                     min_val, max_val = BUDGET_RANGES[idx]
@@ -2228,14 +2224,29 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 filled_slots["transaction_type"] = True
                 lead_updates["transaction_type"] = transaction_type_map.get(transaction_type_str)
                 
+                # 🔥 BUG FIX: Both Buy AND Rent need property category!
                 # After transaction type is selected, ask property category (Residential vs Commercial)
                 # This helps determine budget ranges and property types
-                category_question = {
-                    Language.EN: "Perfect! What type of property?",
-                    Language.FA: "عالی! چه نوع ملکی؟",
-                    Language.AR: "رائع! ما نوع العقار؟",
-                    Language.RU: "Отлично! Какой тип недвижимости?"
-                }
+                
+                # Get user's first name for personalization
+                user_name = lead.first_name or conversation_data.get("customer_name", "")
+                name_part = f" {user_name}" if user_name else ""
+                name_part_fa = f" {user_name} عزیز" if user_name else ""
+                
+                if transaction_type_str == "rent":
+                    category_question = {
+                        Language.EN: f"Great choice{name_part}! Rental properties in Dubai offer flexibility.\n\n🎤 Send me a voice message anytime!\n📸 Got a photo of your dream home? Share it!\n\nNow, what type of property?",
+                        Language.FA: f"انتخاب خوب{name_part_fa}! اجاره در دبی انعطاف‌پذیری بالایی داره.\n\n🎤 هر وقت خواستی ویس بفرست!\n📸 عکس خونه رویاییت رو داری؟ بفرست!\n\nحالا، چه نوع ملکی؟",
+                        Language.AR: f"اختيار جيد{name_part}! العقارات الإيجارية في دبي توفر المرونة.\n\n🎤 أرسل رسالة صوتية في أي وقت!\n📸 عندك صورة منزلك المثالي؟ شاركها!\n\nالآن، ما نوع العقار؟",
+                        Language.RU: f"Отличный выбор{name_part}! Аренда в Дубае дает гибкость.\n\n🎤 Отправь голосовое!\n📸 Есть фото дома мечты? Поделись!\n\nТеперь, какой тип?"
+                    }
+                else:  # buy
+                    category_question = {
+                        Language.EN: f"Perfect{name_part}! Buying in Dubai is a smart investment.\n\n🎤 Send me a voice message anytime!\n📸 Got a photo of your dream property? Share it!\n\nWhat type of property?",
+                        Language.FA: f"عالی{name_part_fa}! خرید در دبی سرمایه‌گذاری هوشمندانه‌ایه.\n\n🎤 هر وقت خواستی ویس بفرست!\n📸 عکس ملک رویاییت رو داری؟ بفرست!\n\nچه نوع ملکی؟",
+                        Language.AR: f"ممتاز{name_part}! الشراء في دبي استثمار ذكي.\n\n🎤 أرسل رسالة صوتية!\n📸 عندك صورة عقارك المثالي؟ شاركها!\n\nما نوع العقار؟",
+                        Language.RU: f"Отлично{name_part}! Покупка в Дубае - умная инвестиция.\n\n🎤 Отправь голосовое!\n📸 Есть фото объекта мечты? Поделись!\n\nКакой тип?"
+                    }
                 
                 category_buttons = [
                     {"text": "🏠 " + ("مسکونی" if lang == Language.FA else "Residential" if lang == Language.EN else "سكني" if lang == Language.AR else "Жилая"), 
@@ -2265,15 +2276,6 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 
                 # Define budget ranges based on transaction type
                 if transaction_type_str == "rent":
-                    # RENTAL budget ranges (annual rent stored, displayed as monthly)
-                    rent_budget_ranges = [
-                        (0, 50000),       # 0 - 4,167 AED/month
-                        (50000, 100000),  # 4,167 - 8,333 AED/month
-                        (100000, 200000), # 8,333 - 16,667 AED/month
-                        (200000, 500000), # 16,667 - 41,667 AED/month
-                        (500000, None)    # 41,667+ AED/month
-                    ]
-                    
                     # Get customer name for personalization
                     customer_name = conversation_data.get("customer_name", "")
                     name_suffix = f", {customer_name}" if customer_name else ""
@@ -2287,7 +2289,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     }
                     
                     budget_buttons = []
-                    for i, (min_val, max_val) in enumerate(rent_budget_ranges):
+                    for i, (min_val, max_val) in enumerate(RENT_BUDGET_RANGES.values()):
                         # Display as monthly (annual / 12)
                         monthly_min = min_val // 12
                         if max_val:
