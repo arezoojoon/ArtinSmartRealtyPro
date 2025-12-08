@@ -150,23 +150,6 @@ async def update_data():
                 END::appointmenttype
                 WHERE appointment_type::text IN ('online', 'office', 'viewing')
             """),
-            ("schedule_slots.day_of_week", """
-                UPDATE schedule_slots 
-                SET day_of_week = CASE day_of_week::text
-                    WHEN 'monday' THEN 'MONDAY'
-                    WHEN 'tuesday' THEN 'TUESDAY'
-                    WHEN 'wednesday' THEN 'WEDNESDAY'
-                    WHEN 'thursday' THEN 'THURSDAY'
-                    WHEN 'friday' THEN 'FRIDAY'
-                    WHEN 'saturday' THEN 'SATURDAY'
-                    WHEN 'sunday' THEN 'SUNDAY'
-                    ELSE day_of_week::text
-                END::dayofweek
-                WHERE day_of_week::text IN (
-                    'monday', 'tuesday', 'wednesday', 'thursday',
-                    'friday', 'saturday', 'sunday'
-                )
-            """),
             ("tenants.subscription_status", """
                 UPDATE tenants 
                 SET subscription_status = CASE subscription_status::text
@@ -192,9 +175,15 @@ async def update_data():
         ]
         
         for field, update_sql in data_updates:
-            result = await conn.execute(text(update_sql))
-            rows_updated = result.rowcount if hasattr(result, 'rowcount') else 0
-            print(f"✓ Updated {rows_updated} {field} values")
+            try:
+                result = await conn.execute(text(update_sql))
+                rows_updated = result.rowcount if hasattr(result, 'rowcount') else 0
+                print(f"✓ Updated {rows_updated} {field} values")
+            except Exception as e:
+                if "does not exist" in str(e):
+                    print(f"⚠ Skipped {field} (table/column not found)")
+                else:
+                    raise
     
     print("\n✅ Step 2 completed: All data updated to UPPERCASE!\n")
 
