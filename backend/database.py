@@ -306,6 +306,14 @@ class Lead(Base):
     urgency_score = Column(Integer, default=0)  # 0-10 scale for FOMO tracking
     fomo_messages_sent = Column(Integer, default=0)  # Track FOMO messages sent
     
+    # Lead Scoring & Engagement Tracking
+    lead_score = Column(Integer, default=0)  # 0-100 score based on engagement + qualification
+    temperature = Column(String(20), default="cold")  # "burning", "hot", "warm", "cold"
+    qr_scan_count = Column(Integer, default=0)  # Number of times QR code scanned
+    catalog_views = Column(Integer, default=0)  # Number of catalog/brochure views
+    messages_count = Column(Integer, default=0)  # Total messages sent by lead
+    total_interactions = Column(Integer, default=0)  # Sum of all engagement activities
+    
     # Conversation State (for state machine)
     conversation_state = Column(String(50), default="start")  # Store as string to avoid enum uppercase issue
     conversation_data = Column(JSON, default=dict)  # Temporary data during qualification

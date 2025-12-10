@@ -245,6 +245,14 @@ class LeadResponse(BaseModel):
     source: str
     last_interaction: Optional[datetime]
     created_at: datetime
+    
+    # Sales Intelligence Fields
+    lead_score: int = 0
+    temperature: str = "cold"
+    qr_scan_count: int = 0
+    catalog_views: int = 0
+    messages_count: int = 0
+    total_interactions: int = 0
 
     class Config:
         from_attributes = True
@@ -1236,7 +1244,8 @@ async def list_leads(
     if purpose:
         query = query.where(Lead.purpose == purpose)
     
-    query = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit)
+    # Order by lead_score DESC (hottest leads first), then by created_at DESC
+    query = query.order_by(Lead.lead_score.desc(), Lead.created_at.desc()).offset(skip).limit(limit)
     
     result = await db.execute(query)
     return result.scalars().all()

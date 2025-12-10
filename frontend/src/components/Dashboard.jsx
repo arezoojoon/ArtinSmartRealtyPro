@@ -45,6 +45,33 @@ const PURPOSE_LABELS = {
   residency: '🛂 Residency/Visa',
 };
 
+// Temperature Badge Helper for Lead Scoring
+const getTemperatureBadge = (temperature) => {
+  const badges = {
+    burning: {
+      emoji: '🔥',
+      color: 'bg-red-500/20 text-red-400 border-red-500/30',
+      label: 'BURNING'
+    },
+    hot: {
+      emoji: '🌶️',
+      color: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+      label: 'HOT'
+    },
+    warm: {
+      emoji: '☀️',
+      color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      label: 'WARM'
+    },
+    cold: {
+      emoji: '❄️',
+      color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      label: 'COLD'
+    },
+  };
+  return badges[temperature] || badges.cold;
+};
+
 // ==================== API HELPERS ====================
 
 const getAuthHeaders = () => {
@@ -122,31 +149,63 @@ const KpiCard = ({ title, value, trend, icon: Icon, trendUp, color = 'gold' }) =
     </div>
 );
 
-// Lead Card Component with Glass Effect
-const LeadCard = ({ name, phone, budget, purpose, onClick }) => (
-    <div 
-        onClick={onClick}
-        className="glass-card glass-card-hover rounded-xl p-4 cursor-pointer"
-    >
-        <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-500 to-gold-600 flex items-center justify-center text-navy-900 font-bold">
-                {name ? name.charAt(0).toUpperCase() : '?'}
+// Lead Card Component with Glass Effect + Sales Intelligence
+const LeadCard = ({ name, phone, budget, purpose, temperature, lead_score, qr_scan_count, catalog_views, messages_count, total_interactions, onClick }) => {
+    const tempBadge = getTemperatureBadge(temperature);
+    
+    return (
+        <div 
+            onClick={onClick}
+            className="glass-card glass-card-hover rounded-xl p-4 cursor-pointer"
+        >
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-500 to-gold-600 flex items-center justify-center text-navy-900 font-bold">
+                        {name ? name.charAt(0).toUpperCase() : '?'}
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h4 className="text-white font-medium text-sm">{name || 'Anonymous'}</h4>
+                            {lead_score !== undefined && lead_score > 0 && (
+                                <span className="text-xs font-bold text-gold-500 bg-gold-500/10 px-2 py-0.5 rounded">
+                                    {lead_score}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-gray-500 text-xs">{phone || 'No phone'}</p>
+                    </div>
+                </div>
+                {temperature && (
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold ${tempBadge.color}`}>
+                        <span>{tempBadge.emoji}</span>
+                        <span>{tempBadge.label}</span>
+                    </div>
+                )}
             </div>
-            <div>
-                <h4 className="text-white font-medium text-sm">{name || 'Anonymous'}</h4>
-                <p className="text-gray-500 text-xs">{phone || 'No phone'}</p>
-            </div>
+            {budget && (
+                <p className="text-gold-500 text-sm mb-2">💰 Up to AED {(budget / 1000000).toFixed(1)}M</p>
+            )}
+            {purpose && (
+                <span className="inline-block bg-navy-800 text-gray-300 text-xs px-2 py-1 rounded mb-2">
+                    {PURPOSE_LABELS[purpose] || purpose}
+                </span>
+            )}
+            {total_interactions > 0 && (
+                <div className="flex items-center gap-3 pt-2 border-t border-white/5">
+                    {qr_scan_count > 0 && (
+                        <span className="text-white/40 text-xs">📱 {qr_scan_count} scans</span>
+                    )}
+                    {catalog_views > 0 && (
+                        <span className="text-white/40 text-xs">📄 {catalog_views} views</span>
+                    )}
+                    {messages_count > 0 && (
+                        <span className="text-white/40 text-xs">💬 {messages_count} msgs</span>
+                    )}
+                </div>
+            )}
         </div>
-        {budget && (
-            <p className="text-gold-500 text-sm mb-2">💰 Up to AED {(budget / 1000000).toFixed(1)}M</p>
-        )}
-        {purpose && (
-            <span className="inline-block bg-navy-800 text-gray-300 text-xs px-2 py-1 rounded">
-                {PURPOSE_LABELS[purpose] || purpose}
-            </span>
-        )}
-    </div>
-);
+    );
+};
 
 // Lead Pipeline Kanban Column with Glass Design
 const PipelineColumn = ({ title, leads, colorClass, onLeadClick }) => (
@@ -165,6 +224,12 @@ const PipelineColumn = ({ title, leads, colorClass, onLeadClick }) => (
                     phone={lead.phone}
                     budget={lead.budget_max}
                     purpose={lead.purpose}
+                    temperature={lead.temperature}
+                    lead_score={lead.lead_score}
+                    qr_scan_count={lead.qr_scan_count || 0}
+                    catalog_views={lead.catalog_views || 0}
+                    messages_count={lead.messages_count || 0}
+                    total_interactions={lead.total_interactions || 0}
                     onClick={() => onLeadClick(lead)}
                 />
             ))}

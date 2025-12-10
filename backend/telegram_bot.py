@@ -39,6 +39,7 @@ from brain import Brain, BrainResponse, process_telegram_message, process_voice_
 from redis_manager import redis_manager, init_redis, close_redis
 from context_recovery import save_context_to_redis, handle_user_message_with_recovery
 from inline_keyboards import edit_message_with_checkmark
+from lead_scoring import increment_engagement, update_lead_score
 
 # Configure logging
 logging.basicConfig(
@@ -677,6 +678,15 @@ class TelegramBotHandler:
         async with user_locks[telegram_id]:
             logger.info(f"🔒 Lock acquired for user {telegram_id}")
             
+            # Track message engagement
+            async with async_session() as session:
+                result = await session.execute(select(Lead).where(Lead.id == lead.id))
+                db_lead = result.scalars().first()
+                if db_lead:
+                    increment_engagement(db_lead, "message")
+                    await session.commit()
+                    logger.info(f"📊 Updated lead score: {db_lead.lead_score} ({db_lead.temperature})")
+            
             # Load context from Redis (with recovery if timeout occurred)
             redis_context = await redis_manager.get_context(telegram_id, self.tenant.id)
             if redis_context:
@@ -746,6 +756,16 @@ class TelegramBotHandler:
         if transcript:
             await update_lead(lead.id, voice_transcript=transcript)
             logger.info(f"🎤 Voice transcript saved for lead {lead.id}: {transcript[:100]}...")
+            
+            # Update lead score (voice = high engagement)
+            async with async_session() as session:
+                result = await session.execute(select(Lead).where(Lead.id == lead.id))
+                db_lead = result.scalars().first()
+                if db_lead:
+                    db_lead.messages_count += 1  # Count voice as message
+                    update_lead_score(db_lead)  # Recalculate with voice bonus
+                    await session.commit()
+                    logger.info(f"📊 Updated lead score after voice: {db_lead.lead_score} ({db_lead.temperature})")
         
         # Save context to Redis after voice processing
         await save_context_to_redis(lead)
