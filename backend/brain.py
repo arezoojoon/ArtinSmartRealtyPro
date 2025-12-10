@@ -799,6 +799,214 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         text = TRANSLATIONS.get(key, {}).get(lang, TRANSLATIONS.get(key, {}).get(Language.EN, key))
         return text.format(agent_name=self.agent_name, **kwargs)
     
+    async def handle_floating_input(
+        self,
+        lead: Lead,
+        message: str,
+        expected_state: ConversationState,
+        conversation_data: Dict
+    ) -> Optional[BrainResponse]:
+        """
+        🎯 FLOATING LOGIC HANDLER
+        
+        Handles "off-script" user input when they:
+        1. Ask questions while we're waiting for button clicks
+        2. Send voice/text instead of clicking buttons
+        3. Try to jump to different topics mid-flow
+        
+        Returns:
+            BrainResponse if we handled it, None if normal flow should continue
+        """
+        lang = lead.language or Language.EN
+        
+        # 1. Check for cancellation/reset keywords
+        cancel_keywords = {
+            Language.EN: ['cancel', 'stop', 'restart', 'start over', 'main menu'],
+            Language.FA: ['لغو', 'کنسل', 'منو اصلی', 'شروع دوباره', 'بازگشت'],
+            Language.AR: ['إلغاء', 'توقف', 'القائمة الرئيسية', 'البداية من جديد'],
+            Language.RU: ['отмена', 'стоп', 'главное меню', 'начать заново']
+        }
+        
+        if any(keyword in message.lower() for keyword in cancel_keywords.get(lang, [])):
+            logger.info(f"🔄 User {lead.id} requested cancellation/restart")
+            # Reset to start
+            conversation_data.clear()
+            return BrainResponse(
+                message=self.get_text("welcome", lang),
+                buttons=self._get_language_buttons(),
+                next_state=ConversationState.START
+            )
+        
+        # 2. Smart extraction attempt - try to parse what they said
+        extracted_data = await self._smart_extract_from_text(message, expected_state, lang)
+        
+        if extracted_data:
+            logger.info(f"✅ Smart extraction successful: {extracted_data}")
+            # User provided data in text/voice instead of button
+            # Update conversation_data and continue flow
+            conversation_data.update(extracted_data)
+            return None  # Let normal flow continue with extracted data
+        
+        # 3. User is asking a question - answer it and redirect back
+        is_question = any(char in message for char in ['؟', '?']) or any(
+            word in message.lower() for word in [
+                'چطور', 'چه', 'کی', 'کجا', 'چرا', 'آیا',  # Persian
+                'how', 'what', 'when', 'where', 'why', 'do you', 'can you', 'is it',  # English
+                'هل', 'اين', 'ما', 'كيف', 'متى',  # Arabic
+                'что', 'как', 'когда', 'где', 'почему'  # Russian
+            ]
+        )
+        
+        if is_question:
+            logger.info(f"❓ User {lead.id} asked question during {expected_state}: {message}")
+            
+            # Generate AI answer using Gemini
+            ai_answer = await self.generate_ai_response(message, lead, "")
+            
+            # Add polite redirect back to flow
+            redirect_messages = {
+                Language.EN: "\n\n💡 By the way, to continue helping you find the perfect property, ",
+                Language.FA: "\n\n💡 راستی، برای کمک به شما در پیدا کردن ملک ایده‌آل، ",
+                Language.AR: "\n\n💡 بالمناسبة، لمواصلة مساعدتك في العثور على العقار المثالي، ",
+                Language.RU: "\n\n💡 Кстати, чтобы продолжить помогать вам найти идеальную недвижимость, "
+            }
+            
+            # Context-aware redirect based on current state
+            if expected_state == ConversationState.SLOT_FILLING:
+                pending_slot = conversation_data.get("pending_slot")
+                if pending_slot == "budget":
+                    redirect = {
+                        Language.EN: "what's your budget range?",
+                        Language.FA: "بودجه شما چقدر است؟",
+                        Language.AR: "ما هي ميزانيتك؟",
+                        Language.RU: "каков ваш бюджет?"
+                    }
+                elif pending_slot == "property_type":
+                    redirect = {
+                        Language.EN: "what type of property interests you?",
+                        Language.FA: "چه نوع ملکی به شما علاقه‌مند است؟",
+                        Language.AR: "ما نوع العقار الذي يهمك؟",
+                        Language.RU: "какой тип недвижимости вас интересует?"
+                    }
+                else:
+                    redirect = {
+                        Language.EN: "please select from the options above.",
+                        Language.FA: "لطفاً از گزینه‌های بالا انتخاب کنید.",
+                        Language.AR: "يرجى الاختيار من الخيارات أعلاه.",
+                        Language.RU: "пожалуйста, выберите из вариантов выше."
+                    }
+                
+                full_response = ai_answer + redirect_messages.get(lang, "") + redirect.get(lang, "")
+                
+                # Return same buttons as before
+                return BrainResponse(
+                    message=full_response,
+                    buttons=self._get_buttons_for_state(expected_state, conversation_data, lang),
+                    next_state=expected_state  # Stay in same state
+                )
+        
+        # 4. Unrecognized input - gentle nudge
+        nudge_messages = {
+            Language.EN: "I'd love to help! Please select one of the options above to continue. 👆",
+            Language.FA: "خوشحال می‌شم کمک کنم! لطفاً یکی از گزینه‌های بالا رو انتخاب کن تا ادامه بدیم. 👆",
+            Language.AR: "يسعدني مساعدتك! يرجى اختيار أحد الخيارات أعلاه للمتابعة. 👆",
+            Language.RU: "С радостью помогу! Пожалуйста, выберите один из вариантов выше, чтобы продолжить. 👆"
+        }
+        
+        return BrainResponse(
+            message=nudge_messages.get(lang, nudge_messages[Language.EN]),
+            buttons=self._get_buttons_for_state(expected_state, conversation_data, lang),
+            next_state=expected_state
+        )
+    
+    async def _smart_extract_from_text(
+        self,
+        message: str,
+        expected_state: ConversationState,
+        lang: Language
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Attempt to extract structured data from freeform text/voice.
+        
+        Returns dict with extracted fields if successful, None otherwise.
+        """
+        extracted = {}
+        message_lower = message.lower()
+        
+        # Extract budget from text
+        # Patterns: "2 million", "دو میلیون", "2M", "2000000", "2-3M"
+        budget_patterns = [
+            r'(\d+\.?\d*)\s*(million|میلیون|مليون|миллион)',  # "2 million"
+            r'(\d+\.?\d*)\s*m\b',  # "2M"
+            r'(\d{6,})',  # Raw numbers >= 1 million
+            r'(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*(million|میلیون|مليون|миллион)'  # "2-3 million"
+        ]
+        
+        for pattern in budget_patterns:
+            match = re.search(pattern, message_lower)
+            if match:
+                try:
+                    if len(match.groups()) >= 3:  # Range pattern
+                        min_val = float(match.group(1)) * 1_000_000
+                        max_val = float(match.group(2)) * 1_000_000
+                        extracted['budget_min'] = int(min_val)
+                        extracted['budget_max'] = int(max_val)
+                    else:
+                        amount = float(match.group(1))
+                        if 'million' in match.group(0) or 'میلیون' in match.group(0):
+                            amount *= 1_000_000
+                        extracted['budget_max'] = int(amount)
+                    logger.info(f"💰 Extracted budget from text: {extracted}")
+                    break
+                except (ValueError, IndexError):
+                    pass
+        
+        # Extract property type
+        property_keywords = {
+            'apartment': ['apartment', 'flat', 'آپارتمان', 'شقة', 'квартира'],
+            'villa': ['villa', 'ویلا', 'فيلا', 'вилла'],
+            'penthouse': ['penthouse', 'پنت‌هاوس', 'بنتهاوس', 'пентхаус'],
+            'townhouse': ['townhouse', 'تاون‌هاوس', 'تاون هاوس', 'таунхаус'],
+            'studio': ['studio', 'استودیو', 'استوديو', 'студия']
+        }
+        
+        for prop_type, keywords in property_keywords.items():
+            if any(kw in message_lower for kw in keywords):
+                extracted['property_type'] = prop_type
+                logger.info(f"🏠 Extracted property type: {prop_type}")
+                break
+        
+        # Extract bedrooms
+        bedroom_patterns = [
+            r'(\d+)\s*(bed|bedroom|خواب|غرفة|спальня)',
+            r'(\d+)br\b'
+        ]
+        
+        for pattern in bedroom_patterns:
+            match = re.search(pattern, message_lower)
+            if match:
+                try:
+                    bedrooms = int(match.group(1))
+                    extracted['bedrooms_min'] = bedrooms
+                    extracted['bedrooms_max'] = bedrooms
+                    logger.info(f"🛏️ Extracted bedrooms: {bedrooms}")
+                    break
+                except ValueError:
+                    pass
+        
+        return extracted if extracted else None
+    
+    def _get_buttons_for_state(
+        self,
+        state: ConversationState,
+        conversation_data: Dict,
+        lang: Language
+    ) -> List[Dict[str, str]]:
+        """Helper to get appropriate buttons for a given state."""
+        # This would return the same buttons that were shown initially
+        # Implementation depends on your existing button logic
+        return []  # Placeholder - implement based on your button structure
+    
     def get_budget_options(self, lang: Language) -> List[str]:
         """Get budget options in the specified language."""
         return BUDGET_OPTIONS.get(lang, BUDGET_OPTIONS[Language.EN])
@@ -1235,6 +1443,19 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             YOUR NAME: Use ONLY "{self.agent_name}" - NEVER variations like "حامد رضا" if name is "حمیدرضا"
             
             YOUR GOAL: GET THE MEETING OR PHONE NUMBER. EVERYTHING ELSE IS SECONDARY.
+            
+            🎯 CRITICAL INSTRUCTION - MID-FLOW QUESTIONS:
+            **If the user is in the middle of a qualification flow (e.g., selecting budget, property type) 
+            but asks a question instead:**
+            1. ANSWER the question FIRST (1-2 sentences max)
+            2. Add FOMO/urgency element
+            3. IMMEDIATELY redirect back to the pending question
+            
+            Example:
+            User (while budget selection pending): "Do you offer payment plans?"
+            You: "Absolutely! We have flexible 1-5 year payment plans starting at just 1% monthly. Many investors use this to preserve cash flow. 💰
+            
+            By the way, what's your budget range so I can show you properties that qualify for these plans?"
             
             🧠 WOLF CLOSER RULES (FOLLOW STRICTLY):
             1. ALWAYS respond in {lead.language.upper() if isinstance(lead.language, str) else lead.language.value.upper()} language
@@ -2109,9 +2330,27 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         Required slots: budget, property_type, transaction_type
         KEY FEATURE: If user asks FAQ mid-filling, answer it and return to slot collection.
         VOICE SUPPORT: Extracts entities from voice_entities field (populated by process_voice).
+        FLOATING LOGIC: Handles off-script input gracefully.
         """
         conversation_data = lead.conversation_data or {}
         filled_slots = lead.filled_slots or {}
+        
+        # 🎯 FLOATING LOGIC: Check if user went off-script (text/voice instead of button)
+        if message and not callback_data:
+            # User sent text/voice instead of clicking button
+            floating_response = await self.handle_floating_input(
+                lead=lead,
+                message=message,
+                expected_state=ConversationState.SLOT_FILLING,
+                conversation_data=conversation_data
+            )
+            
+            if floating_response and not floating_response.lead_updates:
+                # No smart extraction succeeded - user asked question
+                # Return AI answer + redirect back to slot
+                logger.info(f"🔄 Floating logic handled off-script input for lead {lead.id}")
+                return floating_response
+            # else: smart extraction succeeded, continue with extracted data
         
         # === PRE-FILL FROM VOICE ENTITIES (only if this is NOT a callback) ===
         # Only process voice entities if we're handling a text/voice message, not a button click
