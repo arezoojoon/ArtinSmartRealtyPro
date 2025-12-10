@@ -23,14 +23,17 @@ def calculate_lead_score(lead: Lead) -> int:
     # ===== ENGAGEMENT SCORING (40 points) =====
     engagement_score = 0
     
-    # QR scans (worth 3 points each, max 15)
-    engagement_score += min(lead.qr_scan_count * 3, 15)
+    # QR scans (worth 3 points each, max 15) - NULL SAFE
+    qr_scans = lead.qr_scan_count if lead.qr_scan_count is not None else 0
+    engagement_score += min(qr_scans * 3, 15)
     
-    # Catalog views (worth 2 points each, max 10)
-    engagement_score += min(lead.catalog_views * 2, 10)
+    # Catalog views (worth 2 points each, max 10) - NULL SAFE
+    catalog_views = lead.catalog_views if lead.catalog_views is not None else 0
+    engagement_score += min(catalog_views * 2, 10)
     
-    # Messages (worth 1 point each, max 10)
-    engagement_score += min(lead.messages_count, 10)
+    # Messages (worth 1 point each, max 10) - NULL SAFE
+    messages = lead.messages_count if lead.messages_count is not None else 0
+    engagement_score += min(messages, 10)
     
     # Voice message sent (5 bonus points)
     if lead.voice_transcript:
@@ -132,6 +135,16 @@ def increment_engagement(lead: Lead, activity: str) -> None:
         lead: Lead object
         activity: "qr_scan", "catalog_view", or "message"
     """
+    # Initialize counters if None (for existing leads without these fields)
+    if lead.qr_scan_count is None:
+        lead.qr_scan_count = 0
+    if lead.catalog_views is None:
+        lead.catalog_views = 0
+    if lead.messages_count is None:
+        lead.messages_count = 0
+    if lead.total_interactions is None:
+        lead.total_interactions = 0
+    
     if activity == "qr_scan":
         lead.qr_scan_count += 1
     elif activity == "catalog_view":
@@ -139,11 +152,11 @@ def increment_engagement(lead: Lead, activity: str) -> None:
     elif activity == "message":
         lead.messages_count += 1
     
-    # Update total interactions
+    # Update total interactions (NULL-safe)
     lead.total_interactions = (
-        lead.qr_scan_count + 
-        lead.catalog_views + 
-        lead.messages_count
+        (lead.qr_scan_count or 0) + 
+        (lead.catalog_views or 0) + 
+        (lead.messages_count or 0)
     )
     
     # Recalculate score

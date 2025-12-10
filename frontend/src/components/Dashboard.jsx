@@ -190,7 +190,7 @@ const LeadCard = ({ name, phone, budget, purpose, temperature, lead_score, qr_sc
                     {PURPOSE_LABELS[purpose] || purpose}
                 </span>
             )}
-            {total_interactions > 0 && (
+            {(total_interactions > 0 || qr_scan_count > 0 || catalog_views > 0 || messages_count > 0) && (
                 <div className="flex items-center gap-3 pt-2 border-t border-white/5">
                     {qr_scan_count > 0 && (
                         <span className="text-white/40 text-xs">📱 {qr_scan_count} scans</span>

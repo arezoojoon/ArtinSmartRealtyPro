@@ -829,12 +829,20 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         if any(keyword in message.lower() for keyword in cancel_keywords.get(lang, [])):
             logger.info(f"🔄 User {lead.id} requested cancellation/restart")
-            # Reset to start
+            # Reset to start - return to language selection
             conversation_data.clear()
+            
+            lang_buttons = [
+                {"text": "🇬🇧 English", "callback_data": "lang_en"},
+                {"text": "🇮🇷 فارسی", "callback_data": "lang_fa"},
+                {"text": "🇸🇦 العربية", "callback_data": "lang_ar"},
+                {"text": "🇷🇺 Русский", "callback_data": "lang_ru"}
+            ]
+            
             return BrainResponse(
-                message=self.get_text("welcome", lang),
-                buttons=self._get_language_buttons(),
-                next_state=ConversationState.START
+                message=self.get_text("language_select", lang).format(agent_name=self.agent_name),
+                buttons=lang_buttons,
+                next_state=ConversationState.LANGUAGE_SELECT
             )
         
         # 2. Smart extraction attempt - try to parse what they said
@@ -933,28 +941,49 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         extracted = {}
         message_lower = message.lower()
         
+        # Security: Limit message length to prevent ReDoS attacks
+        if len(message_lower) > 500:
+            logger.warning(f"⚠️ Message too long for extraction ({len(message_lower)} chars), truncating")
+            message_lower = message_lower[:500]
+        
         # Extract budget from text
         # Patterns: "2 million", "دو میلیون", "2M", "2000000", "2-3M"
         budget_patterns = [
-            r'(\d+\.?\d*)\s*(million|میلیون|مليون|миллион)',  # "2 million"
-            r'(\d+\.?\d*)\s*m\b',  # "2M"
-            r'(\d{6,})',  # Raw numbers >= 1 million
-            r'(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*(million|میلیون|مليون|миллион)'  # "2-3 million"
+            r'(\d{1,4}\.?\d{0,2})\s*(million|میلیون|مليون|миллион)',  # "2 million" (max 4 digits)
+            r'(\d{1,4}\.?\d{0,2})\s*m\b',  # "2M" (max 4 digits)
+            r'(\d{6,10})',  # Raw numbers 1M to 10B (limited range)
+            r'(\d{1,4}\.?\d{0,2})\s*-\s*(\d{1,4}\.?\d{0,2})\s*(million|میلیون|مليون|миллион)'  # "2-3 million"
         ]
         
         for pattern in budget_patterns:
-            match = re.search(pattern, message_lower)
+            try:
+                match = re.search(pattern, message_lower, timeout=1)  # 1 second timeout
+            except TimeoutError:
+                logger.warning(f"⚠️ Regex timeout for pattern: {pattern}")
+                continue
+            except Exception as e:
+                logger.error(f"❌ Regex error for pattern {pattern}: {e}")
+                continue
+                
             if match:
                 try:
                     if len(match.groups()) >= 3:  # Range pattern
                         min_val = float(match.group(1)) * 1_000_000
                         max_val = float(match.group(2)) * 1_000_000
+                        # Validate range (max 100M AED)
+                        if min_val > 100_000_000 or max_val > 100_000_000:
+                            logger.warning(f"⚠️ Budget out of range: {min_val}-{max_val}")
+                            continue
                         extracted['budget_min'] = int(min_val)
                         extracted['budget_max'] = int(max_val)
                     else:
                         amount = float(match.group(1))
                         if 'million' in match.group(0) or 'میلیون' in match.group(0):
                             amount *= 1_000_000
+                        # Validate amount (max 100M AED)
+                        if amount > 100_000_000:
+                            logger.warning(f"⚠️ Budget out of range: {amount}")
+                            continue
                         extracted['budget_max'] = int(amount)
                     logger.info(f"💰 Extracted budget from text: {extracted}")
                     break
@@ -1003,9 +1032,73 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         lang: Language
     ) -> List[Dict[str, str]]:
         """Helper to get appropriate buttons for a given state."""
-        # This would return the same buttons that were shown initially
-        # Implementation depends on your existing button logic
-        return []  # Placeholder - implement based on your button structure
+        buttons = []
+        
+        if state == ConversationState.SLOT_FILLING:
+            pending_slot = conversation_data.get("pending_slot")
+            
+            if pending_slot == "budget":
+                # Return budget buttons
+                budget_options = {
+                    Language.EN: [
+                        {"text": "💰 Under 1M AED", "callback_data": "budget_0_1000000"},
+                        {"text": "💰 1M - 2M AED", "callback_data": "budget_1000000_2000000"},
+                        {"text": "💰 2M - 5M AED", "callback_data": "budget_2000000_5000000"},
+                        {"text": "💰 5M+ AED", "callback_data": "budget_5000000_999999999"}
+                    ],
+                    Language.FA: [
+                        {"text": "💰 کمتر از ۱ میلیون", "callback_data": "budget_0_1000000"},
+                        {"text": "💰 ۱ تا ۲ میلیون", "callback_data": "budget_1000000_2000000"},
+                        {"text": "💰 ۲ تا ۵ میلیون", "callback_data": "budget_2000000_5000000"},
+                        {"text": "💰 بیشتر از ۵ میلیون", "callback_data": "budget_5000000_999999999"}
+                    ],
+                    Language.AR: [
+                        {"text": "💰 أقل من 1 مليون", "callback_data": "budget_0_1000000"},
+                        {"text": "💰 1 - 2 مليون", "callback_data": "budget_1000000_2000000"},
+                        {"text": "💰 2 - 5 مليون", "callback_data": "budget_2000000_5000000"},
+                        {"text": "💰 أكثر من 5 مليون", "callback_data": "budget_5000000_999999999"}
+                    ],
+                    Language.RU: [
+                        {"text": "💰 До 1 млн", "callback_data": "budget_0_1000000"},
+                        {"text": "💰 1 - 2 млн", "callback_data": "budget_1000000_2000000"},
+                        {"text": "💰 2 - 5 млн", "callback_data": "budget_2000000_5000000"},
+                        {"text": "💰 Более 5 млн", "callback_data": "budget_5000000_999999999"}
+                    ]
+                }
+                buttons = budget_options.get(lang, budget_options[Language.EN])
+            
+            elif pending_slot == "property_type":
+                category = conversation_data.get("property_category", "residential")
+                if category == "residential":
+                    property_buttons = {
+                        Language.EN: [
+                            {"text": "🏢 Apartment", "callback_data": "prop_apartment"},
+                            {"text": "🏠 Villa", "callback_data": "prop_villa"},
+                            {"text": "🏰 Penthouse", "callback_data": "prop_penthouse"},
+                            {"text": "🏘️ Townhouse", "callback_data": "prop_townhouse"}
+                        ],
+                        Language.FA: [
+                            {"text": "🏢 آپارتمان", "callback_data": "prop_apartment"},
+                            {"text": "🏠 ویلا", "callback_data": "prop_villa"},
+                            {"text": "🏰 پنت‌هاوس", "callback_data": "prop_penthouse"},
+                            {"text": "🏘️ تاون‌هاوس", "callback_data": "prop_townhouse"}
+                        ],
+                        Language.AR: [
+                            {"text": "🏢 شقة", "callback_data": "prop_apartment"},
+                            {"text": "🏠 فيلا", "callback_data": "prop_villa"},
+                            {"text": "🏰 بنتهاوس", "callback_data": "prop_penthouse"},
+                            {"text": "🏘️ تاون هاوس", "callback_data": "prop_townhouse"}
+                        ],
+                        Language.RU: [
+                            {"text": "🏢 Квартира", "callback_data": "prop_apartment"},
+                            {"text": "🏠 Вилла", "callback_data": "prop_villa"},
+                            {"text": "🏰 Пентхаус", "callback_data": "prop_penthouse"},
+                            {"text": "🏘️ Таунхаус", "callback_data": "prop_townhouse"}
+                        ]
+                    }
+                    buttons = property_buttons.get(lang, property_buttons[Language.EN])
+        
+        return buttons
     
     def get_budget_options(self, lang: Language) -> List[str]:
         """Get budget options in the specified language."""

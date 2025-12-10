@@ -1244,8 +1244,13 @@ async def list_leads(
     if purpose:
         query = query.where(Lead.purpose == purpose)
     
-    # Order by lead_score DESC (hottest leads first), then by created_at DESC
-    query = query.order_by(Lead.lead_score.desc(), Lead.created_at.desc()).offset(skip).limit(limit)
+    # Order by lead_score DESC (NULL values last), then by created_at DESC
+    # Use nullslast() to ensure NULLs appear at the end
+    from sqlalchemy import nullslast
+    query = query.order_by(
+        nullslast(Lead.lead_score.desc()), 
+        Lead.created_at.desc()
+    ).offset(skip).limit(limit)
     
     result = await db.execute(query)
     return result.scalars().all()
