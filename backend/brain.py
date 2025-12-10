@@ -901,12 +901,20 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 Return ONLY valid JSON.
                 """
                 
-                # Generate transcript and extract entities with retry logic
+                # Generate transcript and extract entities with retry logic and timeout
                 async def call_gemini_voice():
                     return self.model.generate_content([audio_file, prompt])
                 
                 try:
-                    response = await retry_with_backoff(call_gemini_voice)
+                    # BUG-005 FIX: Add 30s timeout
+                    response = await asyncio.wait_for(
+                        retry_with_backoff(call_gemini_voice),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.error("⏱️ Gemini voice API timeout after 30s")
+                    await loop.run_in_executor(None, genai.delete_file, audio_file.name)
+                    return "Voice processing is taking too long. Please try typing your message instead.", {}
                 except Exception as e:
                     logger.error(f"❌ Gemini voice API failed after retries: {e}")
                     await loop.run_in_executor(None, genai.delete_file, audio_file.name)
@@ -942,14 +950,14 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 import os
                 try:
                     os.unlink(temp_audio_path)
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not delete temp audio file: {e}")
                 # Clean up converted file if it exists
                 if converted_path and os.path.exists(converted_path):
                     try:
                         os.unlink(converted_path)
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not delete converted audio file: {e}")
                     
         except Exception as e:
             logger.error(f"❌ VOICE PROCESSING ERROR: {type(e).__name__}: {str(e)}")
@@ -1105,8 +1113,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 import os
                 try:
                     os.unlink(temp_image_path)
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not delete temp image file: {e}")
                     
         except Exception as e:
             logger.error(f"❌ IMAGE PROCESSING ERROR: {type(e).__name__}: {str(e)}")
@@ -1348,10 +1356,22 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             # Build prompt with lead info context
             full_prompt = f"{system_prompt}{lead_info_context}\n\nUser says: {user_message}"
             
-            response = await asyncio.to_thread(
-                chat.send_message,
-                full_prompt
-            )
+            # BUG-005 FIX: Add timeout to prevent infinite hangs
+            try:
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(chat.send_message, full_prompt),
+                    timeout=30.0
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"⏱️ Gemini API timeout after 30s for lead {lead.id}")
+                lang = lead.language or Language.EN
+                timeout_messages = {
+                    Language.EN: "I'm thinking a bit slowly right now. Could you give me a moment and try again?",
+                    Language.FA: "الان کمی آهسته‌تر فکر می‌کنم. می‌تونید یک لحظه بعد دوباره امتحان کنید؟",
+                    Language.AR: "أنا أفكر بشكل بطيء قليلاً الآن. هل يمكنك المحاولة مرة أخرى بعد لحظة؟",
+                    Language.RU: "Я думаю немного медленно сейчас. Можете попробовать ещё раз через момент?"
+                }
+                return timeout_messages.get(lang, timeout_messages[Language.EN])
             
             # FIX #10d: If user has asked 3+ questions, append consultation suggestion
             final_response = response.text.strip()
@@ -2921,15 +2941,15 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
     async def _validate_phone_number(self, lang: Language, message: str, lead_updates: Dict, customer_name: str = "") -> BrainResponse:
         """
         Validate phone number (phone only, name already collected earlier).
-        Expected format: "+971XXXXXXXXX" (international format)
+        Supports international formats: +971 (UAE), +1 (US/CA), +44 (UK), +7 (RU), +91 (IN), +86 (CN)
         """
         # DATA INTEGRITY: Sanitize input to prevent SQL injection
         if not message or len(message) > 30:
             error_msgs = {
-                Language.EN: f"⚠️ Please enter your phone number{f', {customer_name}' if customer_name else ''}:\n\n**Example:** +971505037158",
+                Language.EN: f"⚠️ Please enter your phone number{f', {customer_name}' if customer_name else ''}:\n\n**Example:** +971505037158 or +14155552671",
                 Language.FA: f"⚠️ لطفاً شماره تماستون رو وارد کنید{f'، {customer_name} عزیز' if customer_name else ''}:\n\n**مثال:** +971505037158",
                 Language.AR: f"⚠️ الرجاء إدخال رقم هاتفك{f'، {customer_name}' if customer_name else ''}:\n\n**مثال:** +971505037158",
-                Language.RU: f"⚠️ Пожалуйста, введите номер телефона{f', {customer_name}' if customer_name else ''}:\n\n**Пример:** +971505037158"
+                Language.RU: f"⚠️ Пожалуйста, введите номер телефона{f', {customer_name}' if customer_name else ''}:\n\n**Пример:** +971505037158 или +79991234567"
             }
             return BrainResponse(
                 message=error_msgs.get(lang, error_msgs[Language.EN]),
@@ -2945,7 +2965,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             if cleaned_phone.isdigit() and len(cleaned_phone) >= 10:
                 cleaned_phone = '+' + cleaned_phone
         
-        # International phone pattern
+        # International phone pattern - supports multiple country codes
         phone_pattern = r'^\+\d{10,15}$'
         
         valid = False

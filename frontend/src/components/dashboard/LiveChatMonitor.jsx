@@ -44,7 +44,7 @@ export default function LiveChatMonitor() {
     });
     
     socket.on('connect', () => {
-      console.log('✅ WebSocket connected');
+      setIsConnected(true);
     });
     
     socket.on('new_message', (data) => {

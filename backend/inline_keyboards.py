@@ -106,8 +106,8 @@ async def edit_message_with_checkmark(
         # Try to at least answer the callback
         try:
             await query.answer()
-        except:
-            pass
+        except Exception as callback_err:
+            logger.debug(f"Could not answer callback query: {callback_err}")
         return False
 
 
@@ -145,8 +145,8 @@ async def remove_keyboard(
         logger.error(f"❌ Failed to remove keyboard: {e}")
         try:
             await query.answer()
-        except:
-            pass
+        except Exception as callback_err:
+            logger.debug(f"Could not answer callback query: {callback_err}")
         return False
 
 

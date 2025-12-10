@@ -32,7 +32,8 @@ from sqlalchemy.future import select
 from database import (
     Tenant, Lead, AgentAvailability, get_tenant_by_bot_token, get_or_create_lead,
     update_lead, ConversationState, book_slot, create_appointment,
-    AppointmentType, async_session, Language, get_available_slots, DayOfWeek
+    AppointmentType, async_session, Language, get_available_slots, DayOfWeek,
+    LeadStatus
 )
 from brain import Brain, BrainResponse, process_telegram_message, process_voice_message
 from redis_manager import redis_manager, init_redis, close_redis
@@ -504,9 +505,42 @@ class TelegramBotHandler:
                             appointment_type=AppointmentType.OFFICE,
                             scheduled_date=appointment_date
                         )
+                        
+                        # Update lead status and state
+                        await update_lead(
+                            lead.id,
+                            status=LeadStatus.VIEWING_SCHEDULED,
+                            conversation_state=ConversationState.COMPLETED
+                        )
+                        
+                        # Send confirmation message
+                        lang = lead.language or Language.EN
+                        day_name = slot.day_of_week.value.capitalize()
+                        time_str = slot.start_time.strftime('%H:%M')
+                        date_str = appointment_date.strftime('%Y-%m-%d')
+                        
+                        confirmation_msgs = {
+                            Language.EN: f"✅ **Consultation Booked Successfully!**\n\n📅 Date: {day_name}, {date_str}\n🕐 Time: {time_str}\n\n{self.tenant.name} will contact you at the scheduled time.\n\nSee you soon! 🏠",
+                            Language.FA: f"✅ **مشاوره با موفقیت رزرو شد!**\n\n📅 تاریخ: {day_name}، {date_str}\n🕐 ساعت: {time_str}\n\n{self.tenant.name} در زمان مقرر با شما تماس خواهد گرفت.\n\nتا دیدار بعدی! 🏠",
+                            Language.AR: f"✅ **تم حجز الاستشارة بنجاح!**\n\n📅 التاريخ: {day_name}، {date_str}\n🕐 الوقت: {time_str}\n\n{self.tenant.name} سيتصل بك في الوقت المحدد.\n\nإلى اللقاء! 🏠",
+                            Language.RU: f"✅ **Консультация успешно забронирована!**\n\n📅 Дата: {day_name}, {date_str}\n🕐 Время: {time_str}\n\n{self.tenant.name} свяжется с вами в назначенное время.\n\nДо скорой встречи! 🏠"
+                        }
+                        
+                        await query.edit_message_text(
+                            confirmation_msgs.get(lang, confirmation_msgs[Language.EN]),
+                            parse_mode='Markdown'
+                        )
+                        
+                        # Save context
+                        await save_context_to_redis(lead)
+                        logger.info(f"✅ Consultation booked for lead {lead.id} on {date_str} at {time_str}")
+                        return
         
         # Handle schedule consultation request - Show available time slots
         elif callback_data == "schedule_consultation":
+            # Update lead state to indicate scheduling in progress
+            await update_lead(lead.id, conversation_state=ConversationState.HANDOFF_SCHEDULE)
+            
             # Get available slots from database
             available_slots = await get_available_slots(self.tenant.id)
             
@@ -588,6 +622,9 @@ class TelegramBotHandler:
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
+            # Save context to Redis
+            await save_context_to_redis(lead)
+            logger.info(f"📅 Showing {len(available_slots)} consultation slots to lead {lead.id}")
             return
         
         # Process through Brain

@@ -279,7 +279,6 @@ const Dashboard = ({ user, onLogout }) => {
     };
 
     const handleLeadClick = (lead) => {
-        console.log('Lead clicked:', lead);
         setActiveTab('leads');
     };
 

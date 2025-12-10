@@ -78,7 +78,7 @@ class RedisManager:
             True if saved successfully
         """
         if not self.redis_client:
-            logger.warning("Redis not available, skipping context save")
+            logger.warning("Redis not available, skipping context save - bot will continue in degraded mode")
             return False
         
         try:
@@ -93,7 +93,8 @@ class RedisManager:
             logger.info(f"💾 Context saved for user {telegram_id} (tenant {tenant_id})")
             return True
         except Exception as e:
-            logger.error(f"❌ Failed to save context: {e}")
+            logger.warning(f"⚠️ Failed to save context to Redis: {e} - bot will continue without session persistence")
+            # BUG-006 FIX: Don't crash, just log and continue
             return False
     
     async def get_context(
@@ -104,10 +105,10 @@ class RedisManager:
         """
         Retrieve user conversation context from Redis.
         
-        EDGE CASE PROTECTION: If key expired at exactly 24h, return None gracefully.
-        Bot will detect missing context and create new session.
+        Returns None if Redis unavailable - bot will work in degraded mode.
         """
         if not self.redis_client:
+            logger.debug("Redis not available - returning None for context (degraded mode)")
             return None
         
         try:

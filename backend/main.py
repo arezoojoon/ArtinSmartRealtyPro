@@ -606,8 +606,123 @@ app.include_router(lotteries.router)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Basic health check endpoint."""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.get("/admin/health/dashboard")
+async def health_dashboard(current_tenant: Tenant = Depends(get_current_tenant)):
+    """
+    Comprehensive health dashboard for platform owner.
+    Shows status of all critical services and metrics.
+    Only accessible by super admin.
+    """
+    # Security: Only super admin can access
+    if not current_tenant or not current_tenant.is_super_admin:
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    
+    health_status = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "services": {},
+        "metrics": {},
+        "errors": []
+    }
+    
+    # Check Database
+    try:
+        async with async_session() as session:
+            result = await session.execute(select(Tenant).limit(1))
+            result.scalar_one_or_none()
+        health_status["services"]["database"] = {
+            "status": "healthy",
+            "type": "PostgreSQL"
+        }
+    except Exception as e:
+        health_status["services"]["database"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        health_status["errors"].append(f"Database: {str(e)}")
+    
+    # Check Redis
+    try:
+        from redis_manager import redis_manager
+        if redis_manager.redis_client:
+            await redis_manager.redis_client.ping()
+            health_status["services"]["redis"] = {"status": "healthy"}
+        else:
+            health_status["services"]["redis"] = {
+                "status": "degraded",
+                "message": "Not connected - bot running in degraded mode"
+            }
+    except Exception as e:
+        health_status["services"]["redis"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        health_status["errors"].append(f"Redis: {str(e)}")
+    
+    # Check Gemini API
+    try:
+        import google.generativeai as genai
+        if GEMINI_API_KEY := os.getenv("GEMINI_API_KEY"):
+            genai.configure(api_key=GEMINI_API_KEY)
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Quick test
+            test_response = model.generate_content("Hello")
+            if test_response.text:
+                health_status["services"]["gemini_api"] = {"status": "healthy"}
+            else:
+                health_status["services"]["gemini_api"] = {
+                    "status": "degraded",
+                    "message": "API responding but empty response"
+                }
+        else:
+            health_status["services"]["gemini_api"] = {
+                "status": "unconfigured",
+                "message": "GEMINI_API_KEY not set"
+            }
+            health_status["errors"].append("Gemini API: Missing API key")
+    except Exception as e:
+        health_status["services"]["gemini_api"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        health_status["errors"].append(f"Gemini API: {str(e)}")
+    
+    # Get metrics
+    try:
+        async with async_session() as session:
+            # Total tenants
+            tenant_count = await session.execute(select(Tenant))
+            health_status["metrics"]["total_tenants"] = len(tenant_count.scalars().all())
+            
+            # Active bots (tenants with bot tokens)
+            active_bots = await session.execute(
+                select(Tenant).where(Tenant.telegram_bot_token.isnot(None))
+            )
+            health_status["metrics"]["active_telegram_bots"] = len(active_bots.scalars().all())
+            
+            # Total leads
+            total_leads = await session.execute(select(Lead))
+            health_status["metrics"]["total_leads"] = len(total_leads.scalars().all())
+            
+            # Leads today
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            leads_today = await session.execute(
+                select(Lead).where(Lead.created_at >= today_start)
+            )
+            health_status["metrics"]["leads_today"] = len(leads_today.scalars().all())
+    except Exception as e:
+        health_status["errors"].append(f"Metrics collection: {str(e)}")
+    
+    # Overall status
+    if health_status["errors"]:
+        health_status["overall_status"] = "degraded" if health_status["services"].get("database", {}).get("status") == "healthy" else "unhealthy"
+    else:
+        health_status["overall_status"] = "healthy"
+    
+    return health_status
 
 
 # ==================== AUTHENTICATION ENDPOINTS ====================
