@@ -92,7 +92,7 @@ services:
 
   # Waha WhatsApp API (Self-Hosted)
   waha:
-    image: devlikeapro/waha:latest
+    image: devlikeapro/waha:noweb
     container_name: artinrealty-waha
     restart: unless-stopped
     environment:
