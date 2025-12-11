@@ -92,7 +92,7 @@ services:
 
   # Waha WhatsApp API (Self-Hosted)
   waha:
-    image: devlikeapro/waha:noweb
+    image: devlikeapro/waha:latest
     container_name: artinrealty-waha
     restart: unless-stopped
     environment:
@@ -106,20 +106,14 @@ services:
       - WHATSAPP_HOOK_EVENTS=message,message.any
       # Webhook URL points to backend
       - WHATSAPP_HOOK_URL=http://backend:8000/api/webhook/waha
-      # Disable API key for easier setup (SECURITY: Enable in production)
-      - WHATSAPP_API_KEY=
-      - WHATSAPP_API_KEY_IN_BODY=false
+      # Disable API security (for testing only - enable in production!)
+      - WAHA_API_KEY_STRATEGY=NONE
     ports:
       - "3001:3000"  # Expose on 3001 (3000 taken by frontend)
     volumes:
       - waha_data:/app/.waha
     networks:
       - artinrealty-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/server/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # Nginx Reverse Proxy (Production)
   nginx:
