@@ -9,6 +9,7 @@ import asyncio
 import secrets
 import hashlib
 import logging
+import httpx
 from datetime import datetime, time, timedelta
 from typing import Optional, List
 from contextlib import asynccontextmanager
@@ -1875,13 +1876,19 @@ async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
 
 
 @app.post("/api/webhook/waha")
-async def waha_webhook(payload: dict, background_tasks: BackgroundTasks):
+async def waha_webhook(
+    payload: dict, 
+    background_tasks: BackgroundTasks,
+    tenant_id: Optional[int] = None
+):
     """
     Handle incoming Waha WhatsApp webhook updates.
+    Multi-tenant support: Extracts tenant_id from query param or session name.
+    
     Waha sends events in this format:
     {
-        "event": "message",
-        "session": "default",
+        "event": "message.any",
+        "session": "tenant_5",  ← Used to identify tenant
         "payload": {
             "from": "971505037158@c.us",
             "body": "start_realty",
@@ -1889,7 +1896,20 @@ async def waha_webhook(payload: dict, background_tasks: BackgroundTasks):
         }
     }
     """
-    logger.info(f"📩 [Waha Webhook] Received: {payload.get('event')}")
+    # Extract tenant_id if not provided in query param
+    if not tenant_id:
+        session = payload.get('session', 'default')
+        if session.startswith('tenant_'):
+            try:
+                tenant_id = int(session.replace('tenant_', ''))
+                logger.info(f"📩 [Waha] Extracted tenant {tenant_id} from session name")
+            except ValueError:
+                logger.error(f"❌ [Waha] Invalid session name: {session}")
+        else:
+            # Fallback: single tenant mode (default session)
+            logger.warning(f"⚠️ [Waha] Using default session - tenant_id not identified")
+    
+    logger.info(f"📩 [Waha Webhook] Event: {payload.get('event')} for Tenant: {tenant_id or 'unknown'}")
     
     async def process_waha_webhook():
         try:
@@ -1899,7 +1919,214 @@ async def waha_webhook(payload: dict, background_tasks: BackgroundTasks):
             logger.error(f"❌ [Waha Webhook] Error processing: {e}")
     
     background_tasks.add_task(process_waha_webhook)
-    return {"status": "received"}
+    return {"status": "received", "tenant_id": tenant_id}
+
+
+# ==================== WHATSAPP MULTI-SESSION MANAGEMENT ====================
+
+@app.post("/api/tenants/{tenant_id}/whatsapp/connect")
+async def connect_whatsapp(
+    tenant_id: int,
+    current_tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Create Waha session for tenant and return QR code URL.
+    Each tenant gets isolated WhatsApp connection.
+    """
+    tenant = await verify_tenant_access(tenant_id, current_tenant, db)
+    
+    # Check if already connected
+    if tenant.waha_session_name:
+        # Check if session is still active
+        waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
+        api_key = os.getenv('WAHA_API_KEY', '')
+        headers = {'X-Api-Key': api_key} if api_key else {}
+        
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    f"{waha_api}/sessions/{tenant.waha_session_name}",
+                    headers=headers,
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('status') == 'WORKING':
+                        return {
+                            "success": False,
+                            "message": "WhatsApp already connected",
+                            "phone": data.get('me', {}).get('id', '').replace('@c.us', '')
+                        }
+            except Exception as e:
+                logger.warning(f"Session check failed: {e}")
+    
+    # Generate unique session name
+    session_name = f"tenant_{tenant.id}"
+    
+    # API URL for Waha
+    waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
+    api_key = os.getenv('WAHA_API_KEY', '')
+    headers = {'X-Api-Key': api_key} if api_key else {}
+    
+    # Webhook URL includes tenant_id for routing
+    webhook_url = f"http://backend:8000/api/webhook/waha?tenant_id={tenant.id}"
+    
+    payload = {
+        "config": {
+            "webhooks": [{
+                "url": webhook_url,
+                "events": ["message.any"]
+            }]
+        }
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Start session
+            response = await client.post(
+                f"{waha_api}/sessions/{session_name}/start",
+                json=payload,
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code in [200, 201]:
+                # Save session name to tenant
+                tenant.waha_session_name = session_name
+                await db.commit()
+                
+                # Return QR code URL
+                server_url = os.getenv('SERVER_URL', 'http://localhost:3002')
+                qr_url = f"{server_url}/api/sessions/{session_name}/auth/qr"
+                if api_key:
+                    qr_url += f"?api_key={api_key}"
+                
+                logger.info(f"✅ Waha session created for tenant {tenant.id}: {session_name}")
+                
+                return {
+                    "success": True,
+                    "qr_url": qr_url,
+                    "session": session_name,
+                    "message": "Scan QR code with your WhatsApp to connect"
+                }
+            else:
+                raise HTTPException(500, f"Failed to create session: {response.text}")
+    
+    except httpx.HTTPError as e:
+        logger.error(f"❌ Waha API error: {e}")
+        raise HTTPException(500, f"Failed to connect to Waha service: {str(e)}")
+
+
+@app.get("/api/tenants/{tenant_id}/whatsapp/status")
+async def whatsapp_status(
+    tenant_id: int,
+    current_tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    """Check WhatsApp connection status for tenant."""
+    tenant = await verify_tenant_access(tenant_id, current_tenant, db)
+    
+    if not tenant.waha_session_name:
+        return {
+            "connected": False,
+            "message": "WhatsApp not configured. Click 'Connect WhatsApp' to start."
+        }
+    
+    waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
+    api_key = os.getenv('WAHA_API_KEY', '')
+    headers = {'X-Api-Key': api_key} if api_key else {}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{waha_api}/sessions/{tenant.waha_session_name}",
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                status = data.get('status')
+                
+                if status == 'WORKING':
+                    phone = data.get('me', {}).get('id', '').replace('@c.us', '')
+                    return {
+                        "connected": True,
+                        "status": status,
+                        "phone": phone,
+                        "session": tenant.waha_session_name
+                    }
+                elif status in ['SCAN_QR_CODE', 'STARTING']:
+                    server_url = os.getenv('SERVER_URL', 'http://localhost:3002')
+                    qr_url = f"{server_url}/api/sessions/{tenant.waha_session_name}/auth/qr"
+                    if api_key:
+                        qr_url += f"?api_key={api_key}"
+                    return {
+                        "connected": False,
+                        "status": status,
+                        "qr_url": qr_url,
+                        "message": "Scan QR code to connect"
+                    }
+                else:
+                    return {
+                        "connected": False,
+                        "status": status,
+                        "message": f"Session status: {status}"
+                    }
+            else:
+                return {
+                    "connected": False,
+                    "message": "Session not found. Please reconnect."
+                }
+    
+    except httpx.HTTPError as e:
+        logger.error(f"❌ Waha API error: {e}")
+        return {
+            "connected": False,
+            "message": "Cannot connect to WhatsApp service"
+        }
+
+
+@app.post("/api/tenants/{tenant_id}/whatsapp/disconnect")
+async def disconnect_whatsapp(
+    tenant_id: int,
+    current_tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    """Disconnect WhatsApp for tenant."""
+    tenant = await verify_tenant_access(tenant_id, current_tenant, db)
+    
+    if not tenant.waha_session_name:
+        return {"success": True, "message": "Already disconnected"}
+    
+    waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
+    api_key = os.getenv('WAHA_API_KEY', '')
+    headers = {'X-Api-Key': api_key} if api_key else {}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Stop session
+            await client.post(
+                f"{waha_api}/sessions/{tenant.waha_session_name}/stop",
+                headers=headers,
+                timeout=10
+            )
+            
+            logger.info(f"✅ Waha session stopped for tenant {tenant.id}")
+    
+    except Exception as e:
+        logger.warning(f"Failed to stop Waha session: {e}")
+    
+    # Clear from tenant
+    session_name = tenant.waha_session_name
+    tenant.waha_session_name = None
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": f"WhatsApp disconnected (session: {session_name})"
+    }
 
 
 @app.get("/health")

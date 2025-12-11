@@ -190,11 +190,14 @@ class Tenant(Base):
     reset_token = Column(String(255), nullable=True)  # For password reset
     reset_token_expires = Column(DateTime, nullable=True)
     
-    # WhatsApp Business API Settings
+    # WhatsApp Business API Settings (Meta Cloud API)
     whatsapp_phone_number_id = Column(String(100), nullable=True, unique=True)
     whatsapp_access_token = Column(String(512), nullable=True)
     whatsapp_business_account_id = Column(String(100), nullable=True)
     whatsapp_verify_token = Column(String(255), nullable=True)  # For webhook verification
+    
+    # Waha (Self-Hosted WhatsApp) Settings
+    waha_session_name = Column(String(100), nullable=True, unique=True)  # Unique session per tenant
     
     # Branding
     primary_color = Column(String(20), default="#D4AF37")  # Gold by default
