@@ -53,29 +53,56 @@ docker-compose logs -f waha
 
 ### مرحله 3: اسکن QR Code
 
-دو روش برای اسکن QR code دارید:
+#### روش صحیح: استفاده از API Endpoints
 
-#### روش 1: از طریق Dashboard (راحت‌تر)
+Waha از طریق REST API کار می‌کند. این مراحل را دنبال کنید:
 
-1. در مرورگر به آدرس زیر بروید:
-   ```
-   http://SERVER_IP:3001/api/dashboard
-   ```
-
-2. QR Code را روی صفحه می‌بینید.
-
-3. گوشی خودتان را بردارید:
-   - واتساپ را باز کنید
-   - Settings → Linked Devices
-   - Link a Device
-   - QR Code را اسکن کنید
-
-#### روش 2: از طریق Terminal (برای تکنیکی‌ها)
-
+**مرحله 1: شروع Session**
 ```bash
-# QR Code در لاگ‌ها ظاهر می‌شود
-docker-compose logs -f waha | grep "QR"
+# Session جدید با نام "default" بسازید
+curl -X POST http://localhost:3001/api/sessions/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "default",
+    "config": {
+      "proxy": null,
+      "webhooks": [
+        {
+          "url": "http://backend:8000/api/webhook/waha",
+          "events": ["message"]
+        }
+      ]
+    }
+  }'
 ```
+
+**مرحله 2: دریافت QR Code**
+
+روش 1 - مشاهده در مرورگر (راحت‌تر):
+```
+http://SERVER_IP:3001/api/sessions/default/auth/qr
+```
+این لینک یک تصویر QR code نمایش می‌دهد که باید با گوشی اسکن کنید.
+
+روش 2 - دریافت Base64:
+```bash
+curl http://localhost:3001/api/sessions/default/auth/qr
+```
+
+**مرحله 3: اسکن با گوشی**
+1. گوشی خودتان را بردارید
+2. واتساپ را باز کنید
+3. Settings → Linked Devices
+4. "Link a Device" را بزنید
+5. QR Code را از مرورگر یا terminal اسکن کنید
+
+**مرحله 4: بررسی وضعیت اتصال**
+```bash
+# چک کنید که session متصل شده یا نه
+curl http://localhost:3001/api/sessions/default
+```
+
+اگر همه چیز OK باشد، باید `"status": "WORKING"` را ببینید.
 
 ---
 
