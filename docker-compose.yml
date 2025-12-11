@@ -110,7 +110,7 @@ services:
       # Disable API security (for testing only - enable in production!)
       - WAHA_API_KEY_STRATEGY=NONE
     ports:
-      - "3001:3000"  # Expose on 3001 (3000 taken by frontend)
+      - "3002:3000"  # Expose on 3002 (Realty dedicated port)
     volumes:
       - waha_data:/app/.waha
     networks:
