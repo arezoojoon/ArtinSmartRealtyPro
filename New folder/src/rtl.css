@@ -1,0 +1,287 @@
+/* ============================================
+   RTL (Right-to-Left) SUPPORT
+   Persian & Arabic Language Styles
+   ============================================ */
+
+/* RTL Layout Adjustments */
+[dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Flip Flexbox Direction */
+[dir="rtl"] .flex {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .flex-col {
+  flex-direction: column;
+}
+
+/* Flip Grid for RTL */
+[dir="rtl"] .grid {
+  direction: rtl;
+}
+
+/* Flip Margins & Padding */
+[dir="rtl"] .ml-auto {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[dir="rtl"] .mr-auto {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+/* Flip Borders */
+[dir="rtl"] .border-l {
+  border-left: none;
+  border-right: 1px solid;
+}
+
+[dir="rtl"] .border-r {
+  border-right: none;
+  border-left: 1px solid;
+}
+
+/* Flip Rounded Corners */
+[dir="rtl"] .rounded-l,
+[dir="rtl"] .rounded-tl,
+[dir="rtl"] .rounded-bl {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-top-right-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+[dir="rtl"] .rounded-r,
+[dir="rtl"] .rounded-tr,
+[dir="rtl"] .rounded-br {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-top-left-radius: 0.5rem;
+  border-bottom-left-radius: 0.5rem;
+}
+
+/* Flip Positioning */
+[dir="rtl"] .left-0 {
+  left: auto;
+  right: 0;
+}
+
+[dir="rtl"] .right-0 {
+  right: auto;
+  left: 0;
+}
+
+[dir="rtl"] .left-4 {
+  left: auto;
+  right: 1rem;
+}
+
+[dir="rtl"] .right-4 {
+  right: auto;
+  left: 1rem;
+}
+
+/* Flip Transforms */
+[dir="rtl"] .translate-x-full {
+  transform: translateX(-100%);
+}
+
+[dir="rtl"] .-translate-x-full {
+  transform: translateX(100%);
+}
+
+/* Flip Text Alignment */
+[dir="rtl"] .text-left {
+  text-align: right;
+}
+
+[dir="rtl"] .text-right {
+  text-align: left;
+}
+
+/* Flip Icons for RTL */
+[dir="rtl"] .flip-rtl {
+  transform: scaleX(-1);
+}
+
+/* Sidebar RTL */
+[dir="rtl"] .sidebar {
+  left: auto;
+  right: 0;
+}
+
+/* Input Icons RTL */
+[dir="rtl"] input[type="search"],
+[dir="rtl"] input[type="text"],
+[dir="rtl"] input[type="email"] {
+  padding-left: 1rem;
+  padding-right: 3rem;
+}
+
+[dir="rtl"] .search-icon,
+[dir="rtl"] .input-icon {
+  left: auto;
+  right: 1rem;
+}
+
+/* Dropdown Menus RTL */
+[dir="rtl"] .dropdown {
+  left: auto;
+  right: 0;
+}
+
+/* Toast Notifications RTL */
+[dir="rtl"] .toast {
+  left: auto;
+  right: 1rem;
+}
+
+/* Pagination RTL */
+[dir="rtl"] .pagination {
+  flex-direction: row-reverse;
+}
+
+/* Modal RTL */
+[dir="rtl"] .modal-close {
+  left: 1rem;
+  right: auto;
+}
+
+/* Card Layouts RTL */
+[dir="rtl"] .card-icon {
+  margin-left: 0.75rem;
+  margin-right: 0;
+}
+
+/* Number Formatting - Keep LTR for numbers */
+[dir="rtl"] .number,
+[dir="rtl"] .price,
+[dir="rtl"] .score,
+[dir="rtl"] .percentage {
+  direction: ltr;
+  display: inline-block;
+}
+
+/* Persian/Arabic Typography */
+body.rtl {
+  font-family: 'Vazirmatn', 'Inter', sans-serif;
+  letter-spacing: 0;
+}
+
+body.rtl h1,
+body.rtl h2,
+body.rtl h3,
+body.rtl h4,
+body.rtl h5,
+body.rtl h6 {
+  font-weight: 700;
+}
+
+body.rtl button,
+body.rtl input,
+body.rtl select,
+body.rtl textarea {
+  font-family: 'Vazirmatn', 'Inter', sans-serif;
+}
+
+/* Fix Line Height for Persian */
+body.rtl {
+  line-height: 1.8;
+}
+
+body.rtl h1 { line-height: 1.4; }
+body.rtl h2 { line-height: 1.4; }
+body.rtl h3 { line-height: 1.5; }
+
+/* Fix Letter Spacing for Persian */
+body.rtl * {
+  letter-spacing: 0;
+}
+
+/* Placeholder RTL */
+[dir="rtl"] ::placeholder {
+  text-align: right;
+}
+
+/* Select Arrow RTL */
+[dir="rtl"] select {
+  background-position: left 0.5rem center;
+  padding-left: 2.5rem;
+  padding-right: 0.75rem;
+}
+
+/* Checkboxes & Radio RTL */
+[dir="rtl"] input[type="checkbox"],
+[dir="rtl"] input[type="radio"] {
+  margin-left: 0.5rem;
+  margin-right: 0;
+}
+
+/* Lists RTL */
+[dir="rtl"] ul,
+[dir="rtl"] ol {
+  padding-left: 0;
+  padding-right: 2rem;
+}
+
+/* Table RTL */
+[dir="rtl"] table {
+  direction: rtl;
+  text-align: right;
+}
+
+[dir="rtl"] th,
+[dir="rtl"] td {
+  text-align: right;
+}
+
+/* Breadcrumbs RTL */
+[dir="rtl"] .breadcrumb-separator::before {
+  content: '\\';
+  transform: scaleX(-1);
+}
+
+/* Progress Bar RTL */
+[dir="rtl"] .progress-bar {
+  transform: scaleX(-1);
+}
+
+/* Tooltips RTL */
+[dir="rtl"] .tooltip {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Mobile Menu RTL */
+@media (max-width: 768px) {
+  [dir="rtl"] .mobile-menu {
+    left: auto;
+    right: 0;
+    transform: translateX(100%);
+  }
+  
+  [dir="rtl"] .mobile-menu.open {
+    transform: translateX(0);
+  }
+}
+
+/* Kanban Board RTL */
+[dir="rtl"] .kanban-column {
+  direction: rtl;
+}
+
+/* Drag & Drop RTL */
+[dir="rtl"] .draggable {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Chart Labels RTL */
+[dir="rtl"] .chart-label {
+  direction: rtl;
+  text-align: right;
+}
