@@ -1864,7 +1864,7 @@ async def whatsapp_webhook_verify(
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
     """
-    Handle incoming WhatsApp webhook updates.
+    Handle incoming WhatsApp webhook updates (Meta/Twilio).
     Routes to appropriate tenant handler based on phone_number_id.
     """
     async def process_webhook():
@@ -1872,6 +1872,44 @@ async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
     
     background_tasks.add_task(process_webhook)
     return {"status": "ok"}
+
+
+@app.post("/api/webhook/waha")
+async def waha_webhook(payload: dict, background_tasks: BackgroundTasks):
+    """
+    Handle incoming Waha WhatsApp webhook updates.
+    Waha sends events in this format:
+    {
+        "event": "message",
+        "session": "default",
+        "payload": {
+            "from": "971505037158@c.us",
+            "body": "start_realty",
+            ...
+        }
+    }
+    """
+    logger.info(f"📩 [Waha Webhook] Received: {payload.get('event')}")
+    
+    async def process_waha_webhook():
+        try:
+            # Route to WhatsApp bot manager
+            await whatsapp_bot_manager.handle_webhook(payload)
+        except Exception as e:
+            logger.error(f"❌ [Waha Webhook] Error processing: {e}")
+    
+    background_tasks.add_task(process_waha_webhook)
+    return {"status": "received"}
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker/Nginx."""
+    return {
+        "status": "healthy",
+        "service": "artinsmartrealty-backend",
+        "timestamp": datetime.now().isoformat()
+    }
 
 
 # ==================== TENANT DATA MANAGEMENT ====================

@@ -90,6 +90,34 @@ services:
       timeout: 5s
       retries: 3
 
+  # Waha WhatsApp API (Self-Hosted)
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: artinrealty-waha
+    restart: unless-stopped
+    environment:
+      # Use WEBJS engine (stable and reliable)
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      # Auto-restart on failure
+      - WHATSAPP_RESTART_ON_FAIL=True
+      # Auto-refresh QR code every 30 seconds
+      - WHATSAPP_AUTOREFRESH_QR=True
+      # Enable webhook for message events
+      - WHATSAPP_HOOK_EVENTS=message,message.any
+      # Webhook URL points to backend
+      - WHATSAPP_HOOK_URL=http://backend:8000/api/webhook/waha
+    ports:
+      - "3001:3000"  # Expose on 3001 (3000 taken by frontend)
+    volumes:
+      - waha_data:/app/.waha
+    networks:
+      - artinrealty-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Nginx Reverse Proxy (Production)
   nginx:
     image: nginx:alpine
@@ -113,6 +141,7 @@ volumes:
   postgres_data:
   redis_data:
   pdf_reports:
+  waha_data:  # Persistent storage for Waha sessions
 
 networks:
   artinrealty-network:

@@ -277,25 +277,132 @@ class TwilioWhatsAppProvider(WhatsAppProvider):
             return None
 
 
+class WahaWhatsAppProvider(WhatsAppProvider):
+    """
+    Waha (WhatsApp HTTP API) Provider - Self-Hosted
+    Free alternative to Meta/Twilio using local Docker instance.
+    Repo: https://github.com/devlikeapro/waha
+    """
+    
+    def __init__(self, tenant: Tenant):
+        super().__init__(tenant)
+        # API base points to Waha service in Docker network
+        self.api_base = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
+        # Session name - can be customized per tenant if needed
+        self.session = getattr(tenant, 'waha_session_name', 'default')
+    
+    async def send_message(
+        self,
+        to_phone: str,
+        message: str,
+        buttons: Optional[List[Dict[str, str]]] = None
+    ) -> bool:
+        """Send message via Waha API."""
+        # Format phone: remove + and add @c.us (WhatsApp chat ID format)
+        chat_id = f"{to_phone.replace('+', '')}@c.us"
+        
+        url = f"{self.api_base}/sendText"
+        
+        payload = {
+            "session": self.session,
+            "chatId": chat_id,
+            "text": message
+        }
+        
+        # Waha free version has limited button support
+        # Append buttons as numbered text for now
+        if buttons:
+            button_text = "\\n\\nOptions:\\n" + "\\n".join(
+                [f"{i+1}. {btn['text']}" for i, btn in enumerate(buttons[:10])]
+            )
+            payload["text"] += button_text
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=payload, timeout=10)
+                response.raise_for_status()
+                logger.info(f"[Waha] Message sent to {to_phone}")
+                return True
+        except httpx.HTTPError as e:
+            logger.error(f"[Waha] Failed to send message: {e}")
+            return False
+    
+    def parse_webhook(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Parse Waha webhook payload."""
+        try:
+            # Waha webhook structure:
+            # {"event": "message", "session": "default", "payload": {...}}
+            event = payload.get("event")
+            if event != "message":
+                return None
+            
+            data = payload.get("payload", {})
+            
+            # Extract phone from WhatsApp ID (e.g., "971505037158@c.us")
+            from_id = data.get("from", "")
+            if "@c.us" not in from_id:
+                return None  # Group message or system message
+            
+            from_phone = from_id.split("@")[0]
+            body = data.get("body", "")
+            
+            # Check for media
+            has_media = data.get("hasMedia", False)
+            message_type = "text"
+            if has_media:
+                mime_type = data.get("mimetype", "")
+                if "image" in mime_type:
+                    message_type = "image"
+                elif "audio" in mime_type or "ogg" in mime_type:
+                    message_type = "voice"
+            
+            # Extract profile name
+            profile_name = data.get("_data", {}).get("notifyName", "Unknown")
+            
+            return {
+                "from_phone": from_phone,
+                "profile_name": profile_name,
+                "message_type": message_type,
+                "text": body,
+                "waha_session": payload.get("session")
+            }
+        
+        except Exception as e:
+            logger.error(f"[Waha] Failed to parse webhook: {e}")
+            return None
+
+
 def get_whatsapp_provider(tenant: Tenant) -> Optional[WhatsAppProvider]:
     """
     Factory function to get the appropriate WhatsApp provider.
     Auto-detects based on tenant configuration.
+    
+    Priority:
+    1. Waha (self-hosted, free) - default if nothing else configured
+    2. Meta WhatsApp Cloud API - if access token present
+    3. Twilio WhatsApp API - if Twilio credentials present
     """
-    # Check for Twilio credentials first (easier to set up for testing)
+    # Check for Meta credentials
+    has_meta = tenant.whatsapp_phone_number_id and tenant.whatsapp_access_token
+    
+    # Check for Twilio credentials
     has_twilio = (
         getattr(tenant, 'whatsapp_twilio_account_sid', None) or os.getenv('TWILIO_ACCOUNT_SID')
     )
     
-    # Check for Meta credentials
-    has_meta = tenant.whatsapp_phone_number_id and tenant.whatsapp_access_token
+    # Check if Waha is available (env variable or default)
+    use_waha = os.getenv('USE_WAHA_WHATSAPP', 'true').lower() == 'true'
     
-    if has_twilio:
-        logger.info(f"Using Twilio WhatsApp provider for tenant {tenant.id}")
-        return TwilioWhatsAppProvider(tenant)
-    elif has_meta:
+    if has_meta:
         logger.info(f"Using Meta WhatsApp provider for tenant {tenant.id}")
         return MetaWhatsAppProvider(tenant)
+    elif has_twilio:
+        logger.info(f"Using Twilio WhatsApp provider for tenant {tenant.id}")
+        return TwilioWhatsAppProvider(tenant)
+    elif use_waha:
+        # Default to Waha (free, self-hosted)
+        logger.info(f"Using Waha WhatsApp provider for tenant {tenant.id}")
+        return WahaWhatsAppProvider(tenant)
     else:
         logger.warning(f"No WhatsApp provider configured for tenant {tenant.id}")
         return None

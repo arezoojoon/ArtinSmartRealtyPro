@@ -31,21 +31,28 @@ class VerticalRouter:
     """
     
     # Deep link keywords for each vertical
+    # These are used in WhatsApp deep links like: wa.me/971505037158?text=start_realty
     DEEP_LINK_PATTERNS = {
         VerticalMode.REALTY: [
             r'\bstart[_\s-]?realty\b',
             r'\brealestate\b',
             r'\bproperty\b',
+            r'\bamlak\b',  # Persian for real estate
+            r'\بstart[_\s-]?املاک\b',  # Persian deep link
         ],
         VerticalMode.EXPO: [
             r'\bstart[_\s-]?expo\b',
             r'\bevent\b',
             r'\bexhibition\b',
+            r'\bstart[_\s-]?travel\b',  # Travel/tourism vertical
+            r'\bstart[_\s-]?clinic\b',  # Medical tourism
+            r'\بstart[_\s-]?نمایشگاه\b',  # Persian for expo
         ],
         VerticalMode.SUPPORT: [
             r'\bsupport\b',
             r'\bhelp\b',
             r'\bassistance\b',
+            r'\بپشتیبانی\b',  # Persian for support
         ]
     }
     
