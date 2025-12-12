@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 # Configuration
 BASE_URL="http://localhost:8000"
 DB_NAME="artinrealty"
-DB_USER="artinuser"
+DB_USER="postgres"
 
 echo "Step 1: Installing required packages..."
 echo "---------------------------------------"
@@ -51,11 +51,12 @@ echo ""
 
 echo "Step 4: Verifying Waha service..."
 echo "----------------------------------"
-WAHA_HEALTH=$(curl -s http://localhost:3002/api/health 2>/dev/null || echo "not accessible")
-if [[ "$WAHA_HEALTH" == *"healthy"* ]] || [[ "$WAHA_HEALTH" == *"ok"* ]]; then
+WAHA_SESSIONS=$(curl -s http://localhost:3002/api/sessions 2>/dev/null || echo "not accessible")
+if [[ "$WAHA_SESSIONS" == "["* ]] || [[ "$WAHA_SESSIONS" == "{"* ]]; then
     echo -e "${GREEN}✅ Waha service is running${NC}"
+    echo "Current sessions: $WAHA_SESSIONS"
 else
-    echo -e "${YELLOW}⚠️  Waha response: $WAHA_HEALTH${NC}"
+    echo -e "${YELLOW}⚠️  Waha response: $WAHA_SESSIONS${NC}"
     echo "Checking Docker containers..."
     docker-compose ps waha
 fi
