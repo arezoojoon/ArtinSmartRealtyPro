@@ -6,7 +6,8 @@ Multi-Tenant Real Estate SaaS with Strict Data Isolation
 import os
 from datetime import datetime, timedelta, time
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncContextManager
+from contextlib import asynccontextmanager
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Time, Boolean, 
     ForeignKey, Enum as SQLEnum, JSON, Float, create_engine,
@@ -32,12 +33,29 @@ engine = create_async_engine(
     poolclass=NullPool
 )
 
-# Async session factory
-async_session = sessionmaker(
+# Async session factory (internal use only)
+_async_session_factory = sessionmaker(
     engine, 
     class_=AsyncSession, 
     expire_on_commit=False
 )
+
+
+# Public wrapper function with proper typing
+def async_session() -> AsyncContextManager[AsyncSession]:
+    """
+    Create async database session context manager.
+    Usage: async with async_session() as session:
+           ...use session...
+    """
+    return _async_session_factory()
+
+
+# Helper function for dependency injection
+async def get_db() -> AsyncSession:
+    """Get database session for FastAPI dependency injection"""
+    async with async_session() as session:
+        yield session
 
 Base = declarative_base()
 

@@ -88,8 +88,8 @@ async def add_linkedin_lead(lead_data: LinkedInLeadCreate, tenant_id: int = 1):
     if tenant_id <= 0:
         raise HTTPException(status_code=400, detail="Invalid tenant_id")
     
-    try:
-        async with async_session() as session:
+    async with async_session() as session:
+        try:
             # Prepare data
             data = {
                 'name': lead_data.name.strip(),
@@ -109,26 +109,32 @@ async def add_linkedin_lead(lead_data: LinkedInLeadCreate, tenant_id: int = 1):
             
             # Find or create lead
             lead, created = await find_or_create_lead(session, tenant_id, data)
-        
-        # If new lead, schedule follow-up
-        if created:
-            await schedule_linkedin_lead_followup(lead)
             
-            # Log the initial interaction (LinkedIn message generation)
-            if lead_data.generated_message:
-                await log_interaction(
-                    session=session,
-                    lead_id=lead.id,
-                    channel=InteractionChannel.LINKEDIN,
-                    direction=InteractionDirection.OUTBOUND,
-                    message_text=lead_data.generated_message,
-                    ai_generated=True
-                )
+            # If new lead, schedule follow-up
+            if created:
+                # Log the initial interaction (LinkedIn message generation)
+                if lead_data.generated_message:
+                    await log_interaction(
+                        session=session,
+                        lead_id=int(lead.id),  # type: ignore
+                        channel=InteractionChannel.LINKEDIN,
+                        direction=InteractionDirection.OUTBOUND,
+                        message_text=lead_data.generated_message,
+                        ai_generated=True
+                    )
+            
+            await session.commit()
+            await session.refresh(lead)
+            
+            # Schedule follow-up AFTER session commit (outside transaction)
+            if created:
+                await schedule_linkedin_lead_followup(lead)
+            
+            return lead
         
-        await session.commit()
-        await session.refresh(lead)
-        
-        return lead
+        except Exception as e:
+            await session.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to create/update lead: {str(e)}")
 
 
 @router.get("/leads", response_model=List[LeadResponse])
@@ -150,7 +156,10 @@ async def get_all_leads(
         if status:
             query = query.where(UnifiedLead.status == status)
         if grade:
-            query = query.where(UnifiedLead.grade == grade)
+            # Cast grade string to LeadGrade enum for comparison
+            from backend.unified_database import LeadGrade
+            grade_enum = LeadGrade(grade) if isinstance(grade, str) else grade
+            query = query.where(UnifiedLead.grade == grade_enum)  # type: ignore
         
         query = query.order_by(UnifiedLead.created_at.desc()).limit(limit)
         
@@ -212,11 +221,11 @@ async def get_lead_stats(tenant_id: int = 1):
         # By grade
         result = await session.execute(
             select(
-                UnifiedLead.grade,
+                UnifiedLead.grade,  # type: ignore
                 func.count(UnifiedLead.id)
             ).where(
                 UnifiedLead.tenant_id == tenant_id,
-                UnifiedLead.grade.isnot(None)
+                UnifiedLead.grade.isnot(None)  # type: ignore
             ).group_by(UnifiedLead.grade)
         )
         by_grade = {row[0].value: row[1] for row in result.all()}
@@ -234,11 +243,11 @@ async def get_lead_stats(tenant_id: int = 1):
         pending_followups = result.scalar()
         
         return LeadStatsResponse(
-            total_leads=total_leads,
+            total_leads=total_leads or 0,
             by_source=by_source,
             by_status=by_status,
             by_grade=by_grade,
-            pending_followups=pending_followups
+            pending_followups=pending_followups or 0
         )
 
 
@@ -260,7 +269,7 @@ async def update_lead_status(lead_id: int, status: str):
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
         
-        lead.status = new_status
+        lead.status = new_status  # type: ignore
         lead.update_score_and_grade()
         
         await session.commit()
@@ -284,10 +293,10 @@ async def add_lead_note(lead_id: int, note: str):
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         new_note = f"[{timestamp}] {note}"
         
-        if lead.notes:
-            lead.notes += f"\n{new_note}"
+        if lead.notes:  # type: ignore
+            lead.notes += f"\n{new_note}"  # type: ignore
         else:
-            lead.notes = new_note
+            lead.notes = new_note  # type: ignore
         
         await session.commit()
         
@@ -308,10 +317,10 @@ async def notify_property_matches(property_id: int, tenant_id: int = 1):
     
     try:
         # ✅ FIX: Verify property exists before notifying
-        from backend.database import Property
+        from backend.database import TenantProperty
         async with async_session() as session:
             result = await session.execute(
-                select(Property).where(Property.id == property_id)
+                select(TenantProperty).where(TenantProperty.id == property_id)
             )
             property = result.scalar_one_or_none()
             
@@ -319,7 +328,7 @@ async def notify_property_matches(property_id: int, tenant_id: int = 1):
                 raise HTTPException(status_code=404, detail=f"Property {property_id} not found")
             
             # ✅ FIX: Verify tenant ownership
-            if property.tenant_id != tenant_id:
+            if property.tenant_id != tenant_id:  # type: ignore
                 raise HTTPException(status_code=403, detail="Access denied to this property")
         
         # Now notify
@@ -471,12 +480,12 @@ async def export_leads_to_excel(tenant_id: int = 1):
                 'Source': lead.source.value,
                 'Status': lead.status.value,
                 'Score': lead.lead_score,
-                'Grade': lead.grade.value if lead.grade else '',
+                'Grade': lead.grade.value if lead.grade else '',  # type: ignore
                 'Job Title': lead.job_title,
                 'Company': lead.company,
                 'Budget Min': lead.budget_min,
                 'Budget Max': lead.budget_max,
-                'Property Type': lead.property_type.value if lead.property_type else '',
+                'Property Type': lead.property_type.value if lead.property_type else '',  # type: ignore
                 'Created At': lead.created_at,
                 'Last Contacted': lead.last_contacted_at,
                 'Follow-up Count': lead.followup_count,

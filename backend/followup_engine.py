@@ -501,14 +501,13 @@ Wishing you all the best in your career at {lead.company or 'your company'} 🚀
             property = result.scalar_one()
             
             for lead in matched_leads:
-                message = self._generate_property_notification(lead, property)
-                
-                # Send immediately (not scheduled)
+                lead_name = getattr(lead, 'name', 'Unknown')  # Define at loop start
                 try:
+                    message = self._generate_property_notification(lead, property)
+                    
                     telegram_id = getattr(lead, 'telegram_user_id', None)
                     whatsapp_num = getattr(lead, 'whatsapp_number', None)
                     lead_id = int(getattr(lead, 'id', 0))
-                    lead_name = getattr(lead, 'name', 'Unknown')
                     
                     if telegram_id:
                         await self.send_telegram_message(int(telegram_id), message)
@@ -533,7 +532,7 @@ Wishing you all the best in your career at {lead.company or 'your company'} 🚀
                     matched_props = getattr(lead, 'matched_properties', None)
                     if not matched_props:
                         lead.matched_properties = []  # type: ignore
-                    if property_id not in matched_props:
+                    if property_id not in matched_props:  # type: ignore
                         lead.matched_properties.append(property_id)  # type: ignore
                     
                     print(f"   ✅ Notified {lead_name} about new property match")
@@ -638,7 +637,7 @@ async def notify_property_added(property_id: int) -> int:
             
             # Find all matching leads
             matched_leads = await find_matching_leads_for_property(
-                session, property_id, property.tenant_id
+                session, property_id, int(property.tenant_id)  # type: ignore
             )
             
             if not matched_leads:
