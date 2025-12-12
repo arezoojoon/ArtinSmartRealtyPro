@@ -512,7 +512,7 @@ async def appointment_reminder_job():
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown."""
     # Startup
-    print("🚀 Starting ArtinSmartRealty V2...")
+    print("🚀 Starting ArtinSmartRealty V2 - Unified Platform...")
     
     # Initialize database
     await init_db()
@@ -554,6 +554,11 @@ async def lifespan(app: FastAPI):
     await bot_manager.start_scheduler()
     print("✅ Morning Coffee Report scheduler started")
     
+    # 🆕 Start Unified Follow-up Engine
+    from followup_engine import start_followup_engine
+    await start_followup_engine()
+    print("✅ Unified Follow-up Engine started")
+    
     yield
     
     # Shutdown
@@ -561,6 +566,11 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
     await bot_manager.stop_scheduler()
     await bot_manager.stop_all_bots()
+    
+    # Stop Follow-up Engine
+    from followup_engine import stop_followup_engine
+    await stop_followup_engine()
+    
     print("✅ Shutdown complete")
 
 
@@ -609,8 +619,24 @@ app.include_router(broadcast.router)
 app.include_router(catalogs.router)
 app.include_router(lotteries.router)
 
+# 🆕 Include Unified Lead Management API
+from api.unified_routes import router as unified_router
+app.include_router(unified_router)
 
-# ==================== HEALTH CHECK ====================
+# 🆕 Include LinkedIn Scraper Integration API
+from api.linkedin_routes import router as linkedin_router
+app.include_router(linkedin_router)
+
+# 🤖 Include Follow-up Management API
+from api.followup_routes import router as followup_router
+app.include_router(followup_router)
+
+# 🏥 Include Health Check API
+from api.health import router as health_router
+app.include_router(health_router)
+
+
+# ==================== LEGACY HEALTH CHECK (DEPRECATED) ====================
 
 @app.get("/health")
 async def health_check():
@@ -1871,6 +1897,64 @@ async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
         await whatsapp_bot_manager.handle_webhook(payload)
     
     background_tasks.add_task(process_webhook)
+    return {"status": "ok"}
+
+
+@app.post("/api/webhook/waha")
+async def waha_webhook(payload: dict, background_tasks: BackgroundTasks):
+    """
+    Handle incoming Waha (self-hosted WhatsApp) webhook updates.
+    This receives messages from the WhatsApp Router.
+    """
+    async def process_waha_webhook():
+        try:
+            logger.info(f"📨 Waha webhook received: {payload.get('event')}")
+            
+            # Parse webhook using Waha provider
+            from whatsapp_providers import WahaWhatsAppProvider
+            from database import Tenant
+            
+            # Get default tenant (or extract from router metadata)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(Tenant).where(Tenant.id == 1))
+                tenant = result.scalar_one_or_none()
+                
+                if not tenant:
+                    logger.error("No tenant found for Waha webhook")
+                    return
+                
+                provider = WahaWhatsAppProvider(tenant)
+                message_data = provider.parse_webhook(payload)
+                
+                if not message_data:
+                    logger.info("Waha webhook ignored (not a user message)")
+                    return
+                
+                # Route to WhatsApp bot manager
+                # Convert to Meta-like format for compatibility
+                meta_format = {
+                    "entry": [{
+                        "changes": [{
+                            "value": {
+                                "messages": [{
+                                    "from": message_data["from_phone"],
+                                    "type": message_data["message_type"],
+                                    "text": {"body": message_data.get("text", "")}
+                                }],
+                                "contacts": [{
+                                    "profile": {"name": message_data.get("profile_name", "User")}
+                                }]
+                            }
+                        }]
+                    }]
+                }
+                
+                await whatsapp_bot_manager.handle_webhook(meta_format)
+                
+        except Exception as e:
+            logger.error(f"❌ Error processing Waha webhook: {e}", exc_info=True)
+    
+    background_tasks.add_task(process_waha_webhook)
     return {"status": "ok"}
 
 

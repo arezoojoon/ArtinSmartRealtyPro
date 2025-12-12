@@ -109,10 +109,58 @@ services:
     networks:
       - artinrealty-network
 
+  # Waha - Self-Hosted WhatsApp API
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: artinrealty-waha
+    restart: unless-stopped
+    environment:
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - WHATSAPP_RESTART_ON_FAIL=True
+      - WHATSAPP_AUTOREFRESH_QR=True
+      - WAHA_PRINT_QR=True
+      - WHATSAPP_HOOK_URL=http://router:5000/webhook
+    ports:
+      - "3001:3000"  # Changed to 3001 to avoid conflict with frontend
+    volumes:
+      - waha_sessions:/app/.wwebjs_auth
+      - waha_cache:/app/.wwebjs_cache
+    networks:
+      - artinrealty-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # WhatsApp Router - Multi-Service Message Router
+  router:
+    build:
+      context: ./whatsapp_router
+      dockerfile: Dockerfile
+    container_name: artinrealty-whatsapp-router
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REALTY_WEBHOOK=http://backend:8000/api/webhook/waha
+      - TRAVEL_WEBHOOK=${TRAVEL_WEBHOOK:-http://travel.artinsmartagent.com/api/webhook/waha}
+      - EXPO_WEBHOOK=${EXPO_WEBHOOK:-http://expo.artinsmartagent.com/api/webhook/waha}
+      - CLINIC_WEBHOOK=${CLINIC_WEBHOOK:-http://clinic.artinsmartagent.com/api/webhook/waha}
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+      - waha
+    networks:
+      - artinrealty-network
+
 volumes:
   postgres_data:
   redis_data:
   pdf_reports:
+  waha_sessions:
+  waha_cache:
 
 networks:
   artinrealty-network:

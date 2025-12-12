@@ -219,6 +219,10 @@ class Tenant(Base):
     leads = relationship("Lead", back_populates="tenant", cascade="all, delete-orphan")
     availabilities = relationship("AgentAvailability", back_populates="tenant", cascade="all, delete-orphan")
     features = relationship("TenantFeature", back_populates="tenant", cascade="all, delete-orphan")
+    
+    # ✅ NEW: Unified Lead Management System Relationships
+    unified_leads = relationship("UnifiedLead", back_populates="tenant", cascade="all, delete-orphan")
+    followup_campaigns = relationship("FollowupCampaign", back_populates="tenant", cascade="all, delete-orphan")
 
 
 class TenantFeature(Base):

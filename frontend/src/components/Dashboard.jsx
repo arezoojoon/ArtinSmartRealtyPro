@@ -24,6 +24,13 @@ import QRGenerator from './QRGenerator';
 import Broadcast from './Broadcast';
 import Catalogs from './Catalogs';
 import Lottery from './Lottery';
+import FollowupManagement from './FollowupManagement';
+import LeadGeneration from './LeadGeneration';
+import ROICalculator from './ROICalculator';
+import AdvancedLeadsPage from './AdvancedLeadsPage';
+import FloatingHotLeads from './FloatingHotLeads';
+import LiveIndicator from './LiveIndicator';
+import AgentLeaderboard from './AgentLeaderboard';
 
 // ==================== CONSTANTS ====================
 
@@ -166,7 +173,7 @@ const LeadCard = ({ name, phone, budget, purpose, temperature, lead_score, qr_sc
                     <div>
                         <div className="flex items-center gap-2">
                             <h4 className="text-white font-medium text-sm">{name || 'Anonymous'}</h4>
-                            {lead_score !== undefined && lead_score > 0 && (
+                            {(lead_score !== undefined && lead_score !== null && lead_score > 0) && (
                                 <span className="text-xs font-bold text-gold-500 bg-gold-500/10 px-2 py-0.5 rounded">
                                     {lead_score}
                                 </span>
@@ -183,7 +190,7 @@ const LeadCard = ({ name, phone, budget, purpose, temperature, lead_score, qr_sc
                 )}
             </div>
             {budget && (
-                <p className="text-gold-500 text-sm mb-2">💰 Up to AED {(budget / 1000000).toFixed(1)}M</p>
+                <p className="text-gold-500 text-sm mb-2">💰 Up to AED {(Number(budget) / 1000000).toFixed(1)}M</p>
             )}
             {purpose && (
                 <span className="inline-block bg-navy-800 text-gray-300 text-xs px-2 py-1 rounded mb-2">
@@ -416,6 +423,9 @@ const Dashboard = ({ user, onLogout }) => {
                         />
                     </div>
 
+                    {/* Agent Performance Leaderboard */}
+                    <AgentLeaderboard />
+
                     {/* Pipeline Kanban */}
                     <div>
                         <h2 className="text-white text-xl font-bold mb-6 flex items-center gap-2">
@@ -454,11 +464,24 @@ const Dashboard = ({ user, onLogout }) => {
                 </div>
             )}
 
-            {/* Lead Pipeline Tab */}
+            {/* Lead Pipeline Tab - NEW ADVANCED VERSION */}
             {activeTab === 'leads' && (
                 <div className="animate-fade-in">
-                    <h1 className="text-3xl font-bold text-white mb-6">Lead Management</h1>
-                    <LeadTable leads={leads} onExport={handleExportLeads} />
+                    <AdvancedLeadsPage />
+                </div>
+            )}
+
+            {/* Follow-up Management Tab */}
+            {activeTab === 'followup' && (
+                <div className="animate-fade-in">
+                    <FollowupManagement />
+                </div>
+            )}
+
+            {/* Lead Generation Tab */}
+            {activeTab === 'leadgen' && (
+                <div className="animate-fade-in">
+                    <LeadGeneration />
                 </div>
             )}
 
@@ -466,6 +489,13 @@ const Dashboard = ({ user, onLogout }) => {
             {activeTab === 'properties' && (
                 <div className="animate-fade-in">
                     <PropertiesManagement tenantId={tenantId} />
+                </div>
+            )}
+
+            {/* ROI Calculator Tab */}
+            {activeTab === 'roi' && (
+                <div className="animate-fade-in">
+                    <ROICalculator />
                 </div>
             )}
 
@@ -510,6 +540,12 @@ const Dashboard = ({ user, onLogout }) => {
                     <SettingsPage tenantId={tenantId} token={token} />
                 </div>
             )}
+
+            {/* Floating Hot Leads Sidebar - Always Visible */}
+            <FloatingHotLeads />
+            
+            {/* Live Connection Indicator - Always Visible */}
+            <LiveIndicator wsConnected={true} />
         </Layout>
     );
 };

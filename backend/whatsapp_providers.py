@@ -277,14 +277,130 @@ class TwilioWhatsAppProvider(WhatsAppProvider):
             return None
 
 
+class WahaWhatsAppProvider(WhatsAppProvider):
+    """
+    Waha (WhatsApp HTTP API) Provider - Self Hosted
+    Free, unlimited, runs locally via Docker
+    """
+    
+    def __init__(self, tenant: Tenant):
+        super().__init__(tenant)
+        # Waha service address in Docker network
+        self.api_base = os.getenv("WAHA_API_URL", "http://waha:3000/api")
+        self.session = os.getenv("WAHA_SESSION", "default")
+    
+    async def send_message(
+        self,
+        to_phone: str,
+        message: str,
+        buttons: Optional[List[Dict[str, str]]] = None
+    ) -> bool:
+        """Send message via Waha API."""
+        
+        # Format phone number (no + sign, with @c.us suffix)
+        phone_clean = to_phone.replace("+", "").replace("-", "").replace(" ", "")
+        chat_id = f"{phone_clean}@c.us"
+        
+        url = f"{self.api_base}/sendText"
+        
+        payload = {
+            "session": self.session,
+            "chatId": chat_id,
+            "text": message
+        }
+        
+        # Waha free version doesn't support interactive buttons
+        # Append buttons as text options
+        if buttons:
+            button_text = "\n\n📋 گزینه‌ها:\n" + "\n".join([
+                f"• {btn['text']}" for btn in buttons[:10]
+            ])
+            payload["text"] += button_text
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=payload, timeout=10)
+                response.raise_for_status()
+                logger.info(f"[Waha] Message sent to {to_phone}")
+                return True
+        except httpx.ConnectError:
+            logger.error(f"[Waha] Cannot connect to Waha service at {self.api_base}")
+            return False
+        except httpx.HTTPError as e:
+            logger.error(f"[Waha] Failed to send message: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"[Waha] Unexpected error: {e}")
+            return False
+    
+    def parse_webhook(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Parse Waha webhook payload."""
+        try:
+            # Waha event structure
+            event = payload.get("event")
+            if event != "message":
+                return None
+            
+            data = payload.get("payload", {})
+            
+            # Extract sender info
+            from_id = data.get("from", "")
+            if "@c.us" not in from_id:
+                return None  # Group message or broadcast
+            
+            from_phone = from_id.split("@")[0]
+            body = data.get("body", "")
+            
+            # Check for media
+            has_media = data.get("hasMedia", False)
+            message_type = "text"
+            
+            if has_media:
+                # Waha provides media info
+                mime_type = data.get("mimetype", "")
+                if "image" in mime_type:
+                    message_type = "image"
+                elif "audio" in mime_type or "ogg" in mime_type:
+                    message_type = "voice"
+                elif "video" in mime_type:
+                    message_type = "video"
+                else:
+                    message_type = "document"
+            
+            # Get profile name
+            profile_name = data.get("_data", {}).get("notifyName", "User")
+            
+            return {
+                "from_phone": from_phone,
+                "profile_name": profile_name,
+                "message_type": message_type,
+                "text": body,
+                "waha_session": payload.get("session"),
+                "has_media": has_media
+            }
+        
+        except Exception as e:
+            logger.error(f"[Waha] Failed to parse webhook: {e}")
+            return None
+
+
 def get_whatsapp_provider(tenant: Tenant) -> Optional[WhatsAppProvider]:
     """
     Factory function to get the appropriate WhatsApp provider.
-    Auto-detects based on tenant configuration.
+    Priority: Waha (free) > Twilio > Meta
     """
-    # Check for Twilio credentials first (easier to set up for testing)
+    
+    # Check if Waha is configured (environment variable)
+    waha_enabled = os.getenv("WAHA_ENABLED", "true").lower() == "true"
+    
+    if waha_enabled:
+        logger.info(f"Using Waha WhatsApp provider for tenant {tenant.id}")
+        return WahaWhatsAppProvider(tenant)
+    
+    # Check for Twilio credentials
     has_twilio = (
-        getattr(tenant, 'whatsapp_twilio_account_sid', None) or os.getenv('TWILIO_ACCOUNT_SID')
+        getattr(tenant, 'whatsapp_twilio_account_sid', None) or 
+        os.getenv('TWILIO_ACCOUNT_SID')
     )
     
     # Check for Meta credentials
