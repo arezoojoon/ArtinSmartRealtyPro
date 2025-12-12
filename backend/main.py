@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 # Setup logger
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header, UploadFile, File, Form, Body
+from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header, UploadFile, File, Form, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -46,6 +46,7 @@ from database import (
 from telegram_bot import bot_manager, handle_telegram_webhook
 from whatsapp_bot import whatsapp_bot_manager, verify_webhook as verify_whatsapp_webhook
 from roi_engine import generate_roi_pdf
+from rate_limiter import rate_limit, rate_limiter, cleanup_rate_limiter
 
 # Import API routers
 from api import broadcast, catalogs, lotteries, admin
@@ -58,8 +59,12 @@ security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    """Hash password using PBKDF2 with SHA-256 (more secure than plain SHA-256)."""
-    return hashlib.pbkdf2_hmac('sha256', password.encode(), PASSWORD_SALT.encode(), 100000).hex()
+    """Hash password using PBKDF2 with SHA-256.
+    
+    Uses 600,000 iterations (OWASP 2023 recommendation).
+    Previous: 100,000 iterations (too weak for modern GPUs).
+    """
+    return hashlib.pbkdf2_hmac('sha256', password.encode(), PASSWORD_SALT.encode(), 600000).hex()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -559,6 +564,10 @@ async def lifespan(app: FastAPI):
     await start_followup_engine()
     print("✅ Unified Follow-up Engine started")
     
+    # Start rate limiter cleanup task
+    asyncio.create_task(cleanup_rate_limiter())
+    print("✅ Rate limiter cleanup task started")
+    
     yield
     
     # Shutdown
@@ -599,7 +608,27 @@ async def validation_exception_handler(request, exc):
     )
 
 # CORS Middleware - Use environment variable for allowed origins in production
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+# Security: NEVER use wildcard "*" with credentials enabled (CSRF risk)
+ALLOWED_ORIGINS_DEFAULT = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+]
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", ",".join(ALLOWED_ORIGINS_DEFAULT)).split(",")
+
+# Security check: Prevent wildcard with credentials
+if "*" in CORS_ORIGINS:
+    logger.error(
+        "SECURITY ERROR: CORS wildcard '*' detected with credentials enabled! "
+        "This allows ANY website to steal user data via CSRF. "
+        "Set CORS_ORIGINS in .env to specific domains only."
+    )
+    # In production, raise error. In dev, allow but warn
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        raise RuntimeError("CORS wildcard not allowed in production!")
+    else:
+        logger.warning("⚠️  DEVELOPMENT MODE: Allowing CORS wildcard (NOT FOR PRODUCTION)")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -807,8 +836,26 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Login with email and password. Supports both tenants and super admin."""
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Login with email and password. Supports both tenants and super admin.
+    Rate limited: 5 attempts per minute to prevent brute force attacks.
+    """
+    
+    # Apply rate limit
+    client_ip = request.client.host if request.client else "unknown"
+    if "X-Forwarded-For" in request.headers:
+        client_ip = request.headers["X-Forwarded-For"].split(",")[0].strip()
+    
+    is_limited, retry_after = rate_limiter.is_rate_limited(
+        client_ip, "/api/auth/login", max_requests=5, window_seconds=60
+    )
+    
+    if is_limited:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many login attempts. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)}
+        )
     
     # Check for Super Admin login first
     if data.email == SUPER_ADMIN_EMAIL and data.password == SUPER_ADMIN_PASSWORD:
@@ -848,8 +895,27 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/api/auth/forgot-password")
-async def forgot_password(data: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
-    """Request password reset token."""
+async def forgot_password(request: Request, data: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+    """Request password reset token.
+    Rate limited: 3 attempts per hour to prevent email bombing.
+    """
+    
+    # Apply rate limit
+    client_ip = request.client.host if request.client else "unknown"
+    if "X-Forwarded-For" in request.headers:
+        client_ip = request.headers["X-Forwarded-For"].split(",")[0].strip()
+    
+    is_limited, retry_after = rate_limiter.is_rate_limited(
+        client_ip, "/api/auth/forgot-password", max_requests=3, window_seconds=3600
+    )
+    
+    if is_limited:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many password reset attempts. Try again in {retry_after // 60} minutes.",
+            headers={"Retry-After": str(retry_after)}
+        )
+    
     result = await db.execute(select(Tenant).where(Tenant.email == data.email))
     tenant = result.scalar_one_or_none()
     
