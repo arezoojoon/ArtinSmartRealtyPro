@@ -47,6 +47,9 @@ from telegram_bot import bot_manager, handle_telegram_webhook
 from whatsapp_bot import whatsapp_bot_manager, verify_webhook as verify_whatsapp_webhook
 from roi_engine import generate_roi_pdf
 from rate_limiter import rate_limit, rate_limiter, cleanup_rate_limiter
+from security_headers import add_security_headers
+from password_validator import validate_password_strength
+from input_sanitizer import sanitize_text, sanitize_email, sanitize_phone
 
 # Import API routers
 from api import broadcast, catalogs, lotteries, admin
@@ -68,8 +71,14 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash."""
-    return hash_password(plain_password) == hashed_password
+    """Verify password against hash using constant-time comparison.
+    
+    Prevents timing attacks where attacker can determine correct password
+    characters by measuring response time differences.
+    """
+    computed_hash = hash_password(plain_password)
+    # Use secrets.compare_digest for constant-time comparison
+    return secrets.compare_digest(computed_hash, hashed_password)
 
 
 def create_jwt_token(tenant_id: int, email: str) -> str:
@@ -154,7 +163,7 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8, max_length=128, description="Password must be 8-128 characters with uppercase, lowercase, number, and special character")
     company_name: Optional[str] = Field(None, max_length=255)
     phone: Optional[str] = Field(None, max_length=50)
 
@@ -637,6 +646,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add security headers middleware
+add_security_headers(app)
+
 # Mount static files for uploads
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -805,18 +817,29 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
     
     # Uncomment below to enable public registration:
     """
+    # Validate password strength
+    validate_password_strength(data.password, min_length=8)
+    
+    # Sanitize inputs
+    email = sanitize_email(data.email)
+    name = sanitize_text(data.name, max_length=255)
+    
     # Check if email already exists
-    result = await db.execute(select(Tenant).where(Tenant.email == data.email))
+    result = await db.execute(select(Tenant).where(Tenant.email == email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Sanitize optional fields
+    company_name = sanitize_text(data.company_name, max_length=255) if data.company_name else None
+    phone = sanitize_phone(data.phone) if data.phone else None
+    
     # Create new tenant
     tenant = Tenant(
-        name=data.name,
-        email=data.email,
+        name=name,
+        email=email,
         password_hash=hash_password(data.password),
-        company_name=data.company_name,
-        phone=data.phone,
+        company_name=company_name,
+        phone=phone,
         trial_ends_at=datetime.utcnow() + timedelta(days=14)  # 14-day trial
     )
     db.add(tenant)
@@ -857,8 +880,11 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
             headers={"Retry-After": str(retry_after)}
         )
     
-    # Check for Super Admin login first
-    if data.email == SUPER_ADMIN_EMAIL and data.password == SUPER_ADMIN_PASSWORD:
+    # Check for Super Admin login first (constant-time comparison)
+    email_match = secrets.compare_digest(data.email, SUPER_ADMIN_EMAIL)
+    password_match = secrets.compare_digest(data.password, SUPER_ADMIN_PASSWORD)
+    
+    if email_match and password_match:
         # Super admin uses tenant_id 0 to indicate admin status
         token = create_jwt_token(0, SUPER_ADMIN_EMAIL)
         return LoginResponse(
@@ -1942,13 +1968,14 @@ async def whatsapp_webhook_verify(
     
     # Fallback to environment variable for initial setup
     env_token = os.getenv("WHATSAPP_VERIFY_TOKEN")
-    logger.info(f"🔑 Checking env token: {env_token[:20] if env_token else 'None'}...")
+    logger.info(f"🔑 Checking env token (hash): {hashlib.sha256(env_token.encode()).hexdigest()[:8] if env_token else 'None'}")
     
-    if env_token and hub_token == env_token:
+    if env_token and secrets.compare_digest(hub_token, env_token):
         logger.info(f"✅ Token matched environment variable")
         return Response(content=hub_challenge, media_type="text/plain")
     else:
-        logger.error(f"❌ Token mismatch! Received: {hub_token[:30]}..., Expected: {env_token[:30] if env_token else 'None'}...")
+        # Don't log actual token values - security risk
+        logger.error(f"❌ Token mismatch! Verification failed.")
     
     raise HTTPException(status_code=403, detail="Verification failed")
 
