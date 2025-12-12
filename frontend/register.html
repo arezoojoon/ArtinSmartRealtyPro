@@ -401,15 +401,53 @@
 
         function updatePrices() {
             const prices = {
-                basic: { monthly: 99, yearly: 999 },
-                pro: { monthly: 199, yearly: 1999 }
+                basic: { 
+                    monthly: 299, 
+                    yearly: 2397,
+                    yearlyOriginal: 3588,
+                    discount: 33
+                },
+                pro: { 
+                    monthly: 399, 
+                    yearly: 3597,
+                    yearlyOriginal: 4788,
+                    discount: 25
+                }
             };
 
             const basicPrice = selectedCycle === 'monthly' ? prices.basic.monthly : prices.basic.yearly;
             const proPrice = selectedCycle === 'monthly' ? prices.pro.monthly : prices.pro.yearly;
 
-            document.getElementById('basicPrice').textContent = `$${basicPrice}`;
-            document.getElementById('proPrice').textContent = `$${proPrice}`;
+            // Update prices with discount display for yearly
+            if (selectedCycle === 'yearly') {
+                document.getElementById('basicPrice').innerHTML = `
+                    <span style="text-decoration: line-through; color: #999; font-size: 18px; margin-right: 8px;">
+                        $${prices.basic.yearlyOriginal}
+                    </span>
+                    <span style="color: #10b981; font-size: 14px; font-weight: 600;">
+                        ${prices.basic.discount}% off
+                    </span>
+                    <br>
+                    <span style="font-size: 36px; font-weight: 700; color: #667eea;">
+                        $${basicPrice}
+                    </span>
+                `;
+                document.getElementById('proPrice').innerHTML = `
+                    <span style="text-decoration: line-through; color: #999; font-size: 18px; margin-right: 8px;">
+                        $${prices.pro.yearlyOriginal}
+                    </span>
+                    <span style="color: #10b981; font-size: 14px; font-weight: 600;">
+                        ${prices.pro.discount}% off
+                    </span>
+                    <br>
+                    <span style="font-size: 36px; font-weight: 700; color: #667eea;">
+                        $${proPrice}
+                    </span>
+                `;
+            } else {
+                document.getElementById('basicPrice').textContent = `$${basicPrice}`;
+                document.getElementById('proPrice').textContent = `$${proPrice}`;
+            }
         }
 
         // Form submission

@@ -388,12 +388,12 @@ def get_payment_amount(plan: str, billing_cycle: str, currency: str = "USD") -> 
     
     pricing = {
         "basic": {
-            "monthly": {"USD": 99, "IRR": 5940000},  # 99 USD = ~5.94M Tomans
-            "yearly": {"USD": 999, "IRR": 59940000}
+            "monthly": {"USD": 299, "IRR": 17940000},  # 299 USD = ~17.94M Tomans
+            "yearly": {"USD": 2397, "IRR": 143820000}  # 33% off
         },
         "pro": {
-            "monthly": {"USD": 199, "IRR": 11940000},
-            "yearly": {"USD": 1999, "IRR": 119940000}
+            "monthly": {"USD": 399, "IRR": 23940000},
+            "yearly": {"USD": 3597, "IRR": 215820000}  # 25% off
         }
     }
     

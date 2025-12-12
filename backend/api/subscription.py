@@ -52,8 +52,10 @@ PRICING = {
             "زمان‌بندی قرار ملاقات",
             "پشتیبانی چند زبانه"
         ],
-        "price_monthly": 99,  # USD
-        "price_yearly": 999,  # USD (2 months free)
+        "price_monthly": 299,  # USD
+        "price_yearly": 2397,  # USD (33% off - save $1,191/year)
+        "price_yearly_original": 3588,  # 299 * 12
+        "discount_percent": 33,
         "currency": "USD",
         "trial_days": 7,
         "max_leads": 1000,
@@ -82,8 +84,10 @@ PRICING = {
             "برندینگ اختصاصی",
             "پشتیبانی اولویت‌دار"
         ],
-        "price_monthly": 199,  # USD
-        "price_yearly": 1999,  # USD (2 months free)
+        "price_monthly": 399,  # USD
+        "price_yearly": 3597,  # USD (25% off - save $1,191/year)
+        "price_yearly_original": 4788,  # 399 * 12
+        "discount_percent": 25,
         "currency": "USD",
         "trial_days": 14,
         "max_leads": 10000,

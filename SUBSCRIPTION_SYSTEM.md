@@ -51,8 +51,10 @@ next_payment_date = Column(DateTime, nullable=True)
 ```python
 PRICING = {
     "basic": {
-        "price_monthly": 99,     # USD
-        "price_yearly": 999,      # USD (2 months free)
+        "price_monthly": 299,      # USD
+        "price_yearly": 2397,       # USD (33% off - save $1,191/year)
+        "price_yearly_original": 3588,  # Original price without discount
+        "discount_percent": 33,
         "trial_days": 7,
         "max_leads": 1000,
         "max_messages_per_month": 10000,
@@ -66,8 +68,10 @@ PRICING = {
         ]
     },
     "pro": {
-        "price_monthly": 199,     # USD
-        "price_yearly": 1999,     # USD (2 months free)
+        "price_monthly": 399,      # USD
+        "price_yearly": 3597,       # USD (25% off - save $1,191/year)
+        "price_yearly_original": 4788,  # Original price without discount
+        "discount_percent": 25,
         "trial_days": 14,
         "max_leads": 10000,
         "max_messages_per_month": 100000,
@@ -336,7 +340,9 @@ PRO ($199/month):
 
 | Feature | Free/Trial | Basic | Pro |
 |---------|-----------|-------|-----|
-| **Price** | $0 (7-14 days) | $99/month | $199/month |
+| **Price (Monthly)** | $0 (7-14 days) | **$299/month** | **$399/month** |
+| **Price (Yearly)** | - | **$2,397/year** <br><s>$3,588</s> **33% off** | **$3,597/year** <br><s>$4,788</s> **25% off** |
+| **Trial Period** | 7-14 days | 7 days | 14 days |
 | **WhatsApp Bot** | ✅ | ✅ | ✅ |
 | **Telegram Bot** | ✅ | ✅ | ✅ |
 | **AI Conversations** | ✅ | ✅ | ✅ |
@@ -344,8 +350,8 @@ PRO ($199/month):
 | **Lead Scoring** | ✅ | ✅ | ✅ |
 | **Appointment Booking** | ✅ | ✅ | ✅ |
 | **Multi-language** | ✅ | ✅ | ✅ |
-| **Max Leads** | 100 | 1,000 | 10,000 |
-| **Messages/month** | 1,000 | 10,000 | 100,000 |
+| **Max Leads** | 100 | **1,000** | **10,000** |
+| **Messages/month** | 1,000 | **10,000** | **100,000** |
 | **Bot Instances** | 1 | 2 | 10 |
 | **LinkedIn Scraper** | ❌ | ❌ | ✅ |
 | **Lead Generation** | ❌ | ❌ | ✅ |
@@ -353,6 +359,10 @@ PRO ($199/month):
 | **CRM Integration** | ❌ | ❌ | ✅ |
 | **White-label Branding** | ❌ | ❌ | ✅ |
 | **Priority Support** | ❌ | ❌ | ✅ |
+
+### 💰 Annual Savings:
+- **Basic Plan**: Save **$1,191/year** (33% discount) when billed annually
+- **Pro Plan**: Save **$1,191/year** (25% discount) when billed annually
 
 ---
 
