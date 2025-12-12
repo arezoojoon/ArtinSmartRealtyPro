@@ -1961,8 +1961,9 @@ async def connect_whatsapp(
             except Exception as e:
                 logger.warning(f"Session check failed: {e}")
     
-    # Generate unique session name
-    session_name = f"tenant_{tenant.id}"
+    # WAHA CORE limitation: Only 'default' session supported
+    # For multi-tenant, upgrade to WAHA PLUS or use Meta Cloud API
+    session_name = "default"
     
     # API URL for Waha
     waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
