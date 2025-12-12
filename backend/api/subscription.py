@@ -15,6 +15,14 @@ from backend.database import (
     Language
 )
 from backend.auth_config import hash_password
+from backend.payment_gateway import (
+    PaymentProcessor, PaymentRequest as PaymentGatewayRequest,
+    PaymentGateway, get_payment_amount
+)
+from backend.email_service import (
+    send_welcome_email, send_payment_success_email,
+    send_trial_ending_email, send_trial_expired_email
+)
 from sqlalchemy import select
 
 router = APIRouter(prefix="/api/subscription", tags=["Subscription"])
@@ -187,6 +195,17 @@ async def register_tenant(data: RegisterRequest):
         await session.commit()
         await session.refresh(new_tenant)
         
+        # Send welcome email
+        try:
+            await send_welcome_email(
+                name=data.name,
+                email=data.email,
+                plan=data.plan,
+                trial_days=trial_days
+            )
+        except Exception as e:
+            print(f"Failed to send welcome email: {e}")
+        
         return RegisterResponse(
             tenant_id=int(new_tenant.id),  # type: ignore
             email=str(new_tenant.email),  # type: ignore
@@ -350,3 +369,204 @@ async def cancel_subscription(tenant_id: int):
             "message_fa": "اشتراک لغو شد. دسترسی تا پایان دوره فعلی ادامه دارد.",
             "ends_at": tenant.subscription_ends_at.isoformat() if tenant.subscription_ends_at else None  # type: ignore
         }
+
+
+# ==================== PAYMENT GATEWAY ENDPOINTS ====================
+
+class InitiatePaymentRequest(BaseModel):
+    """Request to initiate payment"""
+    tenant_id: int
+    plan: str  # "basic" or "pro"
+    billing_cycle: str  # "monthly" or "yearly"
+    gateway: str  # "zarinpal" or "stripe"
+    currency: str = "USD"  # "USD" or "IRR"
+
+
+@router.post("/payment/initiate")
+async def initiate_payment(data: InitiatePaymentRequest):
+    """
+    Initiate payment process
+    Returns payment URL for redirect
+    
+    Flow:
+    1. User clicks "Subscribe" on frontend
+    2. Frontend calls this endpoint
+    3. Backend creates payment request with gateway
+    4. Returns payment_url to redirect user
+    5. User completes payment on gateway
+    6. Gateway redirects back to callback_url
+    7. Frontend calls /payment/verify
+    """
+    async with async_session() as session:
+        # Get tenant
+        result = await session.execute(
+            select(Tenant).where(Tenant.id == data.tenant_id)
+        )
+        tenant = result.scalar_one_or_none()
+        
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Validate plan
+        if data.plan not in ["basic", "pro"]:
+            raise HTTPException(status_code=400, detail="Invalid plan")
+        
+        # Get amount
+        amount = get_payment_amount(data.plan, data.billing_cycle, data.currency)
+        if amount == 0:
+            raise HTTPException(status_code=400, detail="Invalid plan or billing cycle")
+        
+        # Determine callback URL
+        callback_url = f"https://yourdomain.com/payment/callback?tenant_id={data.tenant_id}&plan={data.plan}&billing_cycle={data.billing_cycle}"
+        
+        # Create payment request
+        payment_request = PaymentGatewayRequest(
+            gateway=PaymentGateway.ZARINPAL if data.gateway == "zarinpal" else PaymentGateway.STRIPE,
+            amount=amount,
+            currency=data.currency,
+            plan=data.plan,
+            billing_cycle=data.billing_cycle,
+            tenant_id=data.tenant_id,
+            email=tenant.email,  # type: ignore
+            mobile=tenant.phone,  # type: ignore
+            callback_url=callback_url
+        )
+        
+        # Initiate payment
+        result = await PaymentProcessor.initiate_payment(payment_request)
+        
+        if result["status"] == "success":
+            return {
+                "status": "success",
+                "payment_url": result.get("payment_url"),
+                "client_secret": result.get("client_secret"),  # For Stripe
+                "payment_id": result["payment_id"],
+                "gateway": result["gateway"],
+                "amount": amount,
+                "currency": data.currency
+            }
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("message", "Payment initiation failed")
+            )
+
+
+class VerifyPaymentRequest(BaseModel):
+    """Request to verify payment"""
+    tenant_id: int
+    plan: str
+    billing_cycle: str
+    gateway: str
+    payment_id: str  # Authority for ZarinPal, PaymentIntent ID for Stripe
+    amount: float
+
+
+@router.post("/payment/verify")
+async def verify_payment(data: VerifyPaymentRequest):
+    """
+    Verify payment after user returns from gateway
+    
+    Called when:
+    - User completes payment on ZarinPal/Stripe
+    - Gateway redirects back to callback_url
+    - Frontend extracts payment_id and calls this endpoint
+    """
+    
+    # Verify with gateway
+    gateway_enum = PaymentGateway.ZARINPAL if data.gateway == "zarinpal" else PaymentGateway.STRIPE
+    
+    verification = await PaymentProcessor.verify_payment(
+        gateway=gateway_enum,
+        payment_id=data.payment_id,
+        amount=data.amount,
+        currency="IRR" if data.gateway == "zarinpal" else "USD"
+    )
+    
+    if not verification.get("verified"):
+        raise HTTPException(
+            status_code=400,
+            detail=verification.get("message", "Payment verification failed")
+        )
+    
+    # Payment verified - activate subscription
+    async with async_session() as session:
+        result = await session.execute(
+            select(Tenant).where(Tenant.id == data.tenant_id)
+        )
+        tenant = result.scalar_one_or_none()
+        
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Calculate subscription dates
+        now = datetime.utcnow()
+        if data.billing_cycle == "monthly":
+            subscription_ends_at = now + timedelta(days=30)
+            next_payment = now + timedelta(days=30)
+        else:  # yearly
+            subscription_ends_at = now + timedelta(days=365)
+            next_payment = now + timedelta(days=365)
+        
+        # Update subscription
+        tenant.subscription_plan = SubscriptionPlan.BASIC if data.plan == "basic" else SubscriptionPlan.PRO  # type: ignore
+        tenant.subscription_status = SubscriptionStatus.ACTIVE  # type: ignore
+        tenant.subscription_starts_at = now  # type: ignore
+        tenant.subscription_ends_at = subscription_ends_at  # type: ignore
+        tenant.billing_cycle = data.billing_cycle  # type: ignore
+        tenant.payment_method = data.gateway  # type: ignore
+        tenant.last_payment_date = now  # type: ignore
+        tenant.next_payment_date = next_payment  # type: ignore
+        
+        await session.commit()
+        
+        # Send payment success email
+        try:
+            await send_payment_success_email(
+                name=tenant.name,  # type: ignore
+                email=tenant.email,  # type: ignore
+                plan=data.plan,
+                amount=data.amount,
+                currency="IRR" if data.gateway == "zarinpal" else "USD",
+                next_payment_date=next_payment,
+                billing_cycle=data.billing_cycle
+            )
+        except Exception as e:
+            print(f"Failed to send payment success email: {e}")
+        
+        return {
+            "status": "success",
+            "verified": True,
+            "transaction_id": verification.get("transaction_id"),
+            "message": f"Payment successful! {data.plan.upper()} subscription activated.",
+            "subscription_ends_at": subscription_ends_at.isoformat(),
+            "plan": data.plan,
+            "billing_cycle": data.billing_cycle
+        }
+
+
+@router.post("/payment/webhook/zarinpal")
+async def zarinpal_webhook():
+    """
+    ZarinPal webhook handler (if needed)
+    ZarinPal doesn't have webhooks, verification is done via callback
+    """
+    return {"status": "ok"}
+
+
+@router.post("/payment/webhook/stripe")
+async def stripe_webhook():
+    """
+    Stripe webhook handler
+    Handles: payment_intent.succeeded, payment_intent.payment_failed, etc.
+    
+    Important: Verify webhook signature before processing!
+    """
+    # TODO: Implement Stripe webhook handling
+    # 1. Verify signature
+    # 2. Parse event
+    # 3. Handle payment_intent.succeeded -> activate subscription
+    # 4. Handle payment_intent.payment_failed -> notify user
+    
+    return {"status": "ok"}
+

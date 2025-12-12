@@ -133,27 +133,27 @@ services:
       timeout: 10s
       retries: 3
 
-  # WhatsApp Router - Multi-Service Message Router
-  router:
-    build:
-      context: ./whatsapp_router
-      dockerfile: Dockerfile
-    container_name: artinrealty-whatsapp-router
-    restart: unless-stopped
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REALTY_WEBHOOK=http://backend:8000/api/webhook/waha
-      - TRAVEL_WEBHOOK=${TRAVEL_WEBHOOK:-http://travel.artinsmartagent.com/api/webhook/waha}
-      - EXPO_WEBHOOK=${EXPO_WEBHOOK:-http://expo.artinsmartagent.com/api/webhook/waha}
-      - CLINIC_WEBHOOK=${CLINIC_WEBHOOK:-http://clinic.artinsmartagent.com/api/webhook/waha}
-    ports:
-      - "5000:5000"
-    depends_on:
-      - redis
-      - waha
-    networks:
-      - artinrealty-network
+  # WhatsApp Router - Multi-Service Message Router (DISABLED - folder not found)
+  # router:
+  #   build:
+  #     context: ./whatsapp_router
+  #     dockerfile: Dockerfile
+  #   container_name: artinrealty-whatsapp-router
+  #   restart: unless-stopped
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - REALTY_WEBHOOK=http://backend:8000/api/webhook/waha
+  #     - TRAVEL_WEBHOOK=${TRAVEL_WEBHOOK:-http://travel.artinsmartagent.com/api/webhook/waha}
+  #     - EXPO_WEBHOOK=${EXPO_WEBHOOK:-http://expo.artinsmartagent.com/api/webhook/waha}
+  #     - CLINIC_WEBHOOK=${CLINIC_WEBHOOK:-http://clinic.artinsmartagent.com/api/webhook/waha}
+  #   ports:
+  #     - "5000:5000"
+  #   depends_on:
+  #     - redis
+  #     - waha
+  #   networks:
+  #     - artinrealty-network
 
 volumes:
   postgres_data:
