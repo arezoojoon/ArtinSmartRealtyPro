@@ -1927,14 +1927,14 @@ async def waha_webhook(
 @app.post("/api/tenants/{tenant_id}/whatsapp/connect")
 async def connect_whatsapp(
     tenant_id: int,
-    current_tenant: Tenant = Depends(get_current_tenant),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Create Waha session for tenant and return QR code URL.
     Each tenant gets isolated WhatsApp connection.
     """
-    tenant = await verify_tenant_access(tenant_id, current_tenant, db)
+    tenant = await verify_tenant_access(credentials, tenant_id, db)
     
     # Check if already connected
     if tenant.waha_session_name:
@@ -2021,11 +2021,11 @@ async def connect_whatsapp(
 @app.get("/api/tenants/{tenant_id}/whatsapp/status")
 async def whatsapp_status(
     tenant_id: int,
-    current_tenant: Tenant = Depends(get_current_tenant),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
     """Check WhatsApp connection status for tenant."""
-    tenant = await verify_tenant_access(tenant_id, current_tenant, db)
+    tenant = await verify_tenant_access(credentials, tenant_id, db)
     
     if not tenant.waha_session_name:
         return {
@@ -2091,11 +2091,11 @@ async def whatsapp_status(
 @app.post("/api/tenants/{tenant_id}/whatsapp/disconnect")
 async def disconnect_whatsapp(
     tenant_id: int,
-    current_tenant: Tenant = Depends(get_current_tenant),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
     """Disconnect WhatsApp for tenant."""
-    tenant = await verify_tenant_access(tenant_id, current_tenant, db)
+    tenant = await verify_tenant_access(credentials, tenant_id, db)
     
     if not tenant.waha_session_name:
         return {"success": True, "message": "Already disconnected"}
