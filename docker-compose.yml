@@ -107,8 +107,8 @@ services:
       - WHATSAPP_HOOK_EVENTS=message,message.any
       # Webhook URL points to backend
       - WHATSAPP_HOOK_URL=http://backend:8000/api/webhook/waha
-      # Disable API security (for testing only - enable in production!)
-      - WAHA_API_KEY_STRATEGY=NONE
+      # Use persistent API key from .env file
+      - WAHA_API_KEY=${WAHA_API_KEY}
     ports:
       - "3002:3000"  # Expose on 3002 (Realty dedicated port)
     volumes:
