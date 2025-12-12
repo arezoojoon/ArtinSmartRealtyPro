@@ -1,6 +1,7 @@
 """
 LinkedIn Lead Scraper Integration Routes
 Connects Chrome Extension to Unified System
+⚠️ PRO PLAN ONLY - Requires subscription check
 """
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -10,13 +11,14 @@ from datetime import datetime, timedelta
 import google.generativeai as genai
 import os
 
-from backend.database import async_session
+from backend.database import async_session, Tenant
 from backend.unified_database import (
     UnifiedLead, LeadSource, LeadStatus,
     find_or_create_lead, log_interaction,
     InteractionChannel, InteractionDirection
 )
 from backend.followup_engine import schedule_linkedin_lead_followup
+from backend.subscription_guard import check_feature_access, check_subscription_active
 from sqlalchemy import select, func, and_
 
 router = APIRouter(prefix="/api/linkedin", tags=["LinkedIn Scraper"])
@@ -142,11 +144,49 @@ class LeadResponse(BaseModel):
 @router.post("/generate-message", response_model=GenerateMessageResponse)
 async def generate_linkedin_message(request: GenerateMessageRequest):
     """
-    Generate personalized LinkedIn cold DM using Gemini AI
-    This replaces the old endpoint from LinkedIn Scraper backend
+    Generate personalized LinkedIn cold DM using Gemini AI.
+    ⚠️ PRO PLAN ONLY - Requires active Pro subscription.
     """
     
-    # ✅ Validate Gemini API Key
+    # ✅ STEP 1: Check Subscription & Feature Access
+    async with async_session() as session:
+        # Get tenant
+        result = await session.execute(
+            select(Tenant).where(Tenant.id == request.tenantId)
+        )
+        tenant = result.scalar_one_or_none()
+        
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Check subscription active
+        if not check_subscription_active(tenant):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "subscription_expired",
+                    "message": "Your subscription has expired. Please renew to continue using LinkedIn Scraper.",
+                    "message_fa": "اشتراک شما منقضی شده است. برای استفاده از اسکرپر لینکدین، لطفا اشتراک خود را تمدید کنید.",
+                    "upgrade_url": "/subscription/pricing"
+                }
+            )
+        
+        # Check Pro plan access
+        if not check_feature_access(tenant, "linkedin_scraper"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "upgrade_required",
+                    "feature": "linkedin_scraper",
+                    "current_plan": tenant.subscription_plan.value if tenant.subscription_plan else "free",  # type: ignore
+                    "required_plan": "pro",
+                    "message": "LinkedIn Scraper is a Pro Plan feature. Upgrade to unlock lead generation!",
+                    "message_fa": "اسکرپر لینکدین ویژگی پلن Pro است. برای دسترسی به لید جنریشن، ارتقا دهید!",
+                    "upgrade_url": "/subscription/pricing"
+                }
+            )
+    
+    # ✅ STEP 2: Validate Gemini API
     if not GEMINI_API_KEY or not gemini_model:
         raise HTTPException(
             status_code=500,

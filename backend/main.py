@@ -664,13 +664,21 @@ app.include_router(lotteries.router)
 from api.unified_routes import router as unified_router
 app.include_router(unified_router)
 
-# 🆕 Include LinkedIn Scraper Integration API
+# 🆕 Include LinkedIn Scraper Integration API (PRO PLAN)
 from api.linkedin_routes import router as linkedin_router
 app.include_router(linkedin_router)
 
 # 🤖 Include Follow-up Management API
 from api.followup_routes import router as followup_router
 app.include_router(followup_router)
+
+# 💳 Include Subscription & Registration API
+from api.subscription import router as subscription_router
+app.include_router(subscription_router)
+
+# 🔒 Include Super Admin Subscription Management API
+from api.admin_subscription import router as admin_subscription_router
+app.include_router(admin_subscription_router)
 
 # 🏥 Include Health Check API
 from api.health import router as health_router
