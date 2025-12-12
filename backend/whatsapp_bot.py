@@ -289,38 +289,43 @@ class WhatsAppBotHandler:
                     deep_link_tenant_id = int(tenant_match.group(1))
                     logger.info(f"🔗 Deep link detected: Routing to Tenant ID {deep_link_tenant_id}")
                     
-                    # Get the specific tenant
+                    # Get the specific tenant (FIX: Properly close session)
                     from database import async_session, Tenant
                     from sqlalchemy import select
+                    
+                    target_tenant = None
                     async with async_session() as session:
                         result = await session.execute(
                             select(Tenant).where(Tenant.id == deep_link_tenant_id)
                         )
                         target_tenant = result.scalar_one_or_none()
+                    # Session auto-closed here
+                    
+                    if target_tenant:
+                        # Create handler for this tenant
+                        from brain import Brain
+                        tenant_brain = Brain(target_tenant)
                         
-                        if target_tenant:
-                            # Create handler for this tenant
-                            from brain import Brain
-                            tenant_brain = Brain(target_tenant)
-                            
-                            # Get or create lead for this tenant
-                            lead = await self._get_or_create_lead_for_tenant(
-                                from_phone, profile_name, deep_link_tenant_id
-                            )
-                            
-                            # Send welcome message
-                            welcome_msg = {
-                                Language.EN: f"👋 Welcome! You've connected with {target_tenant.name or target_tenant.company_name}.\n\nHow can we help you with Dubai Real Estate today?",
-                                Language.FA: f"👋 خوش آمدید! شما به {target_tenant.name or target_tenant.company_name} متصل شدید.\n\nچطور میتونیم در املاک دبی کمکتون کنیم؟",
-                                Language.AR: f"👋 مرحباً! تم توصيلك مع {target_tenant.name or target_tenant.company_name}.\n\nكيف يمكننا مساعدتك في عقارات دبي؟",
-                                Language.RU: f"👋 Добро пожаловать! Вы подключились к {target_tenant.name or target_tenant.company_name}.\n\nКак мы можем помочь вам с недвижимостью в Дубае?"
-                            }
-                            
-                            lang = lead.language or Language.EN
-                            await self.send_message(from_phone, welcome_msg.get(lang, welcome_msg[Language.EN]))
-                            
-                            # Store tenant mapping in Redis for future messages
-                            import redis.asyncio as redis
+                        # Get or create lead for this tenant
+                        lead = await self._get_or_create_lead_for_tenant(
+                            from_phone, profile_name, deep_link_tenant_id
+                        )
+                        
+                        # Send welcome message
+                        welcome_msg = {
+                            Language.EN: f"👋 Welcome! You've connected with {target_tenant.name or target_tenant.company_name}.\n\nHow can we help you with Dubai Real Estate today?",
+                            Language.FA: f"👋 خوش آمدید! شما به {target_tenant.name or target_tenant.company_name} متصل شدید.\n\nچطور میتونیم در املاک دبی کمکتون کنیم؟",
+                            Language.AR: f"👋 مرحباً! تم توصيلك مع {target_tenant.name or target_tenant.company_name}.\n\nكيف يمكننا مساعدتك في عقارات دبي؟",
+                            Language.RU: f"👋 Добро пожаловать! Вы подключились к {target_tenant.name or target_tenant.company_name}.\n\nКак мы можем помочь вам с недвижимостью в Дубае?"
+                        }
+                        
+                        lang = lead.language or Language.EN
+                        await self.send_message(from_phone, welcome_msg.get(lang, welcome_msg[Language.EN]))
+                        
+                        # Store tenant mapping in Redis for future messages
+                        import redis.asyncio as redis
+                        redis_client = None
+                        try:
                             redis_client = redis.from_url(
                                 os.getenv("REDIS_URL", "redis://localhost:6379"),
                                 decode_responses=True
@@ -330,18 +335,25 @@ class WhatsAppBotHandler:
                                 str(deep_link_tenant_id),
                                 ex=86400 * 30  # 30 days
                             )
-                            await redis_client.aclose()
-                            
-                            return True
+                        finally:
+                            if redis_client:
+                                await redis_client.aclose()
+                        
+                        return True
             
             # Check if this phone number has a mapped tenant from previous deep link
             import redis.asyncio as redis
-            redis_client = redis.from_url(
-                os.getenv("REDIS_URL", "redis://localhost:6379"),
-                decode_responses=True
-            )
-            mapped_tenant_id = await redis_client.get(f"whatsapp_tenant_map:{from_phone}")
-            await redis_client.aclose()
+            redis_client = None
+            mapped_tenant_id = None
+            try:
+                redis_client = redis.from_url(
+                    os.getenv("REDIS_URL", "redis://localhost:6379"),
+                    decode_responses=True
+                )
+                mapped_tenant_id = await redis_client.get(f"whatsapp_tenant_map:{from_phone}")
+            finally:
+                if redis_client:
+                    await redis_client.aclose()
             
             if mapped_tenant_id:
                 # Route to the mapped tenant
@@ -349,20 +361,23 @@ class WhatsAppBotHandler:
                 
                 from database import async_session, Tenant
                 from sqlalchemy import select
+                
+                mapped_tenant = None
                 async with async_session() as session:
                     result = await session.execute(
                         select(Tenant).where(Tenant.id == int(mapped_tenant_id))
                     )
                     mapped_tenant = result.scalar_one_or_none()
+                # Session auto-closed
+                
+                if mapped_tenant:
+                    from brain import Brain
+                    tenant_brain = Brain(mapped_tenant)
                     
-                    if mapped_tenant:
-                        from brain import Brain
-                        tenant_brain = Brain(mapped_tenant)
-                        
-                        lead = await self._get_or_create_lead_for_tenant(
-                            from_phone, profile_name, int(mapped_tenant_id)
-                        )
-                        
+                    lead = await self._get_or_create_lead_for_tenant(
+                        from_phone, profile_name, int(mapped_tenant_id)
+                    )
+                    
                         # Process message with tenant's brain
                         if message_type == "text" and text:
                             response = await tenant_brain.process_message(lead, text, "")
@@ -433,7 +448,7 @@ class WhatsAppBotHandler:
                         processing_msg = self.brain.get_text("image_processing", lang)
                         await self.send_message(from_phone, processing_msg)
                         
-                        # Download and process image
+                        # Download and process image with timeout handling
                         image_url = await self._get_media_url(image_id)
                         if not image_url:
                             error_msg = self.brain.get_text("image_error", lang)
@@ -451,7 +466,13 @@ class WhatsAppBotHandler:
                                 
                                 # Validate size (max 20MB)
                                 if len(image_data) > 20 * 1024 * 1024:
-                                    await self.send_message(from_phone, "Image too large (max 20MB)")
+                                    size_error = {
+                                        Language.EN: "Image too large (max 20MB). Please send a smaller image.",
+                                        Language.FA: "حجم تصویر بیش از حد مجاز است (حداکثر ۲۰ مگابایت). لطفا تصویر کوچکتری ارسال کنید.",
+                                        Language.AR: "الصورة كبيرة جدًا (الحد الأقصى 20 ميجابايت). يرجى إرسال صورة أصغر.",
+                                        Language.RU: "Изображение слишком большое (макс 20МБ). Отправьте изображение меньшего размера."
+                                    }.get(lang, "Image too large (max 20MB)")
+                                    await self.send_message(from_phone, size_error)
                                     return True
                                 
                                 # Process through brain
@@ -467,6 +488,15 @@ class WhatsAppBotHandler:
                                 logger.error(f"Failed to download image: {img_response.status_code}")
                                 error_msg = self.brain.get_text("image_error", lang)
                                 await self.send_message(from_phone, error_msg)
+                    except httpx.TimeoutException:
+                        logger.error("Image download timeout")
+                        timeout_error = {
+                            Language.EN: "Image download timed out. Please try again.",
+                            Language.FA: "زمان دانلود تصویر به پایان رسید. لطفا دوباره تلاش کنید.",
+                            Language.AR: "انتهت مهلة تنزيل الصورة. يرجى المحاولة مرة أخرى.",
+                            Language.RU: "Время загрузки изображения истекло. Попробуйте снова."
+                        }.get(lang, "Image download timed out")
+                        await self.send_message(from_phone, timeout_error)
                     except Exception as e:
                         logger.error(f"Error processing WhatsApp image: {e}")
                         error_msg = self.brain.get_text("image_error", lang)
@@ -487,7 +517,7 @@ class WhatsAppBotHandler:
                             await self.send_message(from_phone, error_msg)
                             return True
                         
-                        # Download audio data
+                        # Download audio data with timeout handling
                         import httpx
                         async with httpx.AsyncClient(timeout=30.0) as client:
                             headers = {"Authorization": f"Bearer {self.tenant.whatsapp_access_token}"}
@@ -498,7 +528,15 @@ class WhatsAppBotHandler:
                                 
                                 # Validate size (max 16MB for Gemini)
                                 if len(audio_data) > 16 * 1024 * 1024:
-                                    await self.send_message(from_phone, "Voice message too large (max 16MB)")
+                                    from brain import Language
+                                    lang = lead.language or Language.EN
+                                    size_error = {
+                                        Language.EN: "Voice message too large (max 16MB). Please send a shorter message.",
+                                        Language.FA: "حجم پیام صوتی بیش از حد مجاز است (حداکثر ۱۶ مگابایت). لطفا پیام کوتاه‌تری ارسال کنید.",
+                                        Language.AR: "رسالة صوتية كبيرة جدًا (الحد الأقصى 16 ميجابايت). يرجى إرسال رسالة أقصر.",
+                                        Language.RU: "Голосовое сообщение слишком большое (макс 16МБ). Отправьте более короткое сообщение."
+                                    }.get(lang, "Voice message too large (max 16MB)")
+                                    await self.send_message(from_phone, size_error)
                                     return True
                                 
                                 # Process through brain
@@ -516,6 +554,17 @@ class WhatsAppBotHandler:
                                 lang = lead.language or Language.EN
                                 error_msg = self.brain.get_text("voice_error", lang)
                                 await self.send_message(from_phone, error_msg)
+                    except httpx.TimeoutException:
+                        logger.error("Voice download timeout")
+                        from brain import Language
+                        lang = lead.language or Language.EN
+                        timeout_error = {
+                            Language.EN: "Voice download timed out. Please try again.",
+                            Language.FA: "زمان دانلود پیام صوتی به پایان رسید. لطفا دوباره تلاش کنید.",
+                            Language.AR: "انتهت مهلة تنزيل الرسالة الصوتية. يرجى المحاولة مرة أخرى.",
+                            Language.RU: "Время загрузки голосового сообщения истекло. Попробуйте снова."
+                        }.get(lang, "Voice download timed out")
+                        await self.send_message(from_phone, timeout_error)
                     except Exception as e:
                         logger.error(f"Error processing WhatsApp voice: {e}")
                         from brain import Language
