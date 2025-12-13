@@ -277,7 +277,7 @@ class LeadInteraction(Base):
     campaign_id = Column(Integer, ForeignKey('followup_campaigns.id'), nullable=True)
     
     # === Metadata ===
-    metadata = Column(JSON, nullable=True)  # Store raw message data, attachments, etc.
+    interaction_metadata = Column(JSON, nullable=True)  # Store raw message data, attachments, etc.
     
     # === Timestamps ===
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -500,7 +500,7 @@ async def log_interaction(
         message_text=message_text,
         ai_generated=ai_generated,
         campaign_id=campaign_id,
-        metadata=metadata
+        interaction_metadata=metadata
     )
     session.add(interaction)
     
