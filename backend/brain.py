@@ -2150,7 +2150,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         elif current_state == ConversationState.COLLECTING_NAME:
             return await self._handle_collecting_name(lang, message, callback_data, lead, lead_updates)
         
-        elif current_state == ConversationState.COLLECTING_PHONE:
+        elif current_state == ConversationState.CAPTURE_CONTACT:
             return await self._handle_capture_contact(lang, message, callback_data, lead, lead_updates)
         
         # ===== NEW STATE MACHINE ROUTING =====
@@ -2307,7 +2307,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         return BrainResponse(
             message=roi_hook_messages.get(lang, roi_hook_messages[Language.EN]),
-            next_state=ConversationState.COLLECTING_PHONE,
+            next_state=ConversationState.CAPTURE_CONTACT,
             lead_updates=lead_updates,
             request_contact=True,  # Show "Share Phone Number" button
             buttons=[]
