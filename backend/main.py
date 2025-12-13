@@ -399,6 +399,23 @@ class TenantPropertyCreate(BaseModel):
     is_featured: bool = False
     
     model_config = {"extra": "ignore"}  # Ignore unknown fields from frontend
+    
+    @field_validator('image_urls', 'images', mode='before')
+    @classmethod
+    def convert_image_objects_to_urls(cls, v):
+        """Convert image objects from frontend to URL strings."""
+        if not v:
+            return []
+        
+        urls = []
+        for item in v:
+            if isinstance(item, dict):
+                # Frontend sends objects with 'url' field
+                urls.append(item.get('url', ''))
+            elif isinstance(item, str):
+                urls.append(item)
+        
+        return urls
 
 
 class TenantPropertyResponse(BaseModel):
