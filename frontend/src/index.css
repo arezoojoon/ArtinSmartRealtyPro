@@ -7,7 +7,18 @@ body {
   background: #0f1729;
   color: #ffffff;
   font-family: 'Inter', sans-serif;
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+  /* Better text rendering on mobile */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* Mobile-First Responsive Typography */
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); }
+h2 { font-size: clamp(1.5rem, 4vw, 2rem); }
+h3 { font-size: clamp(1.25rem, 3vw, 1.75rem); }
+p { font-size: clamp(0.875rem, 2.5vw, 1rem); line-height: 1.6; }
 
 /* CUSTOM SCROLLBAR */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -47,6 +58,33 @@ body {
   .badge-yellow { @apply px-3 py-1 rounded-full text-xs font-bold border bg-yellow-500/15 text-yellow-400 border-yellow-500/30; }
   .badge-green { @apply px-3 py-1 rounded-full text-xs font-bold border bg-green-500/15 text-green-400 border-green-500/30; }
   .badge-blue { @apply px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30; }
+  
+  /* Mobile-Responsive Utilities */
+  .container-mobile {
+    @apply px-4 mx-auto max-w-7xl;
+  }
+  @media (min-width: 640px) {
+    .container-mobile { @apply px-6; }
+  }
+  @media (min-width: 1024px) {
+    .container-mobile { @apply px-8; }
+  }
+  
+  /* Touch-Friendly Buttons */
+  .btn-touch {
+    @apply min-h-[44px] min-w-[44px] inline-flex items-center justify-center;
+  }
+  
+  /* Mobile Grid */
+  .grid-mobile {
+    @apply grid grid-cols-1 gap-4;
+  }
+  @media (min-width: 640px) {
+    .grid-mobile { @apply grid-cols-2 gap-6; }
+  }
+  @media (min-width: 1024px) {
+    .grid-mobile { @apply grid-cols-3; }
+  }
 }
 
 /* ANIMATIONS */

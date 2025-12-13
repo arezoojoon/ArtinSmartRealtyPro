@@ -1,13 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
+    
+    <!-- Mobile Optimization -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0f1729" />
+    
+    <!-- SEO Meta Tags -->
+    <title>Taranteen Realty - Dubai Real Estate CRM & AI Bot Dashboard</title>
+    <meta name="description" content="AI-powered real estate CRM with Telegram bot for Dubai properties. Manage leads, properties, appointments, and automate customer engagement with intelligent conversations." />
+    <meta name="keywords" content="Dubai real estate, CRM, AI bot, Telegram bot, property management, lead management, real estate automation, Dubai properties, investment properties" />
+    <meta name="author" content="Taranteen Realty" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://taranteen-realty.com" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://taranteen-realty.com" />
+    <meta property="og:title" content="Taranteen Realty - AI-Powered Dubai Real Estate Platform" />
+    <meta property="og:description" content="Discover luxury properties in Dubai with our AI-powered platform. Telegram bot with instant property recommendations, ROI calculator, and Golden Visa eligibility check." />
+    <meta property="og:image" content="https://taranteen-realty.com/og-image.jpg" />
+    <meta property="og:site_name" content="Taranteen Realty" />
+    <meta property="og:locale" content="en_US" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://taranteen-realty.com" />
+    <meta name="twitter:title" content="Taranteen Realty - AI-Powered Dubai Real Estate" />
+    <meta name="twitter:description" content="AI-powered real estate platform for Dubai properties with intelligent Telegram bot assistant." />
+    <meta name="twitter:image" content="https://taranteen-realty.com/twitter-image.jpg" />
+    
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ArtinSmartRealty V2 - Dashboard</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    
+    <!-- Performance Optimizations -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="dns-prefetch" href="https://api.taranteen-realty.com" />
+    
+    <!-- Structured Data (JSON-LD) for SEO -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Taranteen Realty",
+      "description": "AI-powered real estate platform for Dubai properties",
+      "url": "https://taranteen-realty.com",
+      "logo": "https://taranteen-realty.com/logo.png",
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+971-50-503-7158",
+        "contactType": "Customer Service",
+        "areaServed": "AE",
+        "availableLanguage": ["English", "Persian", "Arabic", "Russian"]
+      },
+      "sameAs": [
+        "https://wa.me/971505037158"
+      ]
+    }
+    </script>
+    
     <style>
       * {
         margin: 0;
@@ -18,6 +78,19 @@
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         background-color: #0f1729;
         color: #ffffff;
+        /* Mobile font size scaling */
+        font-size: clamp(14px, 2.5vw, 16px);
+        /* Prevent text size adjustment on mobile */
+        -webkit-text-size-adjust: 100%;
+        -moz-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      /* Responsive container for mobile */
+      #root {
+        min-height: 100vh;
+        width: 100%;
+        overflow-x: hidden;
       }
     </style>
   </head>
