@@ -24,6 +24,9 @@ RUN apk add --no-cache curl
 # Copy built assets from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# Copy smart-upload.html to nginx html directory
+COPY smart-upload.html /usr/share/nginx/html/smart-upload.html
+
 # Copy nginx configuration
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 
