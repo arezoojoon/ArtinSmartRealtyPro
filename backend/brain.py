@@ -2162,10 +2162,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         # If user expresses frustration/anger, immediately offer human support
         if message and not callback_data:
             negative_sentiment_keywords = {
-                Language.FA: r'کلافه|دیونه|خری|زیادی|اذیت|خسته|بدم|چقدر حرف|دور تا دور|حالم بد',
-                Language.AR: r'مسخوط|غاضب|زعلان|تعبت|ملل|بطيء|قاسي|سيئ',
-                Language.RU: r'раздосадовано|злой|устал|ужасно|помогите|недовольны|усталь',
-                Language.EN: r'annoyed|frustrated|angry|angry|stupid|terrible|help|tired|awful|enough|stop'
+                Language.FA: r'\b(کلافه شدم|دیونه شدم|خیلی زیادی|اذیت شدم|خسته شدم|بدم میاد|چقدر حرف|حالم بد|بسه دیگه)\b',
+                Language.AR: r'\b(مسخوط|غاضب|زعلان|تعبت|ملل|بطيء|قاسي|سيئ)\b',
+                Language.RU: r'\b(раздосадовано|злой|устал|ужасно|недовольны|усталь)\b',
+                Language.EN: r'\b(annoyed|frustrated|angry|stupid|terrible|tired|awful|enough already|just stop)\b'
             }
             
             # Check all possible languages for sentiment
