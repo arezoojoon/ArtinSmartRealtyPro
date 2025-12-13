@@ -412,10 +412,10 @@ class TenantPropertyResponse(BaseModel):
     features: Optional[List[str]]
     description: Optional[str]
     full_description: Optional[str]
-    golden_visa_eligible: bool
-    is_available: bool
-    is_featured: bool
-    is_urgent: bool
+    golden_visa_eligible: bool = False
+    is_available: bool = True
+    is_featured: bool = False
+    is_urgent: bool = False
     image_urls: Optional[List[str]]
     primary_image: Optional[str]
     image_files: Optional[List[dict]]
