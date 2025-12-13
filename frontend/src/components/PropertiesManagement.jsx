@@ -840,9 +840,6 @@ const PropertiesManagement = ({ tenantId }) => {
                     }}
                 />
             )}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
