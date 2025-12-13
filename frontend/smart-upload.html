@@ -44,6 +44,31 @@
             font-size: 1.1rem;
         }
 
+        .user-info {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: #f0f2ff;
+            border-radius: 10px;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .back-btn {
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            padding: 0.5rem 1rem;
+            background: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .back-btn:hover {
+            background: #5a6268;
+        }
+
         .upload-zone {
             border: 3px dashed #667eea;
             border-radius: 15px;
@@ -256,8 +281,14 @@
 </head>
 <body>
     <div class="container">
+        <a href="/" class="back-btn">← بازگشت به داشبورد / Back to Dashboard</a>
+        
         <h1>🚀 Smart Property Upload</h1>
         <p class="subtitle">Drop PDF brochures or images - AI extracts everything automatically!</p>
+        
+        <div class="user-info" id="userInfo">
+            👤 Loading user info...
+        </div>
 
         <div class="upload-zone" id="uploadZone">
             <div class="upload-icon">📁</div>
@@ -291,6 +322,20 @@
     </div>
 
     <script>
+        // 🔐 CHECK AUTHENTICATION - Redirect if not logged in
+        const token = localStorage.getItem('tenant_token');
+        const tenantId = localStorage.getItem('tenant_id');
+        const tenantName = localStorage.getItem('tenant_name') || 'Agent';
+        
+        if (!token || !tenantId) {
+            alert('🔒 لطفا ابتدا وارد سیستم شوید!\nPlease login first!');
+            window.location.href = '/login.html';
+        }
+
+        // Display user info
+        document.getElementById('userInfo').textContent = 
+            `👤 Welcome ${tenantName} | Tenant ID: ${tenantId}`;
+
         const uploadZone = document.getElementById('uploadZone');
         const fileInput = document.getElementById('fileInput');
         const fileList = document.getElementById('fileList');
@@ -392,9 +437,7 @@
             formData.append('use_ai', useAI.checked);
             formData.append('auto_save', autoSave.checked);
 
-            const token = localStorage.getItem('tenant_token') || 'demo_token';
-            const tenantId = localStorage.getItem('tenant_id') || '1';
-
+            // Use authenticated token and tenant ID from localStorage
             const response = await fetch(`/api/tenants/${tenantId}/properties/smart-upload`, {
                 method: 'POST',
                 headers: {
@@ -406,6 +449,13 @@
             const data = await response.json();
 
             if (!response.ok) {
+                // Handle unauthorized access
+                if (response.status === 401 || response.status === 403) {
+                    alert('🔒 دسترسی غیرمجاز! لطفا دوباره وارد شوید.\nUnauthorized! Please login again.');
+                    localStorage.clear();
+                    window.location.href = '/login.html';
+                    return;
+                }
                 throw new Error(data.detail || 'Upload failed');
             }
 
@@ -418,9 +468,7 @@
             formData.append('use_ai', useAI.checked);
             formData.append('auto_save', autoSave.checked);
 
-            const token = localStorage.getItem('tenant_token') || 'demo_token';
-            const tenantId = localStorage.getItem('tenant_id') || '1';
-
+            // Use authenticated token and tenant ID from localStorage
             const response = await fetch(`/api/tenants/${tenantId}/properties/batch-upload`, {
                 method: 'POST',
                 headers: {
@@ -432,6 +480,13 @@
             const data = await response.json();
 
             if (!response.ok) {
+                // Handle unauthorized access
+                if (response.status === 401 || response.status === 403) {
+                    alert('🔒 دسترسی غیرمجاز! لطفا دوباره وارد شوید.\nUnauthorized! Please login again.');
+                    localStorage.clear();
+                    window.location.href = '/login.html';
+                    return;
+                }
                 throw new Error(data.detail || 'Batch upload failed');
             }
 
