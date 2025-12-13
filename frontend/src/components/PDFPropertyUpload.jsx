@@ -195,7 +195,7 @@ const PDFPropertyUpload = ({ tenantId, onPropertyCreated, onClose }) => {
                             onChange={(e) => setAutoSave(e.target.checked)}
                             className="w-4 h-4"
                         />
-                        <span className="text-white">💾 Auto-save Properties (if confidence {'>'}70%)</span>
+                        <span className="text-white">💾 Auto-save Properties (if confidence &gt; 70%)</span>
                     </label>
                 </div>
 
