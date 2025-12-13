@@ -73,7 +73,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         
         # Remove server header (don't reveal server technology)
-        response.headers.pop("server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
         
         # Add custom security header
         response.headers["X-Powered-By"] = "ArtinSmartRealty"
