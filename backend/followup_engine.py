@@ -16,7 +16,7 @@ from unified_database import (
     LeadSource, LeadStatus, InteractionChannel, InteractionDirection,
     log_interaction
 )
-from brain import RealEstateBrain
+from brain import Brain
 import os
 
 
@@ -29,7 +29,7 @@ class FollowupEngine:
     """
     
     def __init__(self):
-        self.brain = RealEstateBrain()
+        self.brain = Brain()
         self.scheduler = AsyncIOScheduler()
         
     def start(self):
