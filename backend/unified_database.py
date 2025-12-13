@@ -358,7 +358,7 @@ class PropertyLeadMatch(Base):
     __tablename__ = "property_lead_matches"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    property_id = Column(Integer, ForeignKey('properties.id'), nullable=False)
+    property_id = Column(Integer, ForeignKey('tenant_properties.id'), nullable=False)
     lead_id = Column(Integer, ForeignKey('unified_leads.id'), nullable=False)
     
     # === Match Score ===
