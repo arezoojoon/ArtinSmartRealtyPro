@@ -4187,7 +4187,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         return BrainResponse(
             message=consultation_messages.get(lang, consultation_messages[Language.EN]),
             next_state=ConversationState.COMPLETED,
-            lead_updates={"status": LeadStatus.CONSULTATION_PENDING, "consultation_requested": True},
+            lead_updates={"status": LeadStatus.QUALIFIED},
             buttons=[]
         )
     
