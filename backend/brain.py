@@ -2313,6 +2313,76 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             buttons=[]
         )
     
+    async def _handle_capture_contact(
+        self,
+        lang: Language,
+        message: Optional[str],
+        callback_data: Optional[str],
+        lead: Lead,
+        lead_updates: Dict
+    ) -> BrainResponse:
+        """
+        CAPTURE_CONTACT Phase: Capture phone number after name collection
+        This phase validates and stores the phone number before moving to warmup
+        """
+        # Phone number shared via Telegram contact button
+        if not message:
+            retry_msg = {
+                Language.EN: "Please share your phone number using the button below, or type it manually 📱",
+                Language.FA: "لطفاً شماره تلفنتون رو با دکمه پایین share کنید، یا دستی بنویسید 📱",
+                Language.AR: "يرجى مشاركة رقم هاتفك باستخدام الزر أدناه، أو اكتبه يدوياً 📱",
+                Language.RU: "Пожалуйста, поделитесь номером телефона кнопкой ниже или введите вручную 📱"
+            }
+            return BrainResponse(
+                message=retry_msg.get(lang, retry_msg[Language.EN]),
+                next_state=ConversationState.CAPTURE_CONTACT,
+                lead_updates={},
+                request_contact=True,
+                buttons=[]
+            )
+        
+        # Validate phone number (basic validation)
+        phone = message.strip()
+        if len(phone) < 10:
+            retry_msg = {
+                Language.EN: "Please enter a valid phone number (at least 10 digits) 📱",
+                Language.FA: "لطفاً یک شماره معتبر وارد کنید (حداقل ۱۰ رقم) 📱",
+                Language.AR: "يرجى إدخال رقم هاتف صالح (10 أرقام على الأقل) 📱",
+                Language.RU: "Пожалуйста, введите корректный номер (минимум 10 цифр) 📱"
+            }
+            return BrainResponse(
+                message=retry_msg.get(lang, retry_msg[Language.EN]),
+                next_state=ConversationState.CAPTURE_CONTACT,
+                lead_updates={},
+                request_contact=True,
+                buttons=[]
+            )
+        
+        # Save phone number
+        lead_updates["phone"] = phone
+        
+        # Move to WARMUP phase
+        warmup_msg = {
+            Language.EN: f"Thank you! 🙏\n\nNow, let's understand your goals better.\n\n🎯 **What's your primary objective for Dubai property?**",
+            Language.FA: f"ممنون! 🙏\n\nحالا بذار اهداف شما رو بهتر بفهمم.\n\n🎯 **هدف اصلی شما از خرید ملک در دبی چیه؟**",
+            Language.AR: f"شكراً! 🙏\n\nالآن، دعنا نفهم أهدافك بشكل أفضل.\n\n🎯 **ما هو هدفك الأساسي من العقار في دبي؟**",
+            Language.RU: f"Спасибо! 🙏\n\nТеперь давайте лучше поймём ваши цели.\n\n🎯 **Какая ваша основная цель покупки в Дубае?**"
+        }
+        
+        buttons = {
+            Language.EN: ["💰 Investment (ROI)", "🏠 Living (Own Use)", "🛂 Residency (Visa)"],
+            Language.FA: ["💰 سرمایه‌گذاری (بازگشت سرمایه)", "🏠 زندگی (استفاده شخصی)", "🛂 اقامت (ویزا)"],
+            Language.AR: ["💰 استثمار (عائد)", "🏠 سكن (استخدام شخصي)", "🛂 إقامة (تأشيرة)"],
+            Language.RU: ["💰 Инвестиция (ROI)", "🏠 Проживание (личное)", "🛂 Резиденция (виза)"]
+        }
+        
+        return BrainResponse(
+            message=warmup_msg.get(lang, warmup_msg[Language.EN]),
+            next_state=ConversationState.WARMUP,
+            lead_updates=lead_updates,
+            buttons=buttons.get(lang, buttons[Language.EN])
+        )
+    
     # ==================== NEW STATE MACHINE HANDLERS ====================
     # These handlers implement the 6-phase professional sales flow
     
