@@ -827,7 +827,7 @@ const PropertiesManagement = ({ tenantId }) => {
                 </div>
             )}
 
-            {/* PDF Quick Upload Modal - AI-Powered with Gemini */}
+            {/* PDF Quick Upload Modal - AI-Powered Vision Analysis */}
             {showPDFUpload && (
                 <PDFPropertyUpload
                     tenantId={tenantId}

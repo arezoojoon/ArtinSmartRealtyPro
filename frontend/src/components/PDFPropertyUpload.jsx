@@ -1,7 +1,7 @@
 /**
  * 🚀 AI-Powered Smart Property Upload
- * Drop PDF/Images → Gemini Vision extracts everything → Auto-create property!
- * FREE Gemini API instead of paid OpenAI = 100% cost savings! 🎉
+ * Drop PDF/Images → AI Vision extracts everything → Auto-create property!
+ * FREE AI API - 100% cost savings! 🎉
  */
 
 import React, { useState } from 'react';
@@ -116,10 +116,10 @@ const PDFPropertyUpload = ({ tenantId, onPropertyCreated, onClose }) => {
                             🚀 AI Smart Upload
                         </h2>
                         <p className="text-gray-400">
-                            Drop PDF brochures or images - Gemini Vision AI extracts everything!
+                            Drop PDF brochures or images - AI Vision extracts everything!
                         </p>
                         <p className="text-sm text-green-400 mt-1">
-                            ✨ FREE Gemini API - 95% accuracy - 20x faster!
+                            ✨ FREE AI Analysis - 95% accuracy - 20x faster!
                         </p>
                     </div>
                     <button
@@ -186,7 +186,7 @@ const PDFPropertyUpload = ({ tenantId, onPropertyCreated, onClose }) => {
                             onChange={(e) => setUseAI(e.target.checked)}
                             className="w-4 h-4"
                         />
-                        <span className="text-white">🤖 Use Gemini Vision AI (Best Quality - FREE!)</span>
+                        <span className="text-white">🤖 Use Vision AI for Analysis & Extraction (FREE!)</span>
                     </label>
                     <label className="flex items-center gap-2 bg-navy-light px-4 py-2 rounded-lg cursor-pointer">
                         <input
@@ -214,7 +214,7 @@ const PDFPropertyUpload = ({ tenantId, onPropertyCreated, onClose }) => {
                 {uploading && (
                     <div className="flex flex-col items-center justify-center py-8">
                         <Loader className="w-12 h-12 text-purple-400 animate-spin mb-4" />
-                        <p className="text-white font-semibold">Gemini AI is analyzing...</p>
+                        <p className="text-white font-semibold">AI is analyzing your document...</p>
                         <p className="text-gray-400 text-sm mt-2">Extracting property details from {selectedFiles.length} file(s)</p>
                     </div>
                 )}
