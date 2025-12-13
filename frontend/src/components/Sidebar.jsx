@@ -35,7 +35,7 @@ export const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) 
     <aside className={`w-72 glass-sidebar fixed h-screen left-0 top-0 z-50 flex flex-col animate-slide-in-left transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
       <div className="px-6 py-6 mb-4 flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg flex items-center justify-center">
-          <img src="/logo.svg" alt="ArtinRealty Logo" className="w-full h-full object-contain" />
+          <img src="/goldlogo.svg" alt="ArtinRealty Logo" className="w-full h-full object-contain" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-white">Artin<span className="text-gold-500">Realty</span></h1>

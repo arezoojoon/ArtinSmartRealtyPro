@@ -16,7 +16,7 @@ const Logo = ({ size = 'md', variant = 'full' }) => {
   const currentSize = sizes[size];
 
   // Use transparent SVG logo from public folder
-  const customLogoPath = '/logo.svg';
+  const customLogoPath = '/goldlogo.svg';
 
   if (variant === 'icon') {
     return (
