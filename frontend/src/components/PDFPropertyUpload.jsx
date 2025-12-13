@@ -331,33 +331,3 @@ const PDFPropertyUpload = ({ tenantId, onPropertyCreated, onClose }) => {
 };
 
 export default PDFPropertyUpload;
-
-            {/* How it Works */}
-            <div className="mt-8 pt-6 border-t border-white border-opacity-10">
-                <h3 className="text-white font-semibold mb-3 text-center">چطور کار می‌کنه؟</h3>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                        <div className="w-10 h-10 bg-gold-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <span className="text-gold-500 font-bold">1</span>
-                        </div>
-                        <p className="text-sm text-gray-400">Upload PDF</p>
-                    </div>
-                    <div>
-                        <div className="w-10 h-10 bg-gold-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <span className="text-gold-500 font-bold">2</span>
-                        </div>
-                        <p className="text-sm text-gray-400">AI Extracts Data</p>
-                    </div>
-                    <div>
-                        <div className="w-10 h-10 bg-gold-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <span className="text-gold-500 font-bold">3</span>
-                        </div>
-                        <p className="text-sm text-gray-400">Property Created!</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export default PDFPropertyUpload;
