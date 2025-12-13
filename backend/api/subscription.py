@@ -14,7 +14,18 @@ from database import (
     async_session, Tenant, SubscriptionPlan, SubscriptionStatus,
     Language
 )
-from auth_config import hash_password
+# hash_password is in main.py, not auth_config
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+import hashlib
+import os
+
+# Password hashing using same method as main.py
+PASSWORD_SALT = os.getenv("PASSWORD_SALT", "artinsmartrealty_salt_v2")
+
+def hash_password(password: str) -> str:
+    """Hash password using PBKDF2-HMAC-SHA256"""
+    return hashlib.pbkdf2_hmac('sha256', password.encode(), PASSWORD_SALT.encode(), 600000).hex()
 from payment_gateway import (
     PaymentProcessor, PaymentRequest as PaymentGatewayRequest,
     PaymentGateway, get_payment_amount
