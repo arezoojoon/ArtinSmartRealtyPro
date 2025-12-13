@@ -2370,10 +2370,26 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         }
         
         buttons = {
-            Language.EN: ["💰 Investment (ROI)", "🏠 Living (Own Use)", "🛂 Residency (Visa)"],
-            Language.FA: ["💰 سرمایه‌گذاری (بازگشت سرمایه)", "🏠 زندگی (استفاده شخصی)", "🛂 اقامت (ویزا)"],
-            Language.AR: ["💰 استثمار (عائد)", "🏠 سكن (استخدام شخصي)", "🛂 إقامة (تأشيرة)"],
-            Language.RU: ["💰 Инвестиция (ROI)", "🏠 Проживание (личное)", "🛂 Резиденция (виза)"]
+            Language.EN: [
+                {"text": "💰 Investment (ROI)", "callback_data": "purpose_investment"},
+                {"text": "🏠 Living (Own Use)", "callback_data": "purpose_living"},
+                {"text": "🛂 Residency (Visa)", "callback_data": "purpose_residency"}
+            ],
+            Language.FA: [
+                {"text": "💰 سرمایه‌گذاری (بازگشت سرمایه)", "callback_data": "purpose_investment"},
+                {"text": "🏠 زندگی (استفاده شخصی)", "callback_data": "purpose_living"},
+                {"text": "🛂 اقامت (ویزا)", "callback_data": "purpose_residency"}
+            ],
+            Language.AR: [
+                {"text": "💰 استثمار (عائد)", "callback_data": "purpose_investment"},
+                {"text": "🏠 سكن (استخدام شخصي)", "callback_data": "purpose_living"},
+                {"text": "🛂 إقامة (تأشيرة)", "callback_data": "purpose_residency"}
+            ],
+            Language.RU: [
+                {"text": "💰 Инвестиция (ROI)", "callback_data": "purpose_investment"},
+                {"text": "🏠 Проживание (личное)", "callback_data": "purpose_living"},
+                {"text": "🛂 Резиденция (виза)", "callback_data": "purpose_residency"}
+            ]
         }
         
         return BrainResponse(
@@ -2399,8 +2415,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         Goal: Identify primary objective (Investment, Living, or Residency)
         """
         # If button clicked, capture goal and ask buy/rent BEFORE budget
-        if callback_data and callback_data.startswith("goal_"):
-            goal = callback_data.replace("goal_", "")
+        if callback_data and callback_data.startswith("purpose_"):
+            goal = callback_data.replace("purpose_", "")  # purpose_investment, purpose_living, purpose_residency
             
             # Store in conversation_data
             conversation_data = lead.conversation_data or {}
