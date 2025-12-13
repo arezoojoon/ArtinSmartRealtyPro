@@ -332,14 +332,12 @@ async def _save_property_to_db(
         bathrooms=extracted_data.get('bathrooms'),
         property_type=extracted_data.get('property_type') or 'apartment',
         transaction_type=extracted_data.get('transaction_type') or 'buy',
-        is_off_plan=extracted_data.get('is_off_plan', False),
-        completion_date=extracted_data.get('completion_date'),
-        roi_percentage=extracted_data.get('roi_percentage'),
-        is_golden_visa_eligible=extracted_data.get('is_golden_visa_eligible', False),
+        expected_roi=extracted_data.get('roi_percentage'),
+        golden_visa_eligible=extracted_data.get('is_golden_visa_eligible', False),
         primary_image=primary_image,
         images=[primary_image],  # Can add more images later
-        amenities=extracted_data.get('amenities', []),
-        payment_plan=extracted_data.get('payment_plan'),
+        features=extracted_data.get('amenities', []),
+        full_description=extracted_data.get('payment_plan'),  # Store payment plan in description
         is_available=True,
         is_featured=False
     )
