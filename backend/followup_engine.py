@@ -458,7 +458,7 @@ Wishing you all the best in your career at {lead.company or 'your company'} 🚀
     
     async def send_telegram_message(self, user_id: int, message: str):
         """Send message via Telegram"""
-        from backend.telegram_bot import send_message
+        from telegram_bot import send_message
         try:
             await send_message(user_id, message)
         except Exception as e:
@@ -466,7 +466,7 @@ Wishing you all the best in your career at {lead.company or 'your company'} 🚀
     
     async def send_whatsapp_message(self, phone: str, message: str):
         """Send message via WhatsApp"""
-        from backend.whatsapp_bot import send_message
+        from whatsapp_bot import send_message
         try:
             await send_message(phone, message)
         except Exception as e:
@@ -491,7 +491,7 @@ Wishing you all the best in your career at {lead.company or 'your company'} 🚀
         Called when a new property is added that matches existing leads
         Sends immediate notification to matched leads
         """
-        from backend.database import TenantProperty
+        from database import TenantProperty
         
         async with async_session() as session:
             # Get property details
@@ -620,8 +620,8 @@ async def notify_property_added(property_id: int) -> int:
     Notify matched leads about a new property
     Returns: number of leads notified
     """
-    from backend.unified_database import find_matching_leads_for_property
-    from backend.database import TenantProperty
+    from unified_database import find_matching_leads_for_property
+    from database import TenantProperty
     
     try:
         async with async_session() as session:

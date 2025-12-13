@@ -157,7 +157,7 @@ async def get_all_leads(
             query = query.where(UnifiedLead.status == status)
         if grade:
             # Cast grade string to LeadGrade enum for comparison
-            from backend.unified_database import LeadGrade
+            from unified_database import LeadGrade
             grade_enum = LeadGrade(grade) if isinstance(grade, str) else grade
             query = query.where(UnifiedLead.grade == grade_enum)  # type: ignore
         
@@ -317,7 +317,7 @@ async def notify_property_matches(property_id: int, tenant_id: int = 1):
     
     try:
         # ✅ FIX: Verify property exists before notifying
-        from backend.database import TenantProperty
+        from database import TenantProperty
         async with async_session() as session:
             result = await session.execute(
                 select(TenantProperty).where(TenantProperty.id == property_id)

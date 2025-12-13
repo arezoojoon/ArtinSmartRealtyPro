@@ -539,7 +539,7 @@ async def find_matching_leads_for_property(
         raise ValueError(f"Invalid tenant_id: {tenant_id}")
     
     # Get property details
-    from backend.database import TenantProperty
+    from database import TenantProperty
     result = await session.execute(
         select(TenantProperty).where(
             TenantProperty.id == property_id,
