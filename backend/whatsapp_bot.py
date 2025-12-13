@@ -378,16 +378,16 @@ class WhatsAppBotHandler:
                         from_phone, profile_name, int(mapped_tenant_id)
                     )
                     
-                        # Process message with tenant's brain
-                        if message_type == "text" and text:
-                            response = await tenant_brain.process_message(lead, text, "")
-                            await self.send_message(from_phone, response.message, response.buttons)
-                            
-                            # Update lead
-                            updates = response.lead_updates or {}
-                            if response.next_state:
-                                updates["conversation_state"] = response.next_state
-                            if updates:
+                    # Process message with tenant's brain
+                    if message_type == "text" and text:
+                        response = await tenant_brain.process_message(lead, text, "")
+                        await self.send_message(from_phone, response.message, response.buttons)
+                        
+                        # Update lead
+                        updates = response.lead_updates or {}
+                        if response.next_state:
+                            updates["conversation_state"] = response.next_state
+                        if updates:
                                 await update_lead(lead.id, **updates)
                         
                         return True
