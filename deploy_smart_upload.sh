@@ -23,41 +23,39 @@ fi
 
 echo -e "${GREEN}✅ Code updated${NC}"
 
-# Step 2: Check OPENAI_API_KEY
-echo -e "${YELLOW}🔑 Checking OpenAI API Key...${NC}"
+# Step 2: Check GEMINI_API_KEY
+echo -e "${YELLOW}🔑 Checking Gemini API Key...${NC}"
 
-if grep -q "OPENAI_API_KEY=" .env; then
-    KEY_VALUE=$(grep "OPENAI_API_KEY=" .env | cut -d '=' -f2)
-    if [ -z "$KEY_VALUE" ] || [ "$KEY_VALUE" = "your_openai_api_key_here" ]; then
-        echo -e "${RED}⚠️  OPENAI_API_KEY not set in .env${NC}"
+if grep -q "GEMINI_API_KEY=" .env; then
+    KEY_VALUE=$(grep "GEMINI_API_KEY=" .env | cut -d '=' -f2)
+    if [ -z "$KEY_VALUE" ] || [ "$KEY_VALUE" = "your_gemini_api_key_here" ]; then
+        echo -e "${RED}⚠️  GEMINI_API_KEY not set in .env${NC}"
         echo ""
-        echo "Please add your OpenAI API key to .env:"
-        echo "OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx"
+        echo "Gemini API is FREE! Get your key:"
+        echo "https://makersuite.google.com/app/apikey"
         echo ""
-        echo "Get your key from: https://platform.openai.com/api-keys"
-        echo ""
-        read -p "Enter your OpenAI API Key (or press Enter to skip): " api_key
+        read -p "Enter your Gemini API Key (or press Enter to skip): " api_key
         if [ ! -z "$api_key" ]; then
             # Add or update key in .env
-            if grep -q "OPENAI_API_KEY=" .env; then
-                sed -i "s/OPENAI_API_KEY=.*/OPENAI_API_KEY=$api_key/" .env
+            if grep -q "GEMINI_API_KEY=" .env; then
+                sed -i "s/GEMINI_API_KEY=.*/GEMINI_API_KEY=$api_key/" .env
             else
-                echo "OPENAI_API_KEY=$api_key" >> .env
+                echo "GEMINI_API_KEY=$api_key" >> .env
             fi
             echo -e "${GREEN}✅ API key added to .env${NC}"
         else
-            echo -e "${YELLOW}⚠️  Skipping API key - GPT-4 Vision will not work${NC}"
+            echo -e "${YELLOW}⚠️  Skipping API key - Gemini Vision will not work${NC}"
             echo -e "${YELLOW}   OCR with Tesseract will be used instead${NC}"
         fi
     else
-        echo -e "${GREEN}✅ OPENAI_API_KEY is set${NC}"
+        echo -e "${GREEN}✅ GEMINI_API_KEY is set${NC}"
     fi
 else
-    echo -e "${RED}⚠️  OPENAI_API_KEY not found in .env${NC}"
+    echo -e "${RED}⚠️  GEMINI_API_KEY not found in .env${NC}"
     echo ""
-    read -p "Enter your OpenAI API Key (or press Enter to skip): " api_key
+    read -p "Enter your Gemini API Key (or press Enter to skip): " api_key
     if [ ! -z "$api_key" ]; then
-        echo "OPENAI_API_KEY=$api_key" >> .env
+        echo "GEMINI_API_KEY=$api_key" >> .env
         echo -e "${GREEN}✅ API key added to .env${NC}"
     fi
 fi
@@ -138,7 +136,7 @@ echo "==================================${NC}"
 echo ""
 echo "📋 What's new:"
 echo "   ✅ AI-powered PDF extraction"
-echo "   ✅ GPT-4 Vision image analysis"
+echo "   ✅ Gemini Vision image analysis (FREE!)"
 echo "   ✅ Tesseract OCR fallback"
 echo "   ✅ Batch upload support"
 echo "   ✅ Auto-save with confidence scoring"
@@ -154,19 +152,19 @@ echo ""
 echo "🧪 Quick Test:"
 echo "   1. Open: http://localhost:8000/smart-upload.html"
 echo "   2. Upload a PDF brochure"
-echo "   3. Watch AI extract everything!"
+echo "   3. Watch Gemini AI extract everything!"
 echo ""
 
 # Check if API key is set
-if grep -q "OPENAI_API_KEY=sk-" .env; then
-    echo -e "${GREEN}✅ GPT-4 Vision is enabled (best quality)${NC}"
-    echo "   Cost: ~$0.01 per image"
+if grep -q "GEMINI_API_KEY=AIza" .env 2>/dev/null; then
+    echo -e "${GREEN}✅ Gemini Vision is enabled (best quality & FREE!)${NC}"
+    echo "   No cost for API usage!"
 else
-    echo -e "${YELLOW}⚠️  GPT-4 Vision is disabled${NC}"
+    echo -e "${YELLOW}⚠️  Gemini Vision is disabled${NC}"
     echo "   Using Tesseract OCR (free but lower quality)"
-    echo "   To enable GPT-4 Vision:"
-    echo "   1. Get API key: https://platform.openai.com/api-keys"
-    echo "   2. Add to .env: OPENAI_API_KEY=sk-proj-xxxxx"
+    echo "   To enable Gemini Vision:"
+    echo "   1. Get FREE API key: https://makersuite.google.com/app/apikey"
+    echo "   2. Add to .env: GEMINI_API_KEY=AIzaxxxxx"
     echo "   3. Restart: docker-compose restart backend"
 fi
 

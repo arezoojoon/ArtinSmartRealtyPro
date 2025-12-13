@@ -18,8 +18,7 @@ redis==5.0.1
 python-telegram-bot==21.0.1
 
 # AI / LLM
-google-generativeai==0.8.3
-openai==1.54.0  # GPT-4 Vision for smart property extraction
+google-generativeai==0.8.3  # Gemini Vision for smart property extraction (FREE!)
 
 # PDF Generation & Processing
 reportlab==4.0.9

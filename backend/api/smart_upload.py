@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = Path("uploads/properties")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Initialize extractor
-extractor = PropertyExtractor(openai_api_key=os.getenv('OPENAI_API_KEY'))
+# Initialize extractor with Gemini
+extractor = PropertyExtractor(gemini_api_key=os.getenv('GEMINI_API_KEY'))
 
 
 async def verify_tenant_access(
@@ -91,6 +91,8 @@ async def smart_upload_property(
     - Extracted property data (ready to review or auto-save)
     - Confidence score
     - Missing fields warnings
+    
+    Uses Gemini Vision AI (FREE!) for best quality extraction.
     
     Example:
         Upload "marina-tower-brochure.pdf" → System extracts:

@@ -28,14 +28,13 @@ except ImportError:
     HAS_OCR = False
     print("⚠️ Pillow/pytesseract not installed. Run: pip install Pillow pytesseract")
 
-# AI Vision (GPT-4 Vision for complex extraction)
+# AI Vision (Gemini Vision for complex extraction)
 try:
-    import openai
-    from openai import AsyncOpenAI
-    HAS_OPENAI = True
+    import google.generativeai as genai
+    HAS_GEMINI = True
 except ImportError:
-    HAS_OPENAI = False
-    print("⚠️ OpenAI not installed. Run: pip install openai")
+    HAS_GEMINI = False
+    print("⚠️ google-generativeai not installed. Run: pip install google-generativeai")
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +42,11 @@ logger = logging.getLogger(__name__)
 class PropertyExtractor:
     """Extract property information from PDFs and images automatically"""
     
-    def __init__(self, openai_api_key: Optional[str] = None):
-        self.openai_client = None
-        if HAS_OPENAI and openai_api_key:
-            self.openai_client = AsyncOpenAI(api_key=openai_api_key)
+    def __init__(self, gemini_api_key: Optional[str] = None):
+        self.gemini_model = None
+        if HAS_GEMINI and gemini_api_key:
+            genai.configure(api_key=gemini_api_key)
+            self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
     
     async def extract_from_pdf(self, pdf_path: str) -> Dict:
         """
@@ -97,41 +97,32 @@ class PropertyExtractor:
         
         Args:
             image_path: Path to image file
-            use_ai: If True, use GPT-4 Vision for better extraction
+            use_ai: If True, use Gemini Vision for better extraction
         
         Returns: Same as extract_from_pdf
         """
         try:
-            # Method 1: GPT-4 Vision (Best quality, requires API key)
-            if use_ai and self.openai_client:
-                return await self._extract_with_gpt_vision(image_path)
+            # Method 1: Gemini Vision (Best quality, FREE!)
+            if use_ai and self.gemini_model:
+                return await self._extract_with_gemini_vision(image_path)
             
             # Method 2: Tesseract OCR (Free, lower quality)
             elif HAS_OCR:
                 return await self._extract_with_ocr(image_path)
             
             else:
-                raise ImportError("No OCR method available. Install OpenAI or pytesseract")
+                raise ImportError("No OCR method available. Install google-generativeai or pytesseract")
                 
         except Exception as e:
             logger.error(f"❌ Image extraction failed: {e}")
             return {'error': str(e)}
     
-    async def _extract_with_gpt_vision(self, image_path: str) -> Dict:
-        """Use GPT-4 Vision to extract property details from image"""
+    async def _extract_with_gemini_vision(self, image_path: str) -> Dict:
+        """Use Gemini Vision to extract property details from image"""
         
-        # Read and encode image
-        with open(image_path, 'rb') as f:
-            image_data = base64.b64encode(f.read()).decode('utf-8')
-        
-        # Detect image type
-        ext = Path(image_path).suffix.lower()
-        mime_type = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.webp': 'image/webp'
-        }.get(ext, 'image/jpeg')
+        # Read image
+        from PIL import Image as PILImage
+        image = PILImage.open(image_path)
         
         prompt = """
         You are a Dubai real estate property analyzer. Extract all property information from this image.
@@ -166,27 +157,8 @@ class PropertyExtractor:
         """
         
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4o",  # GPT-4 Turbo with vision
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{image_data}"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=1000,
-                temperature=0.1  # Low temperature for accuracy
-            )
-            
-            result_text = response.choices[0].message.content.strip()
+            response = self.gemini_model.generate_content([prompt, image])
+            result_text = response.text.strip()
             
             # Remove markdown code blocks if present
             result_text = re.sub(r'^```json\s*', '', result_text)
@@ -196,11 +168,11 @@ class PropertyExtractor:
             import json
             property_data = json.loads(result_text)
             
-            logger.info(f"✅ GPT-4 Vision extracted: {property_data.get('name', 'Unknown')}")
+            logger.info(f"✅ Gemini Vision extracted: {property_data.get('name', 'Unknown')}")
             return property_data
             
         except Exception as e:
-            logger.error(f"❌ GPT-4 Vision failed: {e}")
+            logger.error(f"❌ Gemini Vision failed: {e}")
             return {'error': str(e)}
     
     async def _extract_with_ocr(self, image_path: str) -> Dict:
@@ -470,7 +442,7 @@ async def test_extraction():
     """Test the property extractor"""
     import os
     
-    extractor = PropertyExtractor(openai_api_key=os.getenv('OPENAI_API_KEY'))
+    extractor = PropertyExtractor(gemini_api_key=os.getenv('GEMINI_API_KEY'))
     
     print("🧪 Testing Property Extractor\n")
     
