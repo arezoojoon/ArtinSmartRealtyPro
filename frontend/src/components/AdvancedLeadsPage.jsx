@@ -252,7 +252,8 @@ const AdvancedLeadsPage = () => {
 
   const fetchLeads = async () => {
     try {
-      const response = await api.get('/api/leads?limit=1000');
+      const tenantId = localStorage.getItem('tenantId') || '1';
+      const response = await api.get(`/api/tenants/${tenantId}/leads?limit=1000`);
       const leadsData = Array.isArray(response) ? response : (response.leads || []);
       setLeads(leadsData);
     } catch (error) {

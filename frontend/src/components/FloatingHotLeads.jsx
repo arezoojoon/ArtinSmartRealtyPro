@@ -27,7 +27,8 @@ const FloatingHotLeads = () => {
 
   const fetchHotLeads = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/leads?limit=100`, {
+      const tenantId = localStorage.getItem('tenantId') || '1';
+      const response = await fetch(`${API_BASE_URL}/api/tenants/${tenantId}/leads?limit=100`, {
         headers: getAuthHeaders(),
       });
       
