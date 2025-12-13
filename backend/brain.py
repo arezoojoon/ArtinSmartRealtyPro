@@ -2150,6 +2150,9 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         elif current_state == ConversationState.COLLECTING_NAME:
             return await self._handle_collecting_name(lang, message, callback_data, lead, lead_updates)
         
+        elif current_state == ConversationState.COLLECTING_PHONE:
+            return await self._handle_capture_contact(lang, message, callback_data, lead, lead_updates)
+        
         # ===== NEW STATE MACHINE ROUTING =====
         elif current_state == ConversationState.WARMUP:
             return await self._handle_warmup(lang, message, callback_data, lead, lead_updates)

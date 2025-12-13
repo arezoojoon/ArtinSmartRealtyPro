@@ -5,7 +5,6 @@
 
 import React from 'react';
 import { Building2 } from 'lucide-react';
-import goldLogo from '../goldlogo.svg';
 
 const Logo = ({ size = 'md', variant = 'full' }) => {
   const sizes = {
@@ -16,16 +15,16 @@ const Logo = ({ size = 'md', variant = 'full' }) => {
 
   const currentSize = sizes[size];
 
-  // لوگوی سفارشی از پوشه src
-  const customLogoPath = goldLogo;
+  // Use transparent SVG logo from public folder
+  const customLogoPath = '/logo.svg';
 
   if (variant === 'icon') {
     return (
-      <div className={`inline-flex items-center justify-center ${currentSize.container} bg-gradient-to-br from-gold-500 to-gold-600 rounded-xl`}>
+      <div className={`inline-flex items-center justify-center ${currentSize.container} rounded-xl`}>
         {customLogoPath ? (
-          <img src={customLogoPath} alt="Artin Smart Realty" className="w-full h-full object-contain p-2" />
+          <img src={customLogoPath} alt="Artin Smart Realty" className="w-full h-full object-contain" />
         ) : (
-          <Building2 className="text-navy-900" size={currentSize.icon} />
+          <Building2 className="text-gold-500" size={currentSize.icon} />
         )}
       </div>
     );

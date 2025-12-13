@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Home icon with modern design -->
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- House shape -->
+  <path d="M100 30 L170 85 L170 170 L30 170 L30 85 Z" 
+        fill="url(#logoGradient)" 
+        stroke="none"/>
+  
+  <!-- Roof highlight -->
+  <path d="M100 30 L170 85 L160 90 L100 45 L40 90 L30 85 Z" 
+        fill="#fff" 
+        opacity="0.2"/>
+  
+  <!-- Door -->
+  <rect x="85" y="120" width="30" height="50" 
+        fill="#fff" 
+        opacity="0.3" 
+        rx="3"/>
+  
+  <!-- Window left -->
+  <rect x="50" y="100" width="20" height="20" 
+        fill="#fff" 
+        opacity="0.4" 
+        rx="2"/>
+  
+  <!-- Window right -->
+  <rect x="130" y="100" width="20" height="20" 
+        fill="#fff" 
+        opacity="0.4" 
+        rx="2"/>
+</svg>
