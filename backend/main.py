@@ -52,7 +52,7 @@ from password_validator import validate_password_strength
 from input_sanitizer import sanitize_text, sanitize_email, sanitize_phone
 
 # Import API routers
-from api import broadcast, catalogs, lotteries, admin
+from api import broadcast, catalogs, lotteries, admin, smart_upload
 from auth_config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, PASSWORD_SALT
 
 
@@ -659,6 +659,7 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(broadcast.router)
 app.include_router(catalogs.router)
 app.include_router(lotteries.router)
+app.include_router(smart_upload.router)  # 🚀 Smart PDF/Image Upload with AI
 
 # 🆕 Include Unified Lead Management API
 from api.unified_routes import router as unified_router
