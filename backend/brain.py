@@ -18,7 +18,8 @@ from database import (
     Lead, Tenant, ConversationState, Language,
     TransactionType, PropertyType, PaymentMethod, Purpose,
     LeadStatus, update_lead, get_available_slots, DayOfWeek,
-    PainPoint, get_tenant_context_for_ai, TenantKnowledge
+    PainPoint, get_tenant_context_for_ai, TenantKnowledge,
+    TenantProperty, async_session, select
 )
 
 # Configure logging
@@ -1900,6 +1901,173 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         return "\n".join(rec_parts)
     
+    async def get_real_properties_from_db(self, lead: Lead, limit: int = 5) -> List[Dict]:
+        """
+        🏠 گرفتن املاک واقعی از دیتابیس (نه فقط tenant_context)
+        
+        این تابع مستقیم از table tenant_properties می‌خونه و 
+        املاک رو filter می‌کنه بر اساس:
+        - نوع معامله (خرید/اجاره)
+        - بودجه
+        - نوع ملک
+        - موجود بودن
+        
+        Returns:
+            لیستی از دیکشنری‌های property با تمام اطلاعات
+        """
+        async with async_session() as db:
+            query = select(TenantProperty).where(
+                TenantProperty.tenant_id == lead.tenant_id,
+                TenantProperty.is_available == True
+            )
+            
+            # Filter by transaction type
+            conversation_data = lead.conversation_data or {}
+            transaction_type = conversation_data.get("transaction_type")
+            if transaction_type:
+                query = query.where(
+                    TenantProperty.transaction_type == transaction_type
+                )
+            
+            # Filter by budget
+            budget_max = conversation_data.get("budget_max") or lead.budget_max
+            if budget_max:
+                query = query.where(TenantProperty.price <= budget_max)
+            
+            # Filter by property type
+            property_type = conversation_data.get("property_type")
+            if property_type:
+                query = query.where(TenantProperty.property_type == property_type)
+            
+            # Filter by bedrooms (if specified)
+            bedrooms = conversation_data.get("bedrooms")
+            if bedrooms:
+                query = query.where(TenantProperty.bedrooms >= bedrooms)
+            
+            # Order by featured > price
+            query = query.order_by(
+                TenantProperty.is_featured.desc(),
+                TenantProperty.price.asc()
+            ).limit(limit)
+            
+            result = await db.execute(query)
+            properties = result.scalars().all()
+        
+        # Convert to dict
+        properties_list = []
+        for prop in properties:
+            prop_dict = {
+                "id": prop.id,
+                "name": prop.name,
+                "property_type": prop.property_type.value if prop.property_type else "Unknown",
+                "location": prop.location,
+                "price": prop.price or 0,
+                "bedrooms": prop.bedrooms or 0,
+                "bathrooms": prop.bathrooms or 0,
+                "area_sqft": prop.area_sqft or 0,
+                "features": prop.features or [],
+                "expected_roi": prop.expected_roi,
+                "rental_yield": prop.rental_yield,
+                "golden_visa_eligible": prop.golden_visa_eligible,
+                "images": prop.image_urls or prop.images or [],
+                "primary_image": prop.primary_image,
+                "brochure_pdf": prop.brochure_pdf,
+                "description": prop.full_description or prop.description,
+                "is_featured": prop.is_featured,
+                "is_urgent": prop.is_urgent
+            }
+            properties_list.append(prop_dict)
+            
+        logger.info(f"🏠 Retrieved {len(properties_list)} real properties from database for lead {lead.id}")
+        return properties_list
+    
+    async def format_properties_for_display(
+        self, 
+        properties: List[Dict], 
+        lang: Language
+    ) -> Tuple[str, List[Dict]]:
+        """
+        📝 فرمت کردن املاک برای نمایش به کاربر
+        
+        Args:
+            properties: لیست املاک از database
+            lang: زبان کاربر
+        
+        Returns:
+            (message_text, media_files) برای ارسال به تلگرام
+        """
+        if not properties:
+            no_props_msg = {
+                Language.FA: "😔 متاسفانه در حال حاضر ملکی با این مشخصات موجود نیست.\n\nبرای دیدن سایر گزینه‌ها یا پیدا کردن ملک مناسب، لطفاً با من تماس بگیرید!",
+                Language.EN: "😔 Sorry, we don't have properties matching those criteria right now.\n\nPlease contact me to explore other options or find the perfect property for you!",
+                Language.AR: "😔 عذرًا، ليس لدينا عقارات تطابق تلك المعايير الآن.\n\nيرجى الاتصال بي لاستكشاف خيارات أخرى!",
+                Language.RU: "😔 Извините, сейчас нет объектов по этим критериям.\n\nСвяжитесь со мной, чтобы рассмотреть другие варианты!"
+            }
+            return no_props_msg.get(lang, no_props_msg[Language.EN]), []
+        
+        # Build message
+        header = {
+            Language.FA: f"🏠 **{len(properties)} ملک مناسب برای شما:**\n\n",
+            Language.EN: f"🏠 **{len(properties)} Properties for You:**\n\n",
+            Language.AR: f"🏠 **{len(properties)} عقارات لك:**\n\n",
+            Language.RU: f"🏠 **{len(properties)} объектов для вас:**\n\n"
+        }
+        
+        message = header.get(lang, header[Language.EN])
+        media_files = []
+        
+        for idx, prop in enumerate(properties, 1):
+            # Price format
+            price_display = f"{int(prop['price']):,} AED" if prop['price'] else "Price on request"
+            
+            # ROI display
+            roi_text = ""
+            if prop.get('expected_roi'):
+                roi_icon = "📈" if lang in [Language.FA, Language.AR] else "📊"
+                roi_label = {
+                    Language.FA: "بازدهی سالانه",
+                    Language.EN: "Annual ROI",
+                    Language.AR: "عائد سنوي",
+                    Language.RU: "Годовая доходность"
+                }
+                roi_text = f"\n   {roi_icon} {roi_label.get(lang, 'ROI')}: {prop['expected_roi']}%"
+            
+            # Golden Visa
+            golden_visa_text = ""
+            if prop.get('golden_visa_eligible'):
+                gv_label = {
+                    Language.FA: "🟡 واجد شرایط ویزای طلایی",
+                    Language.EN: "🟡 Golden Visa Eligible",
+                    Language.AR: "🟡 مؤهل للحصول على الفيزا الذهبية",
+                    Language.RU: "🟡 Золотая виза"
+                }
+                golden_visa_text = f"\n   {gv_label.get(lang, gv_label[Language.EN])}"
+            
+            # Features (top 3)
+            features_str = ""
+            if prop.get('features'):
+                top_features = prop['features'][:3]
+                features_str = f"\n   ✨ {', '.join(top_features)}"
+            
+            # Property card
+            message += f"{idx}. **{prop['name']}**\n"
+            message += f"   📍 {prop['location']}\n"
+            message += f"   💰 {price_display}\n"
+            message += f"   🛏️ {prop['bedrooms']} خواب | 🚿 {prop['bathrooms']} حمام | 📏 {int(prop['area_sqft'])} sqft\n"
+            message += f"{features_str}{roi_text}{golden_visa_text}\n\n"
+            
+            # Add image to media
+            image_url = prop.get('primary_image') or (prop.get('images')[0] if prop.get('images') else None)
+            if image_url:
+                caption = f"{prop['name']} - {price_display}"
+                media_files.append({
+                    "type": "photo",
+                    "url": image_url,
+                    "caption": caption
+                })
+        
+        return message, media_files
+    
     def _validate_state_integrity(
         self,
         lead: Lead,
@@ -3105,19 +3273,56 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             consultation_keywords = ["consultation", "call", "مشاوره", "تماس", "speak", "agent", "مشاور"]
             if any(kw in message_lower for kw in consultation_keywords):
                 logger.info(f"🔔 Consultation request detected from lead {lead.id}")
-                consultation_msg = TRANSLATIONS["phone_request"]
                 lead_updates["consultation_requested"] = True
+                
+                # اگر شماره داره، مستقیم برو schedule
+                if lead.phone:
+                    return await self._handle_schedule(lang, None, lead)
+                
+                # وگرنه اول شماره بگیر
+                consultation_msg = TRANSLATIONS["phone_request"]
                 return BrainResponse(
                     message=consultation_msg.get(lang, consultation_msg[Language.EN]),
-                    next_state=ConversationState.HARD_GATE,
+                    next_state=ConversationState.CAPTURE_CONTACT,
                     lead_updates=lead_updates,
                     request_contact=True
                 )
             
-            # 2. DETECT PHOTO/IMAGE/PDF REQUEST
-            photo_keywords = ["photo", "picture", "image", "عکس", "تصویر", "صورة", "фото", "pdf", "پی دی اف", "بی دی اف", "پی دی ای", "برشور", "brochure", "catalog", "کاتالوگ"]
+            # 2. DETECT PHOTO/IMAGE/PDF REQUEST OR PROPERTY SHOWCASE REQUEST
+            photo_keywords = ["photo", "picture", "image", "عکس", "تصویر", "صورة", "фото", "pdf", "پی دی اف", "بی دی اف", "پی دی ای", "برشور", "brochure", "catalog", "کاتالوگ", "ملک", "property", "عقار", "نشون", "show", "بهم"]
             if any(kw in message_lower for kw in photo_keywords):
-                logger.info(f"📸 Photo/PDF request detected from lead {lead.id}")
+                logger.info(f"📸 Photo/PDF/Property request detected from lead {lead.id}")
+                
+                # *** گرفتن املاک واقعی از دیتابیس ***
+                real_properties = await self.get_real_properties_from_db(lead, limit=5)
+                
+                if real_properties:
+                    logger.info(f"✅ Found {len(real_properties)} real properties in database")
+                    # فرمت کردن املاک
+                    property_message, media_files = await self.format_properties_for_display(
+                        real_properties, lang
+                    )
+                    
+                    buttons_text = {
+                        Language.FA: "📅 رزرو بازدید",
+                        Language.EN: "📅 Schedule Viewing",
+                        Language.AR: "📅 حجز معاينة",
+                        Language.RU: "📅 Записаться на просмотр"
+                    }
+                    
+                    return BrainResponse(
+                        message=property_message,
+                        next_state=ConversationState.VALUE_PROPOSITION,
+                        lead_updates=lead_updates,
+                        buttons=[
+                            {"text": buttons_text.get(lang, buttons_text[Language.EN]), "callback_data": "schedule_consultation"}
+                        ],
+                        media_files=media_files
+                    )
+                else:
+                    logger.warning(f"⚠️ No real properties found in database for lead {lead.id}")
+                
+                # اگر املاکی نبود، استفاده از روش قدیمی (tenant_context)
                 # Get property recommendations and check for media
                 property_recs = await self.get_property_recommendations(lead)
                 
@@ -3201,7 +3406,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             
             return BrainResponse(
                 message=financing_explanation.get(lang, financing_explanation[Language.EN]),
-                next_state=ConversationState.HARD_GATE,
+                next_state=ConversationState.VALUE_PROPOSITION,
                 lead_updates=lead_updates
             )
         
@@ -3317,10 +3522,25 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         # If user clicked "Yes, send PDF"
         if callback_data == "pdf_yes":
+            # اگر شماره داره، فقط پیام تایید بفرست
+            if lead.phone:
+                confirm_msg = {
+                    Language.EN: f"Great! I'll send the brochure to {lead.phone} shortly.",
+                    Language.FA: f"عالی! بروشور رو به زودی برای {lead.phone} می‌فرستم.",
+                    Language.AR: f"رائع! سأرسل الكتيب إلى {lead.phone} قريبًا.",
+                    Language.RU: f"Отлично! Я отправлю брошюру на {lead.phone} в ближайшее время."
+                }
+                return BrainResponse(
+                    message=confirm_msg.get(lang, confirm_msg[Language.EN]),
+                    next_state=ConversationState.VALUE_PROPOSITION,
+                    lead_updates={"brochure_requested": True}
+                )
+            
+            # وگرنه اول شماره بگیر
             return BrainResponse(
                 message=phone_request_personalized.get(lang, phone_request_personalized[Language.EN]),
-                next_state=ConversationState.HARD_GATE,
-                request_contact=True  # NEW: Show contact button in Telegram
+                next_state=ConversationState.CAPTURE_CONTACT,
+                request_contact=True
             )
         
         # If user clicked "No, thanks"
@@ -3414,9 +3634,17 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 return phone_response
         
         # Default - show phone request with format
+        # اگر شماره داریم، برو engagement
+        if lead.phone:
+            return BrainResponse(
+                message=property_recs,
+                next_state=ConversationState.ENGAGEMENT,
+                lead_updates=lead_updates
+            )
+        
         return BrainResponse(
             message=phone_request_personalized.get(lang, phone_request_personalized[Language.EN]),
-            next_state=ConversationState.HARD_GATE,
+            next_state=ConversationState.CAPTURE_CONTACT,
             request_contact=True
         )
     
@@ -3437,7 +3665,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             }
             return BrainResponse(
                 message=error_msgs.get(lang, error_msgs[Language.EN]),
-                next_state=ConversationState.HARD_GATE,
+                next_state=ConversationState.CAPTURE_CONTACT,
                 request_contact=True
             )
         
@@ -3490,7 +3718,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         }
         return BrainResponse(
             message=error_msgs.get(lang, error_msgs[Language.EN]),
-            next_state=ConversationState.HARD_GATE,
+            next_state=ConversationState.CAPTURE_CONTACT,
             request_contact=True
         )
     
@@ -3901,95 +4129,67 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         )
     
     async def _handle_schedule(self, lang: Language, callback_data: Optional[str], lead: Lead) -> BrainResponse:
-        """Handle scheduling selection with SCARCITY technique."""
-        if callback_data and callback_data.startswith("slot_"):
-            # User selected a slot - extract slot ID
-            try:
-                slot_id = int(callback_data.replace("slot_", ""))
-                
-                # Book the slot
-                from database import book_slot
-                booking_success = await book_slot(slot_id, lead.id)
-                
-                if booking_success:
-                    # Get slot details to show in confirmation
-                    slots = await get_available_slots(lead.tenant_id)
-                    selected_slot = None
-                    for slot in slots:
-                        if slot.id == slot_id:
-                            selected_slot = slot
-                            break
-                    
-                    if selected_slot:
-                        day = selected_slot.day_of_week.value.capitalize()
-                        time_str = selected_slot.start_time.strftime("%H:%M")
-                        
-                        # Enhanced completion message with actual date/time
-                        completion_msgs = {
-                            Language.EN: f"✅ Perfect! Your consultation is booked!\n\n📅 **{day} at {time_str}**\n\nOur agent {self.agent_name} will contact you at the scheduled time.\n\nSee you soon! 🏠",
-                            Language.FA: f"✅ عالی! جلسه مشاوره شما رزرو شد!\n\n📅 **{day} ساعت {time_str}**\n\nمشاور ما {self.agent_name} در زمان مقرر با شما تماس خواهد گرفت.\n\nتا دیدار بعدی! 🏠",
-                            Language.AR: f"✅ ممتاز! تم حجز استشارتك!\n\n📅 **{day} في {time_str}**\n\nسيتصل بك وكيلنا {self.agent_name} في الموعد المحدد.\n\nإلى اللقاء! 🏠",
-                            Language.RU: f"✅ Отлично! Ваша консультация забронирована!\n\n📅 **{day} в {time_str}**\n\nНаш агент {self.agent_name} свяжется с вами в назначенное время.\n\nДо скорой встречи! 🏠"
-                        }
-                        
-                        return BrainResponse(
-                            message=completion_msgs.get(lang, completion_msgs[Language.EN]),
-                            next_state=ConversationState.COMPLETED,
-                            lead_updates={"status": LeadStatus.VIEWING_SCHEDULED}
-                        )
-                
-                # Fallback if booking failed
-                return BrainResponse(
-                    message=self.get_text("completed", lang).format(agent_name=self.agent_name),
-                    next_state=ConversationState.COMPLETED,
-                    lead_updates={"status": LeadStatus.VIEWING_SCHEDULED}
-                )
-                
-            except (ValueError, Exception) as e:
-                logger.error(f"❌ Error booking slot: {e}")
-                return BrainResponse(
-                    message=self.get_text("completed", lang).format(agent_name=self.agent_name),
-                    next_state=ConversationState.COMPLETED,
-                    lead_updates={"status": LeadStatus.VIEWING_SCHEDULED}
-                )
+        """Handle consultation scheduling - SIMPLIFIED with Calendly integration."""
         
-        # Fetch available slots
-        slots = await get_available_slots(lead.tenant_id)
-        if slots:
-            # SCARCITY: Limit to only 3-4 slots to create urgency
-            limited_slots = slots[:4]
-            slot_count = len(limited_slots)
-            
-            # Format slots for display
-            slot_buttons = []
-            slot_texts = []
-            for slot in limited_slots:
-                day = slot.day_of_week.value.capitalize()
-                time_str = slot.start_time.strftime("%H:%M")
-                slot_buttons.append({
-                    "text": f"🔥 {day} {time_str}",
-                    "callback_data": f"slot_{slot.id}"
-                })
-                slot_texts.append(f"• {day} at {time_str}")
-            
-            # Use scarcity message instead of plain schedule
-            scarcity_msg = self.get_text("schedule_scarcity", lang, 
-                slot_count=slot_count,
-                slots="\n".join(slot_texts)
+        # لینک Calendly و شماره تلفن
+        calendly_url = "https://calendly.com/taranteen-realty/consultation"
+        phone_number = "+971 50 503 7158"
+        whatsapp_url = "https://wa.me/971505037158"
+        
+        # پیام رزرو مشاوره
+        consultation_messages = {
+            Language.FA: (
+                f"🎉 عالیه {lead.name or 'عزیز'}! بیایید جلسه مشاوره رایگان‌تون رو تنظیم کنیم.\n\n"
+                f"**3 روش برای رزرو:**\n\n"
+                f"1️⃣ **آنلاین (فوری):**\n"
+                f"👉 {calendly_url}\n\n"
+                f"2️⃣ **تماس مستقیم:**\n"
+                f"📞 {phone_number}\n\n"
+                f"3️⃣ **واتساپ:**\n"
+                f"💬 {whatsapp_url}\n\n"
+                f"منتظر شنیدن صدای شما هستیم! 🙏"
+            ),
+            Language.EN: (
+                f"🎉 Great {lead.name or 'friend'}! Let's schedule your free consultation.\n\n"
+                f"**3 Ways to Book:**\n\n"
+                f"1️⃣ **Online (Instant):**\n"
+                f"👉 {calendly_url}\n\n"
+                f"2️⃣ **Direct Call:**\n"
+                f"📞 {phone_number}\n\n"
+                f"3️⃣ **WhatsApp:**\n"
+                f"💬 {whatsapp_url}\n\n"
+                f"Looking forward to hearing from you! 🙏"
+            ),
+            Language.AR: (
+                f"🎉 رائع يا {lead.name or 'صديقي'}! دعنا نحجز استشارتك المجانية.\n\n"
+                f"**3 طرق للحجز:**\n\n"
+                f"1️⃣ **عبر الإنترنت (فوري):**\n"
+                f"👉 {calendly_url}\n\n"
+                f"2️⃣ **مكالمة مباشرة:**\n"
+                f"📞 {phone_number}\n\n"
+                f"3️⃣ **واتساب:**\n"
+                f"💬 {whatsapp_url}\n\n"
+                f"نتطلع إلى سماع صوتك! 🙏"
+            ),
+            Language.RU: (
+                f"🎉 Отлично, {lead.name or 'друг'}! Давайте запишем вас на бесплатную консультацию.\n\n"
+                f"**3 способа записаться:**\n\n"
+                f"1️⃣ **Онлайн (мгновенно):**\n"
+                f"👉 {calendly_url}\n\n"
+                f"2️⃣ **Прямой звонок:**\n"
+                f"📞 {phone_number}\n\n"
+                f"3️⃣ **WhatsApp:**\n"
+                f"💬 {whatsapp_url}\n\n"
+                f"Ждем вашего звонка! 🙏"
             )
-            
-            return BrainResponse(
-                message=scarcity_msg,
-                next_state=ConversationState.HANDOFF_SCHEDULE,
-                buttons=slot_buttons
-            )
-        else:
-            # No slots available - complete anyway
-            return BrainResponse(
-                message=self.get_text("completed", lang),
-                next_state=ConversationState.COMPLETED,
-                lead_updates={"status": LeadStatus.QUALIFIED}
-            )
+        }
+        
+        return BrainResponse(
+            message=consultation_messages.get(lang, consultation_messages[Language.EN]),
+            next_state=ConversationState.COMPLETED,
+            lead_updates={"status": LeadStatus.CONSULTATION_PENDING, "consultation_requested": True},
+            buttons=[]
+        )
     
     def get_ghost_reminder(self, lead: Lead, use_fomo: bool = True) -> BrainResponse:
         """Get ghost protocol reminder message with FOMO technique."""
