@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import os
 
-from backend.database import async_session
+from database import async_session
 from sqlalchemy import select, text
 
 router = APIRouter(prefix="/api/health", tags=["Health Check"])

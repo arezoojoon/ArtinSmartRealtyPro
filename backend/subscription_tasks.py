@@ -7,8 +7,8 @@ import asyncio
 from datetime import datetime, timedelta
 from sqlalchemy import select, and_
 
-from backend.database import async_session, Tenant, SubscriptionStatus
-from backend.email_service import (
+from database import async_session, Tenant, SubscriptionStatus
+from email_service import (
     send_trial_ending_email,
     send_trial_expired_email
 )

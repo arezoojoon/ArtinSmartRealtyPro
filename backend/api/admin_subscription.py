@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 
-from backend.database import get_db, Tenant, SubscriptionPlan, SubscriptionStatus
-from backend.auth_config import verify_super_admin
+from database import get_db, Tenant, SubscriptionPlan, SubscriptionStatus
+from auth_config import verify_super_admin
 
 router = APIRouter(prefix="/api/admin/subscriptions", tags=["Admin - Subscriptions"])
 

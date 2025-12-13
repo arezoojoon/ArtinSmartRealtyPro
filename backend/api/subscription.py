@@ -10,16 +10,16 @@ from datetime import datetime, timedelta
 import secrets
 import hashlib
 
-from backend.database import (
+from database import (
     async_session, Tenant, SubscriptionPlan, SubscriptionStatus,
     Language
 )
-from backend.auth_config import hash_password
-from backend.payment_gateway import (
+from auth_config import hash_password
+from payment_gateway import (
     PaymentProcessor, PaymentRequest as PaymentGatewayRequest,
     PaymentGateway, get_payment_amount
 )
-from backend.email_service import (
+from email_service import (
     send_welcome_email, send_payment_success_email,
     send_trial_ending_email, send_trial_expired_email
 )

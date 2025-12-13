@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from typing import Optional
 from datetime import datetime
 
-from backend.database import Tenant, SubscriptionPlan, SubscriptionStatus
+from database import Tenant, SubscriptionPlan, SubscriptionStatus
 
 
 # Feature to Plan mapping

@@ -11,14 +11,14 @@ from datetime import datetime, timedelta
 import google.generativeai as genai
 import os
 
-from backend.database import async_session, Tenant
-from backend.unified_database import (
+from database import async_session, Tenant
+from unified_database import (
     UnifiedLead, LeadSource, LeadStatus,
     find_or_create_lead, log_interaction,
     InteractionChannel, InteractionDirection
 )
-from backend.followup_engine import schedule_linkedin_lead_followup
-from backend.subscription_guard import check_feature_access, check_subscription_active
+from followup_engine import schedule_linkedin_lead_followup
+from subscription_guard import check_feature_access, check_subscription_active
 from sqlalchemy import select, func, and_
 
 router = APIRouter(prefix="/api/linkedin", tags=["LinkedIn Scraper"])

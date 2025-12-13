@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 import logging
 
-from backend.database import get_db
-from backend.unified_database import (
+from database import get_db
+from unified_database import (
     UnifiedLead, LeadInteraction, FollowupCampaign,
     LeadStatus, InteractionChannel, InteractionDirection
 )
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Import auth - handle missing module gracefully
 try:
-    from backend.auth import get_current_tenant_id
+    from auth import get_current_tenant_id
 except ImportError:
     # Fallback for auth
     async def get_current_tenant_id() -> int:
@@ -318,7 +318,7 @@ async def send_manual_followup(
             )
         
         # Import here to avoid circular dependency
-        from backend.followup_engine import FollowupEngine
+        from followup_engine import FollowupEngine
         
         engine = FollowupEngine()
         
@@ -426,7 +426,7 @@ async def test_followup_engine(
     Admin/testing endpoint
     """
     try:
-        from backend.followup_engine import FollowupEngine
+        from followup_engine import FollowupEngine
         
         engine = FollowupEngine()
         results = await engine.process_scheduled_followups()

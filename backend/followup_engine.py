@@ -10,13 +10,13 @@ from sqlalchemy import select, and_, or_
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from backend.database import async_session
-from backend.unified_database import (
+from database import async_session
+from unified_database import (
     UnifiedLead, LeadInteraction, FollowupCampaign,
     LeadSource, LeadStatus, InteractionChannel, InteractionDirection,
     log_interaction
 )
-from backend.brain import RealEstateBrain
+from brain import RealEstateBrain
 import os
 
 
