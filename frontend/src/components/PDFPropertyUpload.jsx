@@ -234,7 +234,7 @@ const PDFPropertyUpload = ({ tenantId, onPropertyCreated, onClose }) => {
                 {results.length > 0 && (
                     <div className="space-y-4">
                         <h3 className="text-white font-bold text-xl mb-4">
-                            Results ({results.filter(r => r.success).length}/{results.length} successful)
+                            Results ({results.filter(r => r.success).length} / {results.length} successful)
                         </h3>
                         {results.map((result, index) => (
                             <div
