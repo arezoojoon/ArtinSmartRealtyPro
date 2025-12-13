@@ -8,14 +8,14 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from backend.database import async_session
-from backend.unified_database import (
+from database import async_session
+from unified_database import (
     UnifiedLead, LeadInteraction, FollowupCampaign,
     LeadSource, LeadStatus, LeadGrade,
     InteractionChannel, InteractionDirection,
     find_or_create_lead, log_interaction
 )
-from backend.followup_engine import schedule_linkedin_lead_followup, notify_property_added
+from followup_engine import schedule_linkedin_lead_followup, notify_property_added
 from sqlalchemy import select, func, and_
 
 router = APIRouter(prefix="/api/unified", tags=["Unified Leads"])
