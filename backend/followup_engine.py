@@ -29,7 +29,7 @@ class FollowupEngine:
     """
     
     def __init__(self):
-        self.brain = Brain()
+        # Brain will be instantiated per-tenant when needed
         self.scheduler = AsyncIOScheduler()
         
     def start(self):
