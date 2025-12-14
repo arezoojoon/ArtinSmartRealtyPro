@@ -380,7 +380,7 @@ class WhatsAppBotHandler:
                     
                     # Process message with tenant's brain
                     if message_type == "text" and text:
-                        response = await tenant_brain.process_message(lead, text, "")
+                        response = await tenant_brain.process_message(lead, text, callback_data=None)
                         await self.send_message(from_phone, response.message, response.buttons)
                         
                         # Update lead
@@ -413,10 +413,10 @@ class WhatsAppBotHandler:
                     if is_new_session:
                         # Welcome message for new realty session
                         welcome_text = self._get_vertical_welcome(mode, lead.language or Language.EN)
-                        response = await self.brain.process_message(lead, welcome_text, "")
+                        response = await self.brain.process_message(lead, welcome_text, callback_data=None)
                     else:
                         # Continue existing conversation
-                        response = await self.brain.process_message(lead, text, "")
+                        response = await self.brain.process_message(lead, text, callback_data=None)
                     
                     await self._send_response(from_phone, response, lead)
                     return True
@@ -433,7 +433,7 @@ class WhatsAppBotHandler:
             
             # Fallback: Process without routing (backwards compatibility)
             elif message_type == "text" and text:
-                response = await self.brain.process_message(lead, text, "")
+                response = await self.brain.process_message(lead, text, callback_data=None)
                 await self._send_response(from_phone, response, lead)
             
             elif message_type == "image":
@@ -484,6 +484,27 @@ class WhatsAppBotHandler:
                                     file_extension="jpg"
                                 )
                                 await self._send_response(from_phone, response, lead)
+                                
+                                # Update lead state after image processing
+                                updates = response.lead_updates or {}
+                                if response.next_state:
+                                    updates["conversation_state"] = response.next_state
+                                if updates:
+                                    await update_lead(lead.id, **updates)
+                            else:
+                                # Update lead state after image processing
+                                updates = response.lead_updates or {}
+                                if response.next_state:
+                                    updates["conversation_state"] = response.next_state
+                                if updates:
+                                    await update_lead(lead.id, **updates)
+                                
+                                # Update lead state
+                                updates = response.lead_updates or {}
+                                if response.next_state:
+                                    updates["conversation_state"] = response.next_state
+                                if updates:
+                                    await update_lead(lead.id, **updates)
                             else:
                                 logger.error(f"Failed to download image: {img_response.status_code}")
                                 error_msg = self.brain.get_text("image_error", lang)

@@ -692,8 +692,8 @@ class TelegramBotHandler:
             if redis_context:
                 logger.info(f"📦 Loaded Redis context for lead {lead.id}: state={redis_context.get('state')}")
             
-            # Process through Brain
-            response = await self.brain.process_message(lead, message_text)
+            # Process through Brain (pass None as callback_data for text messages)
+            response = await self.brain.process_message(lead, message_text, callback_data=None)
             
             # Save context to Redis after processing
             await save_context_to_redis(lead)
@@ -859,7 +859,7 @@ class TelegramBotHandler:
             logger.info(f"📞 Lead {lead.id} shared phone number: {contact.phone_number}")
         
         # Process as if they entered the phone number
-        response = await self.brain.process_message(lead, contact.phone_number)
+        response = await self.brain.process_message(lead, contact.phone_number, callback_data=None)
         await self._send_response(update, context, response, lead)
     
     async def send_ghost_reminder(self, lead: Lead):
