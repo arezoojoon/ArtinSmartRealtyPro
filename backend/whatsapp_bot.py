@@ -492,20 +492,6 @@ class WhatsAppBotHandler:
                                 if updates:
                                     await update_lead(lead.id, **updates)
                             else:
-                                # Update lead state after image processing
-                                updates = response.lead_updates or {}
-                                if response.next_state:
-                                    updates["conversation_state"] = response.next_state
-                                if updates:
-                                    await update_lead(lead.id, **updates)
-                                
-                                # Update lead state
-                                updates = response.lead_updates or {}
-                                if response.next_state:
-                                    updates["conversation_state"] = response.next_state
-                                if updates:
-                                    await update_lead(lead.id, **updates)
-                            else:
                                 logger.error(f"Failed to download image: {img_response.status_code}")
                                 error_msg = self.brain.get_text("image_error", lang)
                                 await self.send_message(from_phone, error_msg)
