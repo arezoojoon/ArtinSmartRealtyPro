@@ -311,14 +311,41 @@ async def _save_property_to_db(
 ) -> int:
     """Helper: Save extracted property to database"""
     
-    # Use file_path as primary_image if no image provided
+    # Get BASE_URL from environment or use default
+    base_url = os.getenv('BASE_URL', 'http://localhost:8000')
+    
+    # Handle images
     primary_image = extracted_data.get('primary_image')
-    if not primary_image and file_path and file_path.endswith(('.jpg', '.jpeg', '.png', '.webp')):
-        # Convert local path to accessible URL (adjust based on your setup)
-        primary_image = f"/uploads/properties/{Path(file_path).name}"
-    elif not primary_image:
-        # Default placeholder
-        primary_image = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800"
+    image_urls = []
+    brochure_pdf = None
+    
+    # If file was uploaded, convert to accessible URL
+    if file_path:
+        filename = Path(file_path).name
+        file_url = f"{base_url}/uploads/properties/{filename}"
+        
+        # Check if it's an image or PDF
+        if file_path.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+            if not primary_image:
+                primary_image = file_url
+            image_urls.append(file_url)
+        elif file_path.endswith('.pdf'):
+            brochure_pdf = file_url
+    
+    # Add any extracted image URLs
+    if extracted_data.get('images'):
+        for img in extracted_data['images']:
+            if img and img.startswith('http'):
+                image_urls.append(img)
+    
+    # Ensure primary_image is set
+    if not primary_image:
+        if image_urls:
+            primary_image = image_urls[0]
+        else:
+            # Default placeholder
+            primary_image = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800"
+            image_urls.append(primary_image)
     
     # Create property record
     new_property = TenantProperty(
@@ -330,12 +357,13 @@ async def _save_property_to_db(
         area_sqft=extracted_data.get('area_sqft'),
         bedrooms=extracted_data.get('bedrooms'),
         bathrooms=extracted_data.get('bathrooms'),
-        property_type=extracted_data.get('property_type') or 'apartment',
-        transaction_type=extracted_data.get('transaction_type') or 'buy',
+        property_type=extracted_data.get('property_type') or 'APARTMENT',
+        transaction_type=extracted_data.get('transaction_type') or 'BUY',
         expected_roi=extracted_data.get('roi_percentage'),
         golden_visa_eligible=extracted_data.get('is_golden_visa_eligible', False),
         primary_image=primary_image,
-        images=[primary_image],  # Can add more images later
+        image_urls=image_urls,  # Array of all images
+        brochure_pdf=brochure_pdf,  # PDF brochure if uploaded
         features=extracted_data.get('amenities', []),
         full_description=extracted_data.get('payment_plan'),  # Store payment plan in description
         is_available=True,
@@ -347,5 +375,6 @@ async def _save_property_to_db(
     await db.refresh(new_property)
     
     logger.info(f"💾 Saved property: {new_property.name} (ID: {new_property.id})")
+    logger.info(f"📸 Images: {len(image_urls)} | 📄 PDF: {'Yes' if brochure_pdf else 'No'}")
     
     return new_property.id
