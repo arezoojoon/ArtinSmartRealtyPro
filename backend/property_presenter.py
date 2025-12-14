@@ -4,11 +4,21 @@ Professional property presentation with photos and ROI for both Telegram and Wha
 """
 
 import logging
+import asyncio
+import traceback
 from typing import Dict, List, Optional
 import io
 
 from database import Tenant, Lead, Language, TenantProperty
 from roi_engine import generate_roi_pdf
+
+try:
+    from telegram import InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
+except ImportError:
+    # Telegram not available - will handle gracefully in functions
+    InputMediaPhoto = None
+    InlineKeyboardButton = None
+    InlineKeyboardMarkup = None
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +71,6 @@ async def send_property_with_roi(
                     }.get(lang, f"🏠 Property #{index}")
                     
                     # ساخت لیست media
-                    from telegram import InputMediaPhoto
                     media_group = []
                     
                     for idx, img_url in enumerate(photos_to_send):
@@ -83,7 +92,6 @@ async def send_property_with_roi(
                 logger.info(f"📸 Sent {min(len(photos_to_send), 3)} photos for property {index}")
         
         # ⏳ کمی تاخیر برای بارگذاری عکس‌ها
-        import asyncio
         await asyncio.sleep(1)
         
         # 📋 Step 2: ارسال پرزنتیشن کامل ملک
@@ -95,7 +103,6 @@ async def send_property_with_roi(
         action_buttons = []
         
         if platform == "telegram":
-            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
             
             buttons_row1 = [
                 InlineKeyboardButton(
@@ -209,7 +216,6 @@ async def send_property_with_roi(
         
     except Exception as e:
         logger.error(f"❌ Error in send_property_with_roi: {e}")
-        import traceback
         logger.error(traceback.format_exc())
 
 
@@ -246,7 +252,6 @@ async def present_all_properties(
         await bot_interface.send_message(lead.whatsapp_phone, intro)
     
     # ارسال هر ملک با فاصله زمانی
-    import asyncio
     for idx, prop in enumerate(properties, 1):
         await send_property_with_roi(
             bot_interface=bot_interface,
@@ -271,7 +276,6 @@ async def present_all_properties(
     
     if platform == "telegram":
         # دکمه‌های پایانی
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
         buttons = [
             [InlineKeyboardButton(
