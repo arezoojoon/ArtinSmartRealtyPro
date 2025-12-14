@@ -40,6 +40,7 @@ from redis_manager import redis_manager, init_redis, close_redis
 from context_recovery import save_context_to_redis, handle_user_message_with_recovery
 from inline_keyboards import edit_message_with_checkmark
 from lead_scoring import increment_engagement, update_lead_score
+from property_presenter import present_all_properties
 
 # Configure logging
 logging.basicConfig(
@@ -700,6 +701,21 @@ class TelegramBotHandler:
             logger.info(f"💾 Saved context to Redis for lead {lead.id}")
             
             await self._send_response(update, context, response, lead)
+            
+            # 🏆 PROFESSIONAL PROPERTY PRESENTATION: Check if Brain has properties to show
+            if hasattr(self.brain, 'current_properties') and self.brain.current_properties:
+                logger.info(f"🏠 Brain has {len(self.brain.current_properties)} properties to present - using property_presenter")
+                await present_all_properties(
+                    bot_interface=self,
+                    lead=lead,
+                    tenant=self.tenant,
+                    properties=self.brain.current_properties,
+                    platform="telegram"
+                )
+                # Clear properties after presentation to avoid repetition
+                self.brain.current_properties = None
+                logger.info(f"✅ Professional property presentation complete for lead {lead.id}")
+            
             logger.info(f"🔓 Lock released for user {telegram_id}")
     
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

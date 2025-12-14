@@ -41,6 +41,7 @@ from brain import Brain, BrainResponse
 from whatsapp_providers import get_whatsapp_provider, WhatsAppProvider
 from vertical_router import get_vertical_router, VerticalMode, VerticalRouter
 from redis_manager import RedisManager
+from property_presenter import present_all_properties
 
 # Configure logging
 logging.basicConfig(
@@ -383,6 +384,19 @@ class WhatsAppBotHandler:
                         response = await tenant_brain.process_message(lead, text, callback_data=None)
                         await self.send_message(from_phone, response.message, response.buttons)
                         
+                        # 🏆 PROFESSIONAL PROPERTY PRESENTATION for mapped tenants
+                        if hasattr(tenant_brain, 'current_properties') and tenant_brain.current_properties:
+                            logger.info(f"🏠 Mapped tenant brain has {len(tenant_brain.current_properties)} properties - using property_presenter")
+                            await present_all_properties(
+                                bot_interface=self,
+                                lead=lead,
+                                tenant=mapped_tenant,
+                                properties=tenant_brain.current_properties,
+                                platform="whatsapp"
+                            )
+                            tenant_brain.current_properties = None
+                            logger.info(f"✅ Professional property presentation complete for mapped tenant lead {lead.id}")
+                        
                         # Update lead
                         updates = response.lead_updates or {}
                         if response.next_state:
@@ -419,6 +433,20 @@ class WhatsAppBotHandler:
                         response = await self.brain.process_message(lead, text, callback_data=None)
                     
                     await self._send_response(from_phone, response, lead)
+                    
+                    # 🏆 PROFESSIONAL PROPERTY PRESENTATION for REALTY vertical
+                    if hasattr(self.brain, 'current_properties') and self.brain.current_properties:
+                        logger.info(f"🏠 Realty vertical: {len(self.brain.current_properties)} properties - using property_presenter")
+                        await present_all_properties(
+                            bot_interface=self,
+                            lead=lead,
+                            tenant=self.tenant,
+                            properties=self.brain.current_properties,
+                            platform="whatsapp"
+                        )
+                        self.brain.current_properties = None
+                        logger.info(f"✅ Professional property presentation complete for REALTY vertical lead {lead.id}")
+                    
                     return True
                 
                 elif mode == VerticalMode.EXPO:
@@ -435,6 +463,19 @@ class WhatsAppBotHandler:
             elif message_type == "text" and text:
                 response = await self.brain.process_message(lead, text, callback_data=None)
                 await self._send_response(from_phone, response, lead)
+                
+                # 🏆 PROFESSIONAL PROPERTY PRESENTATION
+                if hasattr(self.brain, 'current_properties') and self.brain.current_properties:
+                    logger.info(f"🏠 Brain has {len(self.brain.current_properties)} properties - using property_presenter")
+                    await present_all_properties(
+                        bot_interface=self,
+                        lead=lead,
+                        tenant=self.tenant,
+                        properties=self.brain.current_properties,
+                        platform="whatsapp"
+                    )
+                    self.brain.current_properties = None
+                    logger.info(f"✅ Professional property presentation complete for WhatsApp lead {lead.id}")
             
             elif message_type == "image":
                 # Handle image - find similar properties
