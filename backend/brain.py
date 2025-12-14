@@ -2582,6 +2582,45 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         WARMUP Phase: Quick rapport building (1-2 questions max)
         Goal: Identify primary objective (Investment, Living, or Residency)
         """
+        conversation_data = lead.conversation_data or {}
+        properties_already_shown = conversation_data.get("properties_shown", False)
+        
+        # FIX: اگر املاک نشان داده شده و پیام متنی است، به سوال پاسخ بده
+        if properties_already_shown and message and not callback_data:
+            if any(word in message.lower() for word in ['roi', 'بازده', 'سود', 'گزارش', 'pdf', 'پی دی اف', 'ریپورت']):
+                properties = self.tenant_context.get("properties", []) if self.tenant_context else []
+                if properties and lead.phone:
+                    roi_msg = {
+                        Language.FA: "✅ گزارش ROI اختصاصی برای شما آماده می‌شود...",
+                        Language.EN: "✅ Preparing your personalized ROI report...",
+                        Language.AR: "✅ إعداد تقرير عائد الاستثمار...",
+                        Language.RU: "✅ Готовлю отчёт ROI..."
+                    }
+                    return BrainResponse(
+                        message=roi_msg.get(lang, roi_msg[Language.EN]),
+                        next_state=ConversationState.WARMUP,
+                        lead_updates=lead_updates
+                    )
+                else:
+                    no_phone_msg = {
+                        Language.FA: "برای دریافت گزارش، ابتدا شماره تماستون رو به اشتراک بذارید.",
+                        Language.EN: "To receive the report, please share your phone number first.",
+                        Language.AR: "لتلقي التقرير، شارك رقم هاتفك أولاً.",
+                        Language.RU: "Для отчёта поделитесь номером телефона."
+                    }
+                    return BrainResponse(
+                        message=no_phone_msg.get(lang, no_phone_msg[Language.EN]),
+                        next_state=ConversationState.CAPTURE_CONTACT,
+                        request_contact=True
+                    )
+            
+            ai_response = await self.generate_ai_response(message, lead)
+            return BrainResponse(
+                message=ai_response,
+                next_state=ConversationState.WARMUP,
+                lead_updates=lead_updates
+            )
+        
         # If button clicked, capture goal and ask buy/rent BEFORE budget
         if callback_data and callback_data.startswith("purpose_"):
             goal = callback_data.replace("purpose_", "")  # purpose_investment, purpose_living, purpose_residency
@@ -2720,6 +2759,11 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             Language.RU: "Приятно познакомиться! 🎯\n\nВы ищете инвестиции, проживание или резиденцию в Дубае?"
         }
         
+        # FIX: ست کردن flag که املاک نشان داده نشده
+        conversation_data = lead.conversation_data or {}
+        conversation_data["properties_shown"] = False
+        lead_updates["conversation_data"] = conversation_data
+        
         return BrainResponse(
             message=warmup_message.get(lang, warmup_message[Language.EN]),
             next_state=ConversationState.WARMUP,
@@ -2727,7 +2771,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
                 {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living"), "callback_data": "goal_living"},
                 {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
-            ]
+            ],
+            lead_updates=lead_updates
         )
     
     async def _handle_slot_filling(
