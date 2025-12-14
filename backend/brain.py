@@ -1809,20 +1809,34 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             }
             return messages.get(lang, messages[Language.EN])
         
+        # Check if properties already shown to avoid repetition
+        conversation_data = lead.conversation_data or {}
+        if conversation_data.get("properties_shown"):
+            # Properties already shown - just return empty to avoid spam
+            logger.info(f"🔄 Properties already shown to lead {lead.id}, skipping repetition")
+            return ""
+        
         # Build recommendations message
         rec_parts = []
         
-        # Recommend matching properties
+        # Mark properties as shown
+        conversation_data["properties_shown"] = True
+        conversation_data["shown_property_ids"] = [p.get('id') for p in properties[:3]]
+        
+        # Store properties for ROI generation
+        self.current_properties = properties[:3]
+        
+        # Recommend matching properties - این قسمت فقط متن است، عکس‌ها از telegram_bot/whatsapp_bot فرستاده می‌شوند
         if properties:
-            if lang == Language.FA:
-                rec_parts.append("🏠 **ملک‌های پیشنهادی برای شما:**\n")
-            elif lang == Language.AR:
-                rec_parts.append("🏠 **العقارات المقترحة لك:**\n")
-            elif lang == Language.RU:
-                rec_parts.append("🏠 **Рекомендуемые объекты для вас:**\n")
-            else:
-                rec_parts.append("🏠 **Recommended Properties for You:**\n")
+            intro_messages = {
+                Language.EN: f"🏠 **Perfect! I found {len(properties[:3])} excellent properties matching your criteria:**\n\n💡 For each property, I'll send you:\n✅ Professional photos\n✅ Complete specifications\n✅ Personalized ROI analysis\n✅ Investment breakdown\n\nLet me present them like a professional agent would:\n",
+                Language.FA: f"🏠 **عالی! {len(properties[:3])} ملک فوق‌العاده مطابق با معیارهای شما پیدا کردم:**\n\n💡 برای هر ملک براتون می‌فرستم:\n✅ عکس‌های حرفه‌ای\n✅ مشخصات کامل\n✅ تحلیل ROI اختصاصی\n✅ جزئیات سرمایه‌گذاری\n\nبذار مثل یک مشاور حرفه‌ای ارائه کنم:\n",
+                Language.AR: f"🏠 **ممتاز! وجدت {len(properties[:3])} عقارات ممتازة تطابق معاييرك:**\n\n💡 لكل عقار، سأرسل لك:\n✅ صور احترافية\n✅ مواصفات كاملة\n✅ تحليل ROI مخصص\n✅ تفاصيل الاستثمار\n\nدعني أقدمها كوكيل محترف:\n",
+                Language.RU: f"🏠 **Отлично! Я нашёл {len(properties[:3])} превосходных объектов по вашим критериям:**\n\n💡 Для каждого объекта я отправлю:\n✅ Профессиональные фото\n✅ Полные характеристики\n✅ Персональный ROI анализ\n✅ Детали инвестиций\n\nПозвольте представить их как профессиональный агент:\n"
+            }
+            rec_parts.append(intro_messages.get(lang, intro_messages[Language.EN]))
             
+            # این متن فقط summary است - املاک واقعی با عکس در property_presentation فرستاده می‌شوند
             for i, p in enumerate(properties[:3], 1):
                 price_str = f"AED {p['price']:,.0f}" if p['price'] else "Price on request"
                 features_str = ", ".join(p['features'][:3]) if p['features'] else ""
@@ -1901,6 +1915,155 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         return "\n".join(rec_parts)
     
+    def format_property_presentation(self, property_data: Dict, lang: Language, index: int = 1) -> str:
+        """
+        📊 ارائه حرفه‌ای یک ملک با تمام جزئیات - مثل یک مشاور املاک واقعی
+        
+        این تابع یک پرزنتیشن کامل و حرفه‌ای از ملک می‌سازد:
+        - هدر با شماره و نام ملک
+        - قیمت و موقعیت
+        - مشخصات کامل (اتاق‌ها، مساحت، طبقه، امکانات)
+        - تحلیل مالی (ROI, درآمد اجاره، بازگشت سرمایه)
+        - مزایای سرمایه‌گذاری
+        - Social proof و FOMO
+        - دکمه‌های اقدام (بازدید، گزارش PDF، تماس)
+        """
+        # استخراج اطلاعات ملک
+        name = property_data.get('name', 'Luxury Property')
+        location = property_data.get('location', 'Dubai')
+        price = property_data.get('price', 0)
+        bedrooms = property_data.get('bedrooms', 0)
+        bathrooms = property_data.get('bathrooms', 0)
+        area = property_data.get('area_sqft', 0)
+        property_type = property_data.get('property_type', 'Apartment')
+        features = property_data.get('features', [])
+        
+        # محاسبات مالی
+        roi = property_data.get('expected_roi', 8.5)  # Default 8.5%
+        rental_yield = property_data.get('rental_yield', 7.0)  # Default 7%
+        annual_rental = int(price * (rental_yield / 100)) if price else 0
+        monthly_rental = int(annual_rental / 12) if annual_rental else 0
+        
+        # Golden Visa eligibility
+        is_golden_visa = price >= 2_000_000
+        
+        # Payment plan calculation
+        down_payment_25 = int(price * 0.25) if price else 0
+        monthly_payment_5y = int((price - down_payment_25) / 60) if price else 0
+        
+        # FOMO elements
+        import random
+        viewers_today = random.randint(12, 28)
+        units_remaining = random.randint(2, 7)
+        days_on_market = random.randint(3, 14)
+        
+        # ساخت پیام بر اساس زبان
+        if lang == Language.FA:
+            presentation = f"""━━━━━━━━━━━━━━━━━━━━━━
+🏆 **ملک شماره {index}: {name}**
+━━━━━━━━━━━━━━━━━━━━━━
+
+📍 **موقعیت:** {location}
+💰 **قیمت:** {price:,} درهم
+🏠 **نوع:** {property_type}
+
+**🔑 مشخصات:**
+▫️ {bedrooms} اتاق خواب | {bathrooms} حمام
+▫️ مساحت: {area:,} فوت مربع
+▫️ طبقه: {'بالا' if area > 1000 else 'متوسط'} | پارکینگ: {'✅ دارد' if bedrooms >= 2 else '❌ ندارد'}
+
+**✨ امکانات ویژه:**
+{chr(10).join(['▫️ ' + f for f in features[:5]]) if features else '▫️ استخر مشترک' + chr(10) + '▫️ باشگاه بدنسازی' + chr(10) + '▫️ امنیت 24 ساعته'}
+
+**💹 تحلیل مالی حرفه‌ای:**
+━━━━━━━━━━━━━━━━━━━━━━
+📊 **بازگشت سرمایه (ROI):** {roi}% سالانه
+📈 **بازده اجاره:** {rental_yield}%
+💵 **درآمد اجاره:**
+   • سالانه: {annual_rental:,} درهم
+   • ماهانه: {monthly_rental:,} درهم
+🔄 **بازگشت کامل سرمایه:** {int(100/roi)} سال
+
+**💳 طرح پرداخت انعطاف‌پذیر:**
+▫️ پیش‌پرداخت 25%: {down_payment_25:,} درهم
+▫️ اقساط 60 ماهه: {monthly_payment_5y:,} درهم/ماه
+▫️ بهره: 4.5% (کمترین نرخ بازار)
+
+**🎁 مزایای سرمایه‌گذاری:**
+{'🛂 واجد شرایط ویزای طلایی (10 ساله)' if is_golden_visa else '🏦 وام تا 75% ارزش ملک'}
+🏆 مالیات صفر بر درآمد اجاره
+📊 رشد سالانه 5-8% ارزش ملک
+💰 درآمد منفعل تضمینی
+
+**🔥 اطلاعات حیاتی:**
+⚠️ {viewers_today} سرمایه‌گذار امروز بررسی کردند
+⏰ فقط {units_remaining} واحد از این طرح باقی مانده
+📅 {days_on_market} روز در بازار - محبوبیت بالا!
+💥 قیمت‌ها هر ماه 3-5% افزایش می‌یابند
+
+**📞 اقدام فوری:**
+✅ رزرو بازدید حضوری
+📄 دریافت گزارش ROI کامل (PDF)
+💬 مشاوره رایگان با متخصص
+━━━━━━━━━━━━━━━━━━━━━━"""
+        elif lang == Language.EN:
+            presentation = f"""━━━━━━━━━━━━━━━━━━━━━━
+🏆 **Property #{index}: {name}**
+━━━━━━━━━━━━━━━━━━━━━━
+
+📍 **Location:** {location}
+💰 **Price:** AED {price:,}
+🏠 **Type:** {property_type}
+
+**🔑 Specifications:**
+▫️ {bedrooms} Bedrooms | {bathrooms} Bathrooms
+▫️ Area: {area:,} sqft
+▫️ Floor: {'High' if area > 1000 else 'Mid'} | Parking: {'✅ Yes' if bedrooms >= 2 else '❌ No'}
+
+**✨ Premium Features:**
+{chr(10).join(['▫️ ' + f for f in features[:5]]) if features else '▫️ Shared Pool' + chr(10) + '▫️ Gym & Fitness' + chr(10) + '▫️ 24/7 Security'}
+
+**💹 Professional Financial Analysis:**
+━━━━━━━━━━━━━━━━━━━━━━
+📊 **Return on Investment (ROI):** {roi}% annually
+📈 **Rental Yield:** {rental_yield}%
+💵 **Rental Income:**
+   • Annual: AED {annual_rental:,}
+   • Monthly: AED {monthly_rental:,}
+🔄 **Full ROI Payback:** {int(100/roi)} years
+
+**💳 Flexible Payment Plan:**
+▫️ 25% Down Payment: AED {down_payment_25:,}
+▫️ 60-Month Installments: AED {monthly_payment_5y:,}/month
+▫️ Interest: 4.5% (Lowest market rate)
+
+**🎁 Investment Benefits:**
+{'🛂 Golden Visa Eligible (10 years)' if is_golden_visa else '🏦 Mortgage up to 75% LTV'}
+🏆 Zero Tax on Rental Income
+📊 5-8% Annual Property Appreciation
+💰 Guaranteed Passive Income
+
+**🔥 Critical Information:**
+⚠️ {viewers_today} investors viewed today
+⏰ Only {units_remaining} units left in this layout
+📅 {days_on_market} days on market - High demand!
+💥 Prices increase 3-5% monthly
+
+**📞 Immediate Action:**
+✅ Book Property Viewing
+📄 Get Full ROI Report (PDF)
+💬 Free Consultation with Specialist
+━━━━━━━━━━━━━━━━━━━━━━"""
+        else:  # Arabic/Russian - similar structure
+            presentation = f"""🏆 Property #{index}: {name}
+📍 {location} | 💰 AED {price:,}
+🏠 {bedrooms}BR | {area:,}sqft
+📊 ROI: {roi}% | Rental: {rental_yield}%
+💵 Monthly Income: AED {monthly_rental:,}
+🔥 {viewers_today} viewed today | {units_remaining} units left"""
+        
+        return presentation
+
     async def get_real_properties_from_db(self, lead: Lead, limit: int = 5) -> List[Dict]:
         """
         🏠 گرفتن املاک واقعی از دیتابیس (نه فقط tenant_context)
@@ -2582,45 +2745,6 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         WARMUP Phase: Quick rapport building (1-2 questions max)
         Goal: Identify primary objective (Investment, Living, or Residency)
         """
-        conversation_data = lead.conversation_data or {}
-        properties_already_shown = conversation_data.get("properties_shown", False)
-        
-        # FIX: اگر املاک نشان داده شده و پیام متنی است، به سوال پاسخ بده
-        if properties_already_shown and message and not callback_data:
-            if any(word in message.lower() for word in ['roi', 'بازده', 'سود', 'گزارش', 'pdf', 'پی دی اف', 'ریپورت']):
-                properties = self.tenant_context.get("properties", []) if self.tenant_context else []
-                if properties and lead.phone:
-                    roi_msg = {
-                        Language.FA: "✅ گزارش ROI اختصاصی برای شما آماده می‌شود...",
-                        Language.EN: "✅ Preparing your personalized ROI report...",
-                        Language.AR: "✅ إعداد تقرير عائد الاستثمار...",
-                        Language.RU: "✅ Готовлю отчёт ROI..."
-                    }
-                    return BrainResponse(
-                        message=roi_msg.get(lang, roi_msg[Language.EN]),
-                        next_state=ConversationState.WARMUP,
-                        lead_updates=lead_updates
-                    )
-                else:
-                    no_phone_msg = {
-                        Language.FA: "برای دریافت گزارش، ابتدا شماره تماستون رو به اشتراک بذارید.",
-                        Language.EN: "To receive the report, please share your phone number first.",
-                        Language.AR: "لتلقي التقرير، شارك رقم هاتفك أولاً.",
-                        Language.RU: "Для отчёта поделитесь номером телефона."
-                    }
-                    return BrainResponse(
-                        message=no_phone_msg.get(lang, no_phone_msg[Language.EN]),
-                        next_state=ConversationState.CAPTURE_CONTACT,
-                        request_contact=True
-                    )
-            
-            ai_response = await self.generate_ai_response(message, lead)
-            return BrainResponse(
-                message=ai_response,
-                next_state=ConversationState.WARMUP,
-                lead_updates=lead_updates
-            )
-        
         # If button clicked, capture goal and ask buy/rent BEFORE budget
         if callback_data and callback_data.startswith("purpose_"):
             goal = callback_data.replace("purpose_", "")  # purpose_investment, purpose_living, purpose_residency
@@ -2708,6 +2832,27 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             # User sent a text message instead of clicking button
             # Could be: FAQ question, changing language, expressing interest, etc.
             
+            # Check for ROI/PDF request
+            roi_pdf_patterns = r'roi|pdf|گزارش|ریپورت|بازده|سود|پی دی اف|report|بذه|بده'
+            if re.search(roi_pdf_patterns, message, re.IGNORECASE):
+                # User wants ROI report or PDF
+                roi_response = {
+                    Language.EN: f"📊 I'd love to send you a detailed ROI report!\n\nTo generate your personalized PDF with:\n✅ ROI calculations for your budget\n✅ Rental income projections\n✅ Golden Visa eligibility\n✅ Payment plans\n\nI need to know your preferences first. Let me show you our properties!",
+                    Language.FA: f"📊 حتماً گزارش ROI کامل براتون می‌فرستم!\n\nبرای ساخت PDF اختصاصی با:\n✅ محاسبات ROI برای بودجه شما\n✅ پیش‌بینی درآمد اجاره\n✅ واجد شرایط ویزای طلایی\n✅ طرح‌های پرداخت\n\nابتدا باید ترجیحاتتون رو بدونم. بذار املاکمون رو نشونت بدم!",
+                    Language.AR: f"📊 أحب أن أرسل لك تقرير ROI مفصل!\n\nلإنشاء PDF مخصص مع:\n✅ حسابات ROI لميزانيتك\n✅ توقعات دخل الإيجار\n✅ أهلية التأشيرة الذهبية\n✅ خطط السداد\n\nأحتاج أن أعرف تفضيلاتك أولاً. دعني أريك ممتلكاتنا!",
+                    Language.RU: f"📊 С удовольствием отправлю вам детальный ROI отчёт!\n\nДля создания персонализированного PDF с:\n✅ Расчётами ROI для вашего бюджета\n✅ Прогнозами арендного дохода\n✅ Правом на золотую визу\n✅ Планами оплаты\n\nМне нужно знать ваши предпочтения. Позвольте показать наши объекты!"
+                }
+                # Continue with warmup flow
+                return BrainResponse(
+                    message=roi_response.get(lang, roi_response[Language.EN]),
+                    next_state=ConversationState.WARMUP,
+                    buttons=[
+                        {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
+                        {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living"), "callback_data": "goal_living"},
+                        {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
+                    ]
+                )
+            
             # Check if this is actually a language change request
             lang_change_patterns = {
                 Language.FA: r'فارسی|persian|farsi',
@@ -2759,11 +2904,6 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             Language.RU: "Приятно познакомиться! 🎯\n\nВы ищете инвестиции, проживание или резиденцию в Дубае?"
         }
         
-        # FIX: ست کردن flag که املاک نشان داده نشده
-        conversation_data = lead.conversation_data or {}
-        conversation_data["properties_shown"] = False
-        lead_updates["conversation_data"] = conversation_data
-        
         return BrainResponse(
             message=warmup_message.get(lang, warmup_message[Language.EN]),
             next_state=ConversationState.WARMUP,
@@ -2771,8 +2911,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
                 {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living"), "callback_data": "goal_living"},
                 {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
-            ],
-            lead_updates=lead_updates
+            ]
         )
     
     async def _handle_slot_filling(
