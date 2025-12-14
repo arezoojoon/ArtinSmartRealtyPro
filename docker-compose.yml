@@ -7,6 +7,12 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: artinrealty
+      POSTGRES_HOST_AUTH_METHOD: md5
+      POSTGRES_INITDB_ARGS: "--auth-host=md5"
+    command: 
+      - "postgres"
+      - "-c"
+      - "password_encryption=md5"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
