@@ -62,6 +62,10 @@ services:
       PASSWORD_SALT: ${PASSWORD_SALT:-artinsmartrealty_salt_v2}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@artinsmartrealty.com}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-SuperAdmin123!}
+      WAHA_ENABLED: ${WAHA_ENABLED:-true}
+      WAHA_API_URL: ${WAHA_API_URL:-http://waha:3000/api}
+      WAHA_API_KEY: ${WAHA_API_KEY}
+      WAHA_SESSION: ${WAHA_SESSION:-default}
     ports:
       - "8000:8000"
     depends_on:
