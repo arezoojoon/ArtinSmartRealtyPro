@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* GLOBAL STYLES - Navy & Gold Theme */
+body {
+  background: #0f1729;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+  /* Better text rendering on mobile */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mobile-First Responsive Typography */
+h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); }
+h2 { font-size: clamp(1.5rem, 4vw, 2rem); }
+h3 { font-size: clamp(1.25rem, 3vw, 1.75rem); }
+p { font-size: clamp(0.875rem, 2.5vw, 1rem); line-height: 1.6; }
+
+/* CUSTOM SCROLLBAR */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.3); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.5); }
+
+@layer utilities {
+  /* Glassmorphism Classes */
+  .glass-card {
+    background: rgba(26, 34, 54, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  .glass-card-hover {
+    @apply transition-all duration-300 hover:bg-navy-800/80 hover:border-gold-500/30 hover:-translate-y-0.5;
+  }
+  .glass-sidebar {
+    background: rgba(15, 23, 41, 0.95);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .glass-header {
+    background: rgba(15, 23, 41, 0.8);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .btn-gold {
+    background: linear-gradient(135deg, #D4AF37 0%, #E5C365 100%);
+    @apply text-navy-900 font-bold rounded-xl px-6 py-3 transition-all duration-300 shadow-lg;
+  }
+  
+  /* Badges */
+  .badge-red { @apply px-3 py-1 rounded-full text-xs font-bold border bg-red-500/15 text-red-400 border-red-500/30; }
+  .badge-yellow { @apply px-3 py-1 rounded-full text-xs font-bold border bg-yellow-500/15 text-yellow-400 border-yellow-500/30; }
+  .badge-green { @apply px-3 py-1 rounded-full text-xs font-bold border bg-green-500/15 text-green-400 border-green-500/30; }
+  .badge-blue { @apply px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30; }
+  
+  /* Mobile-Responsive Utilities */
+  .container-mobile {
+    @apply px-4 mx-auto max-w-7xl;
+  }
+  @media (min-width: 640px) {
+    .container-mobile { @apply px-6; }
+  }
+  @media (min-width: 1024px) {
+    .container-mobile { @apply px-8; }
+  }
+  
+  /* Touch-Friendly Buttons */
+  .btn-touch {
+    @apply min-h-[44px] min-w-[44px] inline-flex items-center justify-center;
+  }
+  
+  /* Mobile Grid */
+  .grid-mobile {
+    @apply grid grid-cols-1 gap-4;
+  }
+  @media (min-width: 640px) {
+    .grid-mobile { @apply grid-cols-2 gap-6; }
+  }
+  @media (min-width: 1024px) {
+    .grid-mobile { @apply grid-cols-3; }
+  }
+}
+
+/* ANIMATIONS */
+@keyframes slideInLeft { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+.animate-slide-in-left { animation: slideInLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-fade-in { animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.animate-slide-in-up { animation: slideInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+/* Custom Glassmorphism Class */
+.glass-card {
+    /* پسزمینه نیمهشفاف سرمهای */
+    background: rgba(26, 34, 54, 0.6);
+    /* افکت ماتکننده پسزمینه */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    /* بوردر نازک و شفاف برای عمق دادن */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* سایه ملایم */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a2744;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #243352;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D4AF37;
+}
+
+/* Selection color */
+::selection {
+  background-color: #D4AF37;
+  color: #0f1729;
+}

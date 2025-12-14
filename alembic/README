@@ -1,0 +1,12 @@
+# A generic single-database configuration.
+
+# Script initially created by:
+#   alembic init alembic
+
+# For more on Alembic:
+#   https://alembic.sqlalchemy.org/
+
+from alembic import context
+
+# This is a generic script for both offline and online migrations.
+# Import your Base metadata for autogenerate support in env.py

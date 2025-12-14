@@ -1,0 +1,167 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: artinrealty-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: artinrealty
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - artinrealty-network
+
+  # Redis (Bot Context & Session Management)
+  redis:
+    image: redis:7-alpine
+    container_name: artinrealty-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - artinrealty-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artinrealty-backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD:-postgres}@db:5432/artinrealty
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      PDF_OUTPUT_DIR: /app/pdf_reports
+      DEBUG: ${DEBUG:-false}
+      JWT_SECRET: ${JWT_SECRET}
+      PASSWORD_SALT: ${PASSWORD_SALT:-artinsmartrealty_salt_v2}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@artinsmartrealty.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-SuperAdmin123!}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - pdf_reports:/app/pdf_reports
+    restart: unless-stopped
+    networks:
+      - artinrealty-network
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: artinrealty-frontend
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-}
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - artinrealty-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Nginx Reverse Proxy (Production)
+  nginx:
+    image: nginx:alpine
+    container_name: artinrealty-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    networks:
+      - artinrealty-network
+
+  # Waha - Self-Hosted WhatsApp API
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: artinrealty-waha
+    restart: unless-stopped
+    environment:
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - WHATSAPP_RESTART_ON_FAIL=True
+      - WHATSAPP_AUTOREFRESH_QR=True
+      - WAHA_PRINT_QR=True
+      - WHATSAPP_HOOK_URL=http://router:5000/webhook
+    ports:
+      - "3001:3000"  # Changed to 3001 to avoid conflict with frontend
+    volumes:
+      - waha_sessions:/app/.wwebjs_auth
+      - waha_cache:/app/.wwebjs_cache
+    networks:
+      - artinrealty-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # WhatsApp Router - Multi-Service Message Router (DISABLED - folder not found)
+  # router:
+  #   build:
+  #     context: ./whatsapp_router
+  #     dockerfile: Dockerfile
+  #   container_name: artinrealty-whatsapp-router
+  #   restart: unless-stopped
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - REALTY_WEBHOOK=http://backend:8000/api/webhook/waha
+  #     - TRAVEL_WEBHOOK=${TRAVEL_WEBHOOK:-http://travel.artinsmartagent.com/api/webhook/waha}
+  #     - EXPO_WEBHOOK=${EXPO_WEBHOOK:-http://expo.artinsmartagent.com/api/webhook/waha}
+  #     - CLINIC_WEBHOOK=${CLINIC_WEBHOOK:-http://clinic.artinsmartagent.com/api/webhook/waha}
+  #   ports:
+  #     - "5000:5000"
+  #   depends_on:
+  #     - redis
+  #     - waha
+  #   networks:
+  #     - artinrealty-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  pdf_reports:
+  waha_sessions:
+  waha_cache:
+
+networks:
+  artinrealty-network:
+    driver: bridge
