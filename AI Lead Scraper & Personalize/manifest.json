@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Artin Lead Scraper & Personalizer",
+  "version": "1.0.0",
+  "description": "Generate personalized cold DMs for LinkedIn prospects using AI-powered analysis by ArtinSmartAgent",
+  "author": "Arezoo Mohammadzadegan - ArtinSmartAgent",
+  "homepage_url": "https://www.artinsmartagent.com",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "sidePanel",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["styles.css"],
+      "matches": ["https://www.linkedin.com/*"]
+    }
+  ]
+}

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artin Lead Scraper & Personalizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .header h1 {
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+    
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    
+    .content {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .card h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: #667eea;
+      font-weight: 600;
+    }
+    
+    .profile-info {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #666;
+    }
+    
+    .profile-info strong {
+      color: #333;
+      display: block;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+    
+    .post-preview {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      border-left: 3px solid #667eea;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+    
+    .btn-secondary:hover {
+      background: #f8f9ff;
+    }
+    
+    .generated-message {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 12px;
+      white-space: pre-wrap;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #667eea;
+    }
+    
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 12px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .error {
+      background: #ffebee;
+      border-left: 4px solid #f44336;
+      padding: 12px;
+      border-radius: 8px;
+      color: #c62828;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #999;
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    
+    .copy-btn {
+      background: #4caf50;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    
+    .copy-btn:hover {
+      background: #45a049;
+    }
+    
+    .manual-input {
+      margin-top: 12px;
+    }
+    
+    .manual-input textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      resize: vertical;
+      min-height: 60px;
+      font-family: inherit;
+    }
+    
+    .manual-input textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🤖 Artin Lead Scraper</h1>
+    <p>Generate personalized icebreakers with AI</p>
+  </div>
+  
+  <div class="content">
+    <div id="emptyState" class="empty-state">
+      <div class="empty-state-icon">👋</div>
+      <h3>Navigate to a LinkedIn Profile</h3>
+      <p style="font-size: 13px; margin-top: 8px;">
+        Click "Scrape Profile" when you're on someone's LinkedIn page
+      </p>
+    </div>
+    
+    <div id="profileData" style="display: none;">
+      <div class="card">
+        <h3>📊 Profile Data</h3>
+        <div id="profileInfo" class="profile-info"></div>
+      </div>
+      
+      <button class="btn btn-primary" id="generateBtn">
+        ✨ Generate Personalized Message
+      </button>
+      
+      <button class="btn btn-secondary" id="manualToggle">
+        ✏️ Manual Input (Fallback)
+      </button>
+      
+      <div id="manualInputSection" class="manual-input" style="display: none;">
+        <div class="card">
+          <h3>Manual Input</h3>
+          <label style="font-size: 12px; display: block; margin-bottom: 4px;">Recent Post Content:</label>
+          <textarea id="manualPostInput" placeholder="Paste the person's recent post or activity here..."></textarea>
+        </div>
+      </div>
+      
+      <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Generating your personalized message...</p>
+      </div>
+      
+      <div id="error" class="error" style="display: none;"></div>
+      
+      <div id="result" style="display: none;">
+        <div class="card">
+          <h3>✅ Generated Message</h3>
+          <div id="generatedMessage" class="generated-message"></div>
+          <button class="copy-btn" id="copyBtn">📋 Copy to Clipboard</button>
+        </div>
+      </div>
+    </div>
+    
+    <button class="btn btn-primary" id="scrapeBtn">
+      🔍 Scrape Profile
+    </button>
+  </div>
+  
+  <script src="sidepanel.js"></script>
+</body>
+</html>
