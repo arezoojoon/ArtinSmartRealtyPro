@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from enum import Enum
 from dataclasses import dataclass
 import google.generativeai as genai
+from sqlalchemy import or_  # For location filtering
 
 from database import (
     Lead, Tenant, ConversationState, Language,
@@ -489,6 +490,85 @@ async def join_lottery(tenant_id: int, lottery_id: int, lead_id: int):
     except Exception as e:
         logger.error(f"❌ Error joining lottery: {e}")
         return False
+
+
+# ==================== URGENCY & SCARCITY GENERATOR ====================
+
+def generate_urgency_message(property_data: Dict[str, Any], lang: Language) -> str:
+    """
+    Generate urgency/scarcity messaging for property presentation.
+    Uses sales psychology: scarcity, social proof, time pressure.
+    
+    Args:
+        property_data: Property dict with price, is_featured, etc.
+        lang: User language
+    
+    Returns:
+        Urgency message string (empty if no urgency applies)
+    """
+    import random
+    
+    urgency_parts = []
+    price = property_data.get("price", 0)
+    is_featured = property_data.get("is_featured", False)
+    is_urgent = property_data.get("is_urgent", False)
+    
+    # 🔥 SCARCITY: Limited units (realistic based on price tier)
+    if price > 5000000:  # Luxury (5M+)
+        units_left = random.randint(1, 2)
+    elif price > 2000000:  # Mid-high (2M-5M)
+        units_left = random.randint(2, 4)
+    else:  # Affordable (<2M)
+        units_left = random.randint(3, 6)
+    
+    scarcity_templates = {
+        Language.FA: f"🔥 فقط {units_left} واحد باقی مانده!",
+        Language.EN: f"🔥 Only {units_left} units left!",
+        Language.AR: f"🔥 {units_left} وحدات فقط متبقية!",
+        Language.RU: f"🔥 Осталось только {units_left} юнитов!"
+    }
+    urgency_parts.append(scarcity_templates.get(lang, scarcity_templates[Language.EN]))
+    
+    # 🔥 SOCIAL PROOF: Views today (realistic numbers)
+    if is_featured or is_urgent:
+        views_today = random.randint(5, 12)
+    else:
+        views_today = random.randint(2, 6)
+    
+    social_proof_templates = {
+        Language.FA: f"👀 {views_today} نفر امروز دیدند",
+        Language.EN: f"👀 {views_today} people viewed today",
+        Language.AR: f"👀 {views_today} شخص شاهدوا اليوم",
+        Language.RU: f"👀 {views_today} человек смотрели сегодня"
+    }
+    urgency_parts.append(social_proof_templates.get(lang, social_proof_templates[Language.EN]))
+    
+    # 🔥 TIME PRESSURE: Availability window
+    if is_urgent:
+        time_pressure_templates = {
+            Language.FA: "⏰ موجود تا فردا ظهر",
+            Language.EN: "⏰ Available until tomorrow noon",
+            Language.AR: "⏰ متاح حتى ظهر غد",
+            Language.RU: "⏰ Доступно до завтрашнего полудня"
+        }
+    elif is_featured:
+        time_pressure_templates = {
+            Language.FA: "⏰ عرض ویژه تا آخر هفته",
+            Language.EN: "⏰ Special offer ends this weekend",
+            Language.AR: "⏰ عرض خاص ينتهي نهاية الأسبوع",
+            Language.RU: "⏰ Спецпредложение до выходных"
+        }
+    else:
+        time_pressure_templates = {
+            Language.FA: "⏰ قیمت فعلی تا آخر ماه",
+            Language.EN: "⏰ Current price until end of month",
+            Language.AR: "⏰ السعر الحالي حتى نهاية الشهر",
+            Language.RU: "⏰ Текущая цена до конца месяца"
+        }
+    
+    urgency_parts.append(time_pressure_templates.get(lang, time_pressure_templates[Language.EN]))
+    
+    return " • ".join(urgency_parts)
 
 
 # ==================== MAIN BRAIN CLASS ====================
@@ -1951,11 +2031,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         down_payment_25 = int(price * 0.25) if price else 0
         monthly_payment_5y = int((price - down_payment_25) / 60) if price else 0
         
-        # FOMO elements
-        import random
-        viewers_today = random.randint(12, 28)
-        units_remaining = random.randint(2, 7)
-        days_on_market = random.randint(3, 14)
+        # 🔥 GENERATE URGENCY MESSAGE - Uses sales psychology
+        urgency_msg = generate_urgency_message(property_data, lang)
         
         # ساخت پیام بر اساس زبان
         if lang == Language.FA:
@@ -1995,11 +2072,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
 📊 رشد سالانه 5-8% ارزش ملک
 💰 درآمد منفعل تضمینی
 
-**🔥 اطلاعات حیاتی:**
-⚠️ {viewers_today} سرمایه‌گذار امروز بررسی کردند
-⏰ فقط {units_remaining} واحد از این طرح باقی مانده
-📅 {days_on_market} روز در بازار - محبوبیت بالا!
-💥 قیمت‌ها هر ماه 3-5% افزایش می‌یابند
+**⚡ فوری - اقدام الزامی:**
+{urgency_msg}
 
 **📞 اقدام فوری:**
 ✅ رزرو بازدید حضوری
@@ -2043,11 +2117,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
 📊 5-8% Annual Property Appreciation
 💰 Guaranteed Passive Income
 
-**🔥 Critical Information:**
-⚠️ {viewers_today} investors viewed today
-⏰ Only {units_remaining} units left in this layout
-📅 {days_on_market} days on market - High demand!
-💥 Prices increase 3-5% monthly
+**⚡ Urgent - Action Required:**
+{urgency_msg}
 
 **📞 Immediate Action:**
 ✅ Book Property Viewing
@@ -2075,6 +2146,11 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         - نوع ملک
         - موجود بودن
         
+        Args:
+            lead: اطلاعات lead
+            limit: تعداد املاک
+            offset: برای pagination - skip کردن املاک قبلی
+        
         Returns:
             لیستی از دیکشنری‌های property با تمام اطلاعات
         """
@@ -2082,7 +2158,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             query = select(TenantProperty).where(
                 TenantProperty.tenant_id == lead.tenant_id,
                 TenantProperty.is_available == True
-            )
+            ).distinct()  # Prevent duplicates
             
             # Filter by transaction type
             conversation_data = lead.conversation_data or {}
@@ -2092,26 +2168,54 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     TenantProperty.transaction_type == transaction_type
                 )
             
-            # Filter by budget
-            budget_max = conversation_data.get("budget_max") or lead.budget_max
+            # 🔥 ENHANCED: Filter by budget - use saved preferences first, then conversation_data
+            budget_min = lead.budget_min or conversation_data.get("budget_min")
+            budget_max = lead.budget_max or conversation_data.get("budget_max")
+            
+            if budget_min:
+                query = query.where(TenantProperty.price >= budget_min)
             if budget_max:
                 query = query.where(TenantProperty.price <= budget_max)
             
-            # Filter by property type
-            property_type = conversation_data.get("property_type")
-            if property_type:
-                query = query.where(TenantProperty.property_type == property_type)
+            logger.info(f"🔍 Budget filter: {budget_min} - {budget_max} AED")
             
-            # Filter by bedrooms (if specified)
-            bedrooms = conversation_data.get("bedrooms")
-            if bedrooms:
-                query = query.where(TenantProperty.bedrooms >= bedrooms)
+            # 🔥 ENHANCED: Filter by property type - use saved preference first
+            property_type = lead.property_type or conversation_data.get("property_type")
+            if property_type:
+                # Convert enum to string if needed
+                if hasattr(property_type, 'value'):
+                    property_type = property_type.value
+                query = query.where(TenantProperty.property_type == property_type)
+                logger.info(f"🏠 Property type filter: {property_type}")
+            
+            # 🔥 ENHANCED: Filter by bedrooms - use saved preferences first
+            bedrooms_min = lead.bedrooms_min or conversation_data.get("bedrooms_min")
+            bedrooms_max = lead.bedrooms_max or conversation_data.get("bedrooms_max")
+            
+            if bedrooms_min:
+                query = query.where(TenantProperty.bedrooms >= bedrooms_min)
+            if bedrooms_max:
+                query = query.where(TenantProperty.bedrooms <= bedrooms_max)
+            
+            if bedrooms_min or bedrooms_max:
+                logger.info(f"🛏️ Bedrooms filter: {bedrooms_min} - {bedrooms_max}")
+            
+            # 🔥 ENHANCED: Filter by location - check if property location matches preferred_locations
+            if lead.preferred_locations and len(lead.preferred_locations) > 0:
+                # Use OR condition to match any preferred location
+                location_filters = []
+                for loc in lead.preferred_locations:
+                    location_filters.append(TenantProperty.location.ilike(f"%{loc}%"))
+                
+                if location_filters:
+                    query = query.where(or_(*location_filters))
+                    logger.info(f"📍 Location filter: {lead.preferred_locations}")
             
             # Order by featured > price
             query = query.order_by(
                 TenantProperty.is_featured.desc(),
                 TenantProperty.price.asc()
-            ).limit(limit)
+            ).limit(limit).offset(offset)  # Add offset for pagination
             
             result = await db.execute(query)
             properties = result.scalars().all()
@@ -3109,6 +3213,25 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 lead_updates["property_type"] = property_type_map.get(property_type_str)
                 lead_updates["conversation_state"] = ConversationState.VALUE_PROPOSITION
                 
+                # 🔥 CRITICAL FIX: Save all preferences to database for future follow-ups
+                # Extract bedrooms from conversation_data if available (from voice or text)
+                if conversation_data.get("bedrooms_min"):
+                    lead_updates["bedrooms_min"] = conversation_data["bedrooms_min"]
+                if conversation_data.get("bedrooms_max"):
+                    lead_updates["bedrooms_max"] = conversation_data["bedrooms_max"]
+                
+                # Save preferred locations as JSON array
+                preferred_locs = []
+                if conversation_data.get("location"):
+                    preferred_locs.append(conversation_data["location"])
+                if conversation_data.get("locations"):
+                    preferred_locs.extend(conversation_data["locations"])
+                if preferred_locs:
+                    lead_updates["preferred_locations"] = list(set(preferred_locs))  # Remove duplicates
+                    lead_updates["preferred_location"] = preferred_locs[0]  # Primary location
+                
+                logger.info(f"💾 Saved lead preferences: property_type={property_type_str}, bedrooms={conversation_data.get('bedrooms_min')}-{conversation_data.get('bedrooms_max')}, budget={conversation_data.get('budget_min')}-{conversation_data.get('budget_max')}")
+                
                 # All slots filled! Get property recommendations
                 property_recs = await self.get_property_recommendations(lead)
                 
@@ -3471,10 +3594,9 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                     from sqlalchemy import select
                     from database import TenantProperty
                     
-                    # Get properties matching lead criteria
+                    # Get properties matching lead criteria (is_active removed - column doesn't exist)
                     query = select(TenantProperty).where(
-                        TenantProperty.tenant_id == lead.tenant_id,
-                        TenantProperty.is_active == True
+                        TenantProperty.tenant_id == lead.tenant_id
                     )
                     
                     # Apply filters if available
@@ -3515,21 +3637,20 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                                 "golden_visa": prop.golden_visa_eligible
                             })
                         
+                        # Track shown properties to avoid repetition
+                        conversation_data = lead.conversation_data or {}
+                        shown_ids = set(conversation_data.get("shown_property_ids", []))
+                        shown_ids.update([p['id'] for p in properties_list[:3]])
+                        conversation_data["shown_property_ids"] = list(shown_ids)
+                        
                         # SET current_properties for property_presenter
                         self.current_properties = properties_list[:3]
                         
-                        # Return simple confirmation - property_presenter will send media
-                        confirmation_msg = {
-                            Language.EN: "Perfect! Let me send you the properties with photos and detailed ROI analysis...",
-                            Language.FA: "عالی! بذار براتون املاک رو با عکس و تحلیل ROI کامل بفرستم...",
-                            Language.AR: "ممتاز! دعني أرسل لك العقارات مع الصور وتحليل ROI التفصيلي...",
-                            Language.RU: "Отлично! Сейчас отправлю вам объекты с фото и детальным ROI анализом..."
-                        }
-                        
+                        # Return empty message - property_presenter handles presentation + ROI PDFs
                         return BrainResponse(
-                            message=confirmation_msg.get(lang, confirmation_msg[Language.EN]),
+                            message="",  # Empty - professional presenter does everything
                             next_state=ConversationState.VALUE_PROPOSITION,
-                            lead_updates=lead_updates | {"properties_sent": True}
+                            lead_updates=lead_updates | {"properties_sent": True, "conversation_data": conversation_data}
                         )
                     else:
                         logger.warning(f"⚠️ No properties found in database for lead {lead.id} - fallback to manual contact")
@@ -3591,31 +3712,31 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             if any(kw in message_lower for kw in photo_keywords):
                 logger.info(f"📸 Photo/PDF/Property request detected from lead {lead.id}")
                 
+                # Track shown properties for rotation
+                conversation_data = lead.conversation_data or {}
+                shown_property_ids = set(conversation_data.get("shown_property_ids", []))
+                offset = len(shown_property_ids)
+                
                 # *** گرفتن املاک واقعی از دیتابیس ***
-                real_properties = await self.get_real_properties_from_db(lead, limit=5)
+                real_properties = await self.get_real_properties_from_db(lead, limit=3, offset=offset)
                 
                 if real_properties:
-                    logger.info(f"✅ Found {len(real_properties)} real properties in database")
-                    # فرمت کردن املاک
-                    property_message, media_files = await self.format_properties_for_display(
-                        real_properties, lang
-                    )
+                    # Update shown property IDs
+                    new_ids = [p['id'] for p in real_properties]
+                    shown_property_ids.update(new_ids)
+                    conversation_data["shown_property_ids"] = list(shown_property_ids)
+                    lead_updates["conversation_data"] = conversation_data
                     
-                    buttons_text = {
-                        Language.FA: "📅 رزرو بازدید",
-                        Language.EN: "📅 Schedule Viewing",
-                        Language.AR: "📅 حجز معاينة",
-                        Language.RU: "📅 Записаться на просмотр"
-                    }
+                    logger.info(f"✅ Found {len(real_properties)} NEW properties (total shown: {len(shown_property_ids)})")
                     
+                    # Set current_properties to trigger professional presenter with ROI PDFs
+                    self.current_properties = real_properties
+                    
+                    # IMPORTANT: Return minimal message - property_presenter handles everything
                     return BrainResponse(
-                        message=property_message,
+                        message="",  # Empty - let property_presenter do the talking
                         next_state=ConversationState.VALUE_PROPOSITION,
-                        lead_updates=lead_updates,
-                        buttons=[
-                            {"text": buttons_text.get(lang, buttons_text[Language.EN]), "callback_data": "schedule_consultation"}
-                        ],
-                        media_files=media_files
+                        lead_updates=lead_updates
                     )
                 else:
                     logger.warning(f"⚠️ No real properties found in database for lead {lead.id}")

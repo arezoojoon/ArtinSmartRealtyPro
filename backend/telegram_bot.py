@@ -211,45 +211,48 @@ class TelegramBotHandler:
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to send media {media.get('name')}: {e}")
         
-        # Send message
-        if update.callback_query:
-            # Edit existing message for callback queries
-            try:
-                await update.callback_query.edit_message_text(
-                    text=response.message,
-                    reply_markup=reply_markup if not response.request_contact else None,  # Can't use ReplyKeyboard with edit
-                    parse_mode='HTML'
-                )
-                # Send contact request as new message if needed
-                if response.request_contact:
-                    button_text = {
-                        Language.EN: "📱 Share Phone Number",
-                        Language.FA: "📱 اشتراک‌گذاری شماره تلفن",
-                        Language.AR: "📱 شارك رقم الهاتف",
-                        Language.RU: "📱 Поделиться номером"
-                    }.get(lead.language, "📱 Share Phone Number")
-                    contact_button = KeyboardButton(button_text, request_contact=True)
-                    reply_markup = ReplyKeyboardMarkup([[contact_button]], resize_keyboard=True, one_time_keyboard=True)
+        # Send message (skip if empty - property_presenter will handle)
+        if response.message and response.message.strip():
+            if update.callback_query:
+                # Edit existing message for callback queries
+                try:
+                    await update.callback_query.edit_message_text(
+                        text=response.message,
+                        reply_markup=reply_markup if not response.request_contact else None,
+                        parse_mode='HTML'
+                    )
+                    # Send contact request as new message if needed
+                    if response.request_contact:
+                        button_text = {
+                            Language.EN: "📱 Share Phone Number",
+                            Language.FA: "📱 اشتراک‌گذاری شماره تلفن",
+                            Language.AR: "📱 شارك رقم الهاتف",
+                            Language.RU: "📱 Поделиться номером"
+                        }.get(lead.language, "📱 Share Phone Number")
+                        contact_button = KeyboardButton(button_text, request_contact=True)
+                        reply_markup = ReplyKeyboardMarkup([[contact_button]], resize_keyboard=True, one_time_keyboard=True)
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="👇",
+                            reply_markup=reply_markup
+                        )
+                except Exception:
+                    # If edit fails, send new message
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="👇",
-                        reply_markup=reply_markup
+                        text=response.message,
+                        reply_markup=reply_markup,
+                        parse_mode='HTML'
                     )
-            except Exception:
-                # If edit fails, send new message
+            else:
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=response.message,
                     reply_markup=reply_markup,
                     parse_mode='HTML'
                 )
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=response.message,
-                reply_markup=reply_markup,
-                parse_mode='HTML'
-            )
+        elif response.message == "":
+            logger.info(f"📭 Empty message - property_presenter will handle presentation")
         
         # Update lead state if needed
         updates = response.lead_updates or {}

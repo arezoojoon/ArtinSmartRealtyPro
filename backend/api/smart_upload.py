@@ -1,6 +1,7 @@
 """
 Smart Property Upload API
 Agents upload PDFs/images → System auto-extracts property details
+🔔 NEW: Auto-notifies qualified leads when property matches their preferences
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
@@ -16,6 +17,7 @@ import logging
 
 from database import async_session, Tenant, TenantProperty, get_db
 from property_extractor import PropertyExtractor
+from followup_matcher import get_matching_leads_count  # For preview count
 
 router = APIRouter(prefix="/api/tenants", tags=["Smart Upload"])
 security = HTTPBearer()
@@ -303,6 +305,88 @@ async def save_extracted_property(
         raise HTTPException(status_code=500, detail=f"Save failed: {e}")
 
 
+@router.post("/{tenant_id}/properties/{property_id}/notify-leads")
+async def notify_leads_of_property(
+    tenant_id: int,
+    property_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    🔔 NOTIFY QUALIFIED LEADS - Send property to matching leads
+    
+    After uploading a property, use this endpoint to automatically:
+    - Find qualified leads with matching preferences (budget, type, bedrooms)
+    - Send property presentation with photos + ROI PDF
+    - Include urgency messaging (scarcity, social proof, time pressure)
+    
+    Note: Requires bot to be running (Telegram or WhatsApp)
+    
+    Returns:
+    - leads_notified: Number of leads successfully notified
+    - matching_leads: Total matching leads found
+    - errors: List of errors encountered
+    """
+    
+    # Verify access
+    tenant = await verify_tenant_access(credentials, tenant_id, db)
+    
+    try:
+        # Import here to avoid circular dependency
+        from followup_matcher import notify_qualified_leads_of_new_property
+        
+        # Get bot interface - try Telegram first, then WhatsApp
+        bot_interface = None
+        
+        # Try to get Telegram bot
+        try:
+            from telegram_bot import TelegramBot
+            bot_interface = TelegramBot(tenant)
+            platform = "telegram"
+        except Exception as telegram_error:
+            logger.warning(f"⚠️ Telegram bot not available: {telegram_error}")
+            
+            # Try WhatsApp as fallback
+            try:
+                from whatsapp_bot import WhatsAppBot
+                bot_interface = WhatsAppBot(tenant)
+                platform = "whatsapp"
+            except Exception as wa_error:
+                logger.warning(f"⚠️ WhatsApp bot not available: {wa_error}")
+        
+        if not bot_interface:
+            raise HTTPException(
+                status_code=503, 
+                detail="No bot interface available. Make sure Telegram or WhatsApp bot is running."
+            )
+        
+        # Trigger follow-up notifications
+        stats = await notify_qualified_leads_of_new_property(
+            tenant_id=tenant_id,
+            property_id=property_id,
+            bot_interface=bot_interface
+        )
+        
+        return {
+            'success': True,
+            'platform': platform,
+            'leads_notified': stats['leads_notified'],
+            'leads_skipped': stats['leads_skipped'],
+            'errors': stats['errors'],
+            'message': (
+                f"✅ Notified {stats['leads_notified']} qualified leads via {platform}!" 
+                if stats['leads_notified'] > 0 
+                else "ℹ️ No qualified leads match this property yet"
+            )
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Notification failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Notification failed: {e}")
+
+
 async def _save_property_to_db(
     tenant_id: int,
     extracted_data: dict,
@@ -376,5 +460,12 @@ async def _save_property_to_db(
     
     logger.info(f"💾 Saved property: {new_property.name} (ID: {new_property.id})")
     logger.info(f"📸 Images: {len(image_urls)} | 📄 PDF: {'Yes' if brochure_pdf else 'No'}")
+    
+    # 🔔 Check how many qualified leads match this property
+    matching_count = await get_matching_leads_count(tenant_id, new_property.id)
+    if matching_count > 0:
+        logger.info(f"🎯 {matching_count} qualified leads match this property - ready for follow-up!")
+    else:
+        logger.info(f"ℹ️ No qualified leads match this property yet")
     
     return new_property.id
