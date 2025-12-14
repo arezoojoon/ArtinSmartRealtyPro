@@ -3446,12 +3446,126 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         Goal: Demonstrate value BEFORE asking for contact info.
         
         FIXED: Properly route consultation/photo/question requests to avoid infinite loop.
+        FIXED: Detect YES/NO text responses to avoid repeating financing info.
         """
         # ===== CRITICAL: HANDLE TEXT MESSAGES IN VALUE_PROPOSITION =====
         if message and not callback_data:
-            message_lower = message.lower()
+            message_lower = message.lower().strip()
             
             logger.info(f"📝 VALUE_PROPOSITION text input from lead {lead.id}: '{message}'")
+            
+            # 0. DETECT YES/NO AFFIRMATIVE RESPONSES (HIGHEST PRIORITY - FIX FOR INFINITE LOOP)
+            # When bot asks "Would you like financing calculator?", user types "yes" instead of clicking button
+            affirmative_keywords = ["yes", "yeah", "yep", "sure", "ok", "okay", "بله", "آره", "باشه", "اوکی", "نعم", "حسناً", "да", "хорошо", "ладно"]
+            negative_keywords = ["no", "nope", "نه", "نخیر", "لا", "нет"]
+            
+            # Check if message is JUST affirmative/negative (not part of longer question)
+            is_pure_affirmative = any(kw == message_lower for kw in affirmative_keywords) or any(kw in message_lower for kw in affirmative_keywords[:4])  # English variants
+            is_pure_negative = any(kw == message_lower for kw in negative_keywords)
+            
+            if is_pure_affirmative:
+                logger.info(f"✅ AFFIRMATIVE RESPONSE detected from lead {lead.id} - Triggering property presentation with photos+PDFs")
+                
+                # User wants to see properties with details - GET REAL PROPERTIES FROM DATABASE
+                async with async_session() as session:
+                    from sqlalchemy import select
+                    from database import TenantProperty
+                    
+                    # Get properties matching lead criteria
+                    query = select(TenantProperty).where(
+                        TenantProperty.tenant_id == lead.tenant_id,
+                        TenantProperty.is_active == True
+                    )
+                    
+                    # Apply filters if available
+                    conversation_data = lead.conversation_data or {}
+                    if conversation_data.get("budget"):
+                        budget_max = int(conversation_data["budget"]) * 1.2  # 20% flexibility
+                        query = query.where(TenantProperty.price <= budget_max)
+                    
+                    if conversation_data.get("property_type"):
+                        prop_type = conversation_data["property_type"]
+                        if prop_type != "any":
+                            query = query.where(TenantProperty.property_type == prop_type)
+                    
+                    # Execute query
+                    result = await session.execute(query.limit(5))
+                    properties_db = result.scalars().all()
+                    
+                    if properties_db:
+                        logger.info(f"✅ Found {len(properties_db)} properties in database for lead {lead.id}")
+                        
+                        # Convert to dict format for property_presenter
+                        properties_list = []
+                        for prop in properties_db:
+                            properties_list.append({
+                                "id": prop.id,
+                                "name": prop.name,
+                                "price": prop.price,
+                                "location": prop.location,
+                                "bedrooms": prop.bedrooms,
+                                "bathrooms": prop.bathrooms,
+                                "area": prop.area,
+                                "property_type": prop.property_type,
+                                "image_urls": prop.image_urls or [],
+                                "brochure_pdf": prop.brochure_pdf,
+                                "primary_image": prop.primary_image,
+                                "features": prop.features or [],
+                                "description": prop.description,
+                                "golden_visa": prop.golden_visa_eligible
+                            })
+                        
+                        # SET current_properties for property_presenter
+                        self.current_properties = properties_list[:3]
+                        
+                        # Return simple confirmation - property_presenter will send media
+                        confirmation_msg = {
+                            Language.EN: "Perfect! Let me send you the properties with photos and detailed ROI analysis...",
+                            Language.FA: "عالی! بذار براتون املاک رو با عکس و تحلیل ROI کامل بفرستم...",
+                            Language.AR: "ممتاز! دعني أرسل لك العقارات مع الصور وتحليل ROI التفصيلي...",
+                            Language.RU: "Отлично! Сейчас отправлю вам объекты с фото и детальным ROI анализом..."
+                        }
+                        
+                        return BrainResponse(
+                            message=confirmation_msg.get(lang, confirmation_msg[Language.EN]),
+                            next_state=ConversationState.VALUE_PROPOSITION,
+                            lead_updates=lead_updates | {"properties_sent": True}
+                        )
+                    else:
+                        logger.warning(f"⚠️ No properties found in database for lead {lead.id} - fallback to manual contact")
+                        
+                        # No properties - offer consultation
+                        no_properties_msg = {
+                            Language.EN: f"I'd love to show you properties, but I need to check our exclusive inventory for your specific criteria. Can I schedule a quick call with {self.agent_name} to discuss the best available options?",
+                            Language.FA: f"دوست دارم املاک رو نشونتون بدم، اما باید موجودی اختصاصی رو برای معیارهای خاص شما چک کنم. می‌تونم یه تماس سریع با {self.agent_name} برای بحث بهترین گزینه‌های موجود تنظیم کنم؟",
+                            Language.AR: f"أود أن أريك العقارات، لكن أحتاج للتحقق من مخزوننا الحصري لمعاييرك المحددة. هل يمكنني جدولة مكالمة سريعة مع {self.agent_name} لمناقشة أفضل الخيارات المتاحة؟",
+                            Language.RU: f"Хочу показать вам объекты, но мне нужно проверить эксклюзивный каталог под ваши критерии. Могу я организовать быстрый звонок с {self.agent_name} для обсуждения лучших вариантов?"
+                        }
+                        
+                        return BrainResponse(
+                            message=no_properties_msg.get(lang, no_properties_msg[Language.EN]),
+                            next_state=ConversationState.VALUE_PROPOSITION,
+                            lead_updates=lead_updates,
+                            buttons=[
+                                {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
+                            ]
+                        )
+            
+            elif is_pure_negative:
+                logger.info(f"❌ NEGATIVE RESPONSE detected from lead {lead.id} - Moving to engagement")
+                
+                engagement_msg = {
+                    Language.EN: "No problem! Do you have any questions about these properties or Dubai real estate? I'm here to help! 😊",
+                    Language.FA: "مشکلی نیست! سوالی درباره این ملک‌ها یا املاک دبی دارید؟ من اینجا هستم تا کمکتان کنم! 😊",
+                    Language.AR: "لا مشكلة! هل لديك أي أسئلة حول هذه الممتلكات أو العقارات في دبي؟ أنا هنا لمساعدتك! 😊",
+                    Language.RU: "Без проблем! У вас есть вопросы об этих объектах или недвижимости в Дубае? Я здесь, чтобы помочь! 😊"
+                }
+                
+                return BrainResponse(
+                    message=engagement_msg.get(lang, engagement_msg[Language.EN]),
+                    next_state=ConversationState.ENGAGEMENT,
+                    lead_updates=lead_updates
+                )
             
             # 1. DETECT CONSULTATION REQUEST
             consultation_keywords = ["consultation", "call", "مشاوره", "تماس", "speak", "agent", "مشاور"]
