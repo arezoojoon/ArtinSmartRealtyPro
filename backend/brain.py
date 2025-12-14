@@ -4315,10 +4315,19 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
     async def _handle_schedule(self, lang: Language, callback_data: Optional[str], lead: Lead) -> BrainResponse:
         """Handle consultation scheduling - SIMPLIFIED with Calendly integration."""
         
-        # لینک Calendly و شماره تلفن
-        calendly_url = "https://calendly.com/taranteen-realty/consultation"
-        phone_number = "+971 50 503 7158"
-        whatsapp_url = "https://wa.me/971505037158"
+        # لینک Calendly و شماره تلفن از تنانت
+        calendly_url = self.tenant.booking_url or "https://calendly.com/schedule"
+        phone_number = self.tenant.contact_phone or self.tenant.phone or "+971XXXXXXXXX"
+        
+        # ساخت لینک واتساپ از شماره تلفن
+        if self.tenant.whatsapp_link:
+            whatsapp_url = self.tenant.whatsapp_link
+        elif phone_number:
+            # حذف فضاها و کاراکترهای غیر عددی برای لینک واتساپ
+            clean_phone = phone_number.replace(" ", "").replace("-", "").replace("+", "")
+            whatsapp_url = f"https://wa.me/{clean_phone}"
+        else:
+            whatsapp_url = "https://wa.me/971XXXXXXXXX"
         
         # پیام رزرو مشاوره
         consultation_messages = {

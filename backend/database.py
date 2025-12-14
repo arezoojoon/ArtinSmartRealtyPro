@@ -229,6 +229,11 @@ class Tenant(Base):
     # Admin Settings
     admin_chat_id = Column(String(100), nullable=True)  # Telegram chat ID for admin notifications
     
+    # Booking & Contact Information (per tenant)
+    booking_url = Column(String(512), nullable=True)  # Calendly or other booking system URL
+    contact_phone = Column(String(50), nullable=True)  # WhatsApp/Direct call number
+    whatsapp_link = Column(String(512), nullable=True)  # wa.me link (auto-generated from contact_phone)
+    
     # Subscription & Billing
     subscription_plan = Column(SQLEnum(SubscriptionPlan), default=SubscriptionPlan.FREE)
     subscription_status = Column(SQLEnum(SubscriptionStatus), default=SubscriptionStatus.TRIAL)
