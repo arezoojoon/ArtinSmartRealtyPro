@@ -1809,11 +1809,14 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             }
             return messages.get(lang, messages[Language.EN])
         
+        # ALWAYS set current_properties for property_presenter to use
+        self.current_properties = properties[:3]
+        
         # Check if properties already shown to avoid repetition
         conversation_data = lead.conversation_data or {}
         if conversation_data.get("properties_shown"):
-            # Properties already shown - just return empty to avoid spam
-            logger.info(f"🔄 Properties already shown to lead {lead.id}, skipping repetition")
+            # Properties already shown - just return empty text but properties will still be presented
+            logger.info(f"🔄 Properties already shown to lead {lead.id}, skipping text but presenting professionally")
             return ""
         
         # Build recommendations message
@@ -1822,9 +1825,6 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         # Mark properties as shown
         conversation_data["properties_shown"] = True
         conversation_data["shown_property_ids"] = [p.get('id') for p in properties[:3]]
-        
-        # Store properties for ROI generation
-        self.current_properties = properties[:3]
         
         # Recommend matching properties - این قسمت فقط متن است، عکس‌ها از telegram_bot/whatsapp_bot فرستاده می‌شوند
         if properties:
