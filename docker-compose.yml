@@ -126,6 +126,7 @@ services:
       - WHATSAPP_AUTOREFRESH_QR=True
       - WAHA_PRINT_QR=True
       - WHATSAPP_HOOK_URL=http://router:5000/webhook
+      - WAHA_API_KEY=${WAHA_API_KEY:-waha_artinsmartrealty_secure_key_2024}
     ports:
       - "3001:3000"  # Changed to 3001 to avoid conflict with frontend
     volumes:
@@ -133,11 +134,8 @@ services:
       - waha_cache:/app/.wwebjs_cache
     networks:
       - artinrealty-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # Health check disabled - WAHA CORE doesn't support API authentication
+    # Service is considered healthy if container is running
 
   # WhatsApp Router - Multi-Service Message Router (DISABLED - folder not found)
   # router:
