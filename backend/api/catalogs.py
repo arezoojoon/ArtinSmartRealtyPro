@@ -16,7 +16,16 @@ from database import async_session, Tenant, TenantProperty, get_db
 router = APIRouter(prefix="/api/tenants", tags=["Catalogs"])
 
 
+class PropertyCatalogCreate(BaseModel):
+    """Request body for creating a catalog (tenant_id comes from URL path)"""
+    name: str
+    description: Optional[str] = None
+    property_ids: List[int]  # List of TenantProperty IDs
+    is_public: bool = False
+
+
 class PropertyCatalog(BaseModel):
+    """Full catalog model including tenant_id"""
     id: Optional[int] = None
     tenant_id: int
     name: str
@@ -75,7 +84,7 @@ async def get_catalogs(
 @router.post("/{tenant_id}/catalogs", response_model=CatalogResponse)
 async def create_catalog(
     tenant_id: int,
-    catalog: PropertyCatalog,
+    catalog: PropertyCatalogCreate,  # Changed from PropertyCatalog
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new property catalog."""
@@ -139,7 +148,7 @@ async def create_catalog(
 async def update_catalog(
     tenant_id: int,
     catalog_id: int,
-    catalog: PropertyCatalog,
+    catalog: PropertyCatalogCreate,  # Changed from PropertyCatalog
     db: AsyncSession = Depends(get_db)
 ):
     """Update an existing catalog."""
