@@ -776,6 +776,17 @@ class TelegramBotHandler:
             await update_lead(lead.id, voice_transcript=transcript)
             logger.info(f"🎤 Voice transcript saved for lead {lead.id}: {transcript[:100]}...")
             
+            # CRITICAL: Process transcript as text message through brain for AI intent extraction
+            if lead.conversation_state in [ConversationState.WARMUP, ConversationState.SLOT_FILLING]:
+                logger.info(f"🧠 Re-processing transcript through brain for AI intent extraction...")
+                response = await self.brain.generate_ai_response(
+                    lead=lead,
+                    message=transcript,  # Pass transcript as text
+                    callback_data=None,
+                    platform="telegram"
+                )
+                logger.info(f"✅ Brain processed voice transcript - extracted intents")
+            
             # Update lead score (voice = high engagement)
             async with async_session() as session:
                 result = await session.execute(select(Lead).where(Lead.id == lead.id))

@@ -2886,40 +2886,19 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         
         # Goal not known yet - ask conversationally (NO buttons!)
         warmup_msg = {
-            Language.EN: f"Thank you! 🙏\n\nNow, let's understand your goals better.\n\n🎯 **What's your primary objective for Dubai property?**",
-            Language.FA: f"ممنون! 🙏\n\nحالا بذار اهداف شما رو بهتر بفهمم.\n\n🎯 **هدف اصلی شما از خرید ملک در دبی چیه؟**",
-            Language.AR: f"شكراً! 🙏\n\nالآن، دعنا نفهم أهدافك بشكل أفضل.\n\n🎯 **ما هو هدفك الأساسي من العقار في دبي؟**",
-            Language.RU: f"Спасибо! 🙏\n\nТеперь давайте лучше поймём ваши цели.\n\n🎯 **Какая ваша основная цель покупки в Дубае?**"
+            Language.EN: f"Thank you! 🙏\n\nNow let me understand what you're looking for.\n\n🎯 **What brings you to Dubai property market?**\n\n💬 Just type naturally:\n• \"I want investment property\"\n• \"Looking for a family home\"\n• \"Need residency visa\"\n\nOr send me a voice message! 🎤",
+            Language.FA: f"ممنون! 🙏\n\nحالا بذار بفهمم دنبال چی هستی.\n\n🎯 **چی باعث شده به بازار املاک دبی علاقه‌مند بشی؟**\n\n💬 راحت بنویس:\n• \"میخوام سرمایه‌گذاری کنم\"\n• \"دنبال خونه برای خانواده‌ام\"\n• \"برای اقامت میخوام\"\n\nیا برام ویس بفرست! 🎤",
+            Language.AR: f"شكراً! 🙏\n\nالآن دعني أفهم ما تبحث عنه.\n\n🎯 **ما الذي يجذبك إلى سوق العقارات في دبي؟**\n\n💬 اكتب بحرية:\n• \"أريد عقار استثماري\"\n• \"أبحث عن منزل للعائلة\"\n• \"أحتاج تأشيرة إقامة\"\n\nأو أرسل لي رسالة صوتية! 🎤",
+            Language.RU: f"Спасибо! 🙏\n\nТеперь давайте пойму, что вы ищете.\n\n🎯 **Что привело вас на рынок недвижимости Дубая?**\n\n💬 Пишите свободно:\n• \"Хочу инвестиционную недвижимость\"\n• \"Ищу семейный дом\"\n• \"Нужна виза резидента\"\n\nИли отправьте голосовое! 🎤"
         }
         
-        buttons = {
-            Language.EN: [
-                {"text": "💰 Investment (ROI)", "callback_data": "purpose_investment"},
-                {"text": "🏠 Living (Own Use)", "callback_data": "purpose_living"},
-                {"text": "🛂 Residency (Visa)", "callback_data": "purpose_residency"}
-            ],
-            Language.FA: [
-                {"text": "💰 سرمایه‌گذاری (بازگشت سرمایه)", "callback_data": "purpose_investment"},
-                {"text": "🏠 زندگی (استفاده شخصی)", "callback_data": "purpose_living"},
-                {"text": "🛂 اقامت (ویزا)", "callback_data": "purpose_residency"}
-            ],
-            Language.AR: [
-                {"text": "💰 استثمار (عائد)", "callback_data": "purpose_investment"},
-                {"text": "🏠 سكن (استخدام شخصي)", "callback_data": "purpose_living"},
-                {"text": "🛂 إقامة (تأشيرة)", "callback_data": "purpose_residency"}
-            ],
-            Language.RU: [
-                {"text": "💰 Инвестиция (ROI)", "callback_data": "purpose_investment"},
-                {"text": "🏠 Проживание (личное)", "callback_data": "purpose_living"},
-                {"text": "🛂 Резиденция (виза)", "callback_data": "purpose_residency"}
-            ]
-        }
-        
+        # NO BUTTONS - Conversational only!
+        buttons = []
         return BrainResponse(
             message=warmup_msg.get(lang, warmup_msg[Language.EN]),
             next_state=ConversationState.WARMUP,
             lead_updates=lead_updates,
-            buttons=buttons.get(lang, buttons[Language.EN])
+            buttons=[]  # NO BUTTONS - Pure conversation!
         )
     
     # ==================== NEW STATE MACHINE HANDLERS ====================
