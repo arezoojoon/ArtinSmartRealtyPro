@@ -2929,6 +2929,20 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             # 🧠 AI-POWERED: Extract intent from natural language
             intent_data = await self.extract_user_intent(message, lang, ["goal", "budget", "bedrooms", "property_type", "location"])
             
+            # FALLBACK: If AI fails, use keyword matching (handles voice transcription errors)
+            if not intent_data.get("goal"):
+                message_lower = message.lower()
+                goal_keywords = {
+                    "investment": ["سرمایه", "investment", "invest", "استثمار", "инвестиц", "roi", "return", "بازده", "سود", "درآمد"],
+                    "living": ["زندگی", "living", "live", "سكن", "жилье", "خونه", "منزل", "home", "family", "خانواده"],
+                    "residency": ["اقامت", "residency", "visa", "виза", "تأشيرة", "ویزا", "اقامة", "residenc", "golden visa"]
+                }
+                for goal_key, keywords in goal_keywords.items():
+                    if any(kw in message_lower for kw in keywords):
+                        intent_data["goal"] = goal_key
+                        logger.info(f"✅ Goal '{goal_key}' extracted via keyword fallback from: '{message}'")
+                        break
+            
             if intent_data.get("goal"):
                 goal = intent_data["goal"]
                 logger.info(f"✅ Goal extracted from text '{message}': {goal}")
@@ -2970,6 +2984,19 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 
                 lead_updates["conversation_data"] = conversation_data
                 lead_updates["filled_slots"] = filled_slots
+        
+        # If still no goal after AI + keyword fallback, guide user with examples
+        if not goal and message:
+            clarify_msg = {
+                Language.EN: f"I want to help you find the perfect property! 😊\n\nJust tell me in simple words - are you looking for:\n• **Investment** property (for rental income)?\n• **Home** to live in?\n• **Residency** visa?\n\nExample: \"I want investment property\" or \"Need residency visa\"",
+                Language.FA: f"میخوام بهترین ملک رو برات پیدا کنم! 😊\n\nفقط به زبون ساده بگو - دنبال کدوم هستی:\n• ملک **سرمایه‌گذاری** (برای درآمد اجاره)?\n• **خونه** برای زندگی?\n• **اقامت** (ویزا)?\n\nمثلاً: \"میخوام سرمایه‌گذاری کنم\" یا \"برای اقامت میخوام\""
+            }
+            return BrainResponse(
+                message=clarify_msg.get(lang, clarify_msg[Language.EN]),
+                next_state=ConversationState.WARMUP,
+                lead_updates=lead_updates,
+                buttons=[]  # NO BUTTONS - conversational only!
+            )
         
         # Process goal if we have it
         if goal:
@@ -3975,17 +4002,51 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             
             return schedule_response
         
-        # Get property recommendations
-        property_recs = await self.get_property_recommendations(lead)
+        # ✅ GET REAL PROPERTIES FROM DATABASE (not tenant_context!)
+        conversation_data = lead.conversation_data or {}
+        shown_property_ids = set(conversation_data.get("shown_property_ids", []))
+        offset = len(shown_property_ids)
+        
+        real_properties = await self.get_real_properties_from_db(lead, limit=3, offset=offset)
         
         # Get customer name for personalization
-        conversation_data = lead.conversation_data or {}
         customer_name = conversation_data.get("customer_name", "")
         name_prefix_en = f"{customer_name}, " if customer_name else ""
         name_prefix_fa = f"{customer_name} عزیز، " if customer_name else ""
         
-        # Parse recommendations (simplified)
-        if property_recs and "no properties" not in property_recs.lower():
+        # CRITICAL: If we have real properties, show them immediately!
+        if real_properties:
+            # Update shown property IDs
+            new_ids = [p['id'] for p in real_properties]
+            shown_property_ids.update(new_ids)
+            conversation_data["shown_property_ids"] = list(shown_property_ids)
+            lead_updates["conversation_data"] = conversation_data
+            
+            logger.info(f"✅ Showing {len(real_properties)} REAL properties from database for lead {lead.id}")
+            
+            # Set current_properties to trigger professional presenter with photos + ROI PDFs
+            self.current_properties = real_properties
+            
+            # Build property summary text for inline message
+            props_summary = ""
+            for i, prop in enumerate(real_properties, 1):
+                props_summary += f"\n{i}. **{prop['name']}**\n"
+                props_summary += f"   📍 {prop['location']} | 💰 AED {prop['price']:,}\n"
+                props_summary += f"   🛏️ {prop['bedrooms']}BR | 📐 {prop['area']:,}sqft\n"
+            
+            value_message = {
+                Language.EN: f"Perfect{f', {customer_name}' if customer_name else ''}! Here are the best properties matching your criteria:\n{props_summary}\n\n💰 **Your Investment Numbers:**\n\n✅ 7-10% Annual ROI (beats most global markets)\n✅ Rental income: 110% mortgage coverage\n✅ Zero tax on profits (100% yours!)\n✅ Capital appreciation: +8% yearly (Dubai is BOOMING!)\n✅ Golden Visa from 750K\n\n⚠️ **Market Alert:** Dubai prices up 12% this year. Every month delay = 1% appreciation loss!\n\n💡 Pro Move: 70% financing = rental income > mortgage. You profit from day 1!\n\n📍 **Want personalized help?**\nSend location/photo of area you like, I'll find exact matches!\n\n📋 Want to see full details & financing calculator?",
+                Language.FA: f"عالی{f'، {customer_name} عزیز' if customer_name else ''}! اینها بهترین املاکی هستند که با معیارهای شما مطابقت دارند:\n{props_summary}\n\n💰 **اعداد سرمایه‌گذاری شما:**\n\n✅ بازده سالانه ۷-۱۰٪ (از اکثر بازارهای جهانی بهتر!)\n✅ درآمد اجاره: ۱۱۰٪ پوشش وام\n✅ مالیات صفر روی سود (۱۰۰٪ مال خودته!)\n✅ رشد ارزش: سالانه +۸٪ (دبی داره سریع میره بالا!)\n✅ ویزای طلایی از ۷۵۰ هزار\n\n⚠️ **هشدار بازار:** قیمت‌های دبی امسال ۱۲٪ بالا رفته. هر ماه تأخیر یعنی از دست دادن ۱٪ رشد!\n\n💡 حرکت حرفه‌ای: ۷۰٪ فاینانس = درآمد اجاره بیشتر از قسط. از روز اول سود میکنی!\n\n📍 **می‌خوای کمک شخصی‌سازی شده؟**\nلوکیشنت یا عکسی از منطقه‌ای که دوست داری رو بفرست، من دقیقاً املاک اطراف رو پیدا می‌کنم!\n\n📋 می‌خواید جزئیات کامل و ماشین‌حساب تامین مالی رو ببینید?"
+            }
+            
+            # Return message with photos+PDFs handled by property_presenter
+            return BrainResponse(
+                message=value_message.get(lang, value_message[Language.EN]),
+                next_state=ConversationState.VALUE_PROPOSITION,
+                lead_updates=lead_updates | {"properties_sent": True},
+                buttons=[]  # NO BUTTONS - conversational responses only
+            )
+        else:
             # Build comprehensive message with financial education
             financial_benefits = {
                 Language.EN: "\n\n💰 **Investment Highlights:**\n\n✅ 7-10% Annual ROI - Beat inflation, grow wealth\n✅ Rental Yield covers mortgage - Passive income stream\n✅ Payment Plans Available - Start with 25% down\n✅ Tax-Free Income - No rental tax in UAE\n✅ Capital Appreciation - Dubai property values rising 5-8% yearly\n\n💡 Most investors use 70% financing and rental income pays it off!",
