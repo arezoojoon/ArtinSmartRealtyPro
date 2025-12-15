@@ -733,17 +733,8 @@ class TelegramBotHandler:
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
                 lead = fresh_lead  # Replace object reference
         
-        # ZOMBIE STATE PROTECTION: If in SLOT_FILLING with pending button selection, guide them
-        if lead.conversation_state == ConversationState.SLOT_FILLING and lead.pending_slot:
-            lang = lead.language or Language.EN
-            voice_redirect = {
-                Language.EN: "I'll process your voice in a moment! First, please select an option from the buttons above to continue.",
-                Language.FA: "یه لحظه بعد صداتو پردازش میکنم! اول لطفاً یکی از دکمه‌های بالا رو انتخاب کن.",
-                Language.AR: "سأعالج رسالتك الصوتية بعد قليل! أولاً، اختر خياراً من الأزرار أعلاه.",
-                Language.RU: "Обработаю голосовое чуть позже! Сначала выберите вариант из кнопок выше."
-            }
-            await update.message.reply_text(voice_redirect.get(lang, voice_redirect[Language.EN]))
-            return
+        # ✅ REMOVED ZOMBIE STATE PROTECTION - Voice should ALWAYS be processed!
+        # Voice transcript will be analyzed by brain's AI intent extraction
         
         # Check if voice exists
         if not update.message.voice:
