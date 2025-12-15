@@ -161,6 +161,12 @@ services:
     depends_on:
       - backend
       - waha
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
     networks:
       - artinrealty-network
 

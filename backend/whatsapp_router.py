@@ -38,6 +38,13 @@ DB_FILE.parent.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="WhatsApp Gateway Router", version="2.0.0")
 
 
+# --- Health Check Endpoint ---
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker"""
+    return {"status": "healthy", "service": "router"}
+
+
 # --- حافظه ماندگار (Persistent Storage) ---
 def load_map():
     """بارگذاری نقشه user → tenant از فایل"""
