@@ -209,6 +209,26 @@ class TenantCreate(BaseModel):
     whatsapp_verify_token: Optional[str] = Field(None, max_length=255)
 
 
+class TenantUpdate(BaseModel):
+    """Model for partial tenant updates - all fields optional"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    company_name: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[str] = Field(None, max_length=255)
+    telegram_bot_token: Optional[str] = Field(None, max_length=255)
+    logo_url: Optional[str] = Field(None, max_length=512)
+    primary_color: Optional[str] = Field(None, max_length=20)
+    admin_chat_id: Optional[str] = Field(None, max_length=100)
+    booking_url: Optional[str] = Field(None, max_length=512)
+    contact_phone: Optional[str] = Field(None, max_length=50)
+    whatsapp_link: Optional[str] = Field(None, max_length=512)
+    # WhatsApp Business API fields
+    whatsapp_phone_number_id: Optional[str] = Field(None, max_length=100)
+    whatsapp_access_token: Optional[str] = Field(None, max_length=512)
+    whatsapp_business_account_id: Optional[str] = Field(None, max_length=100)
+    whatsapp_verify_token: Optional[str] = Field(None, max_length=255)
+
+
 class TenantResponse(BaseModel):
     id: int
     name: str
@@ -1235,7 +1255,7 @@ async def get_tenant(
 @app.put("/api/tenants/{tenant_id}", response_model=TenantResponse)
 async def update_tenant(
     tenant_id: int, 
-    tenant_data: TenantCreate,
+    tenant_data: TenantUpdate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
