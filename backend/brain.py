@@ -1052,28 +1052,19 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                         next_state=expected_state  # Stay in same state
                     )
         
-        # 4. Unrecognized input - ENGAGING nudge with curiosity + consultation button
-        nudge_messages = {
-            Language.EN: "I see you're interested! 👀\n\nWant to know something? I just saw 2 amazing properties that came TODAY.\n\nLet's continue so I can show them! Select an option above 👆\n\nOr book a free consultation now!",
-            Language.FA: "می‌بینم علاقه‌مندی! 👀\n\nیه چیزی بگم؟ الان 2 تا ملک فوق‌العاده دیدم که امروز اومدن!\n\nبریم ادامه بدیم تا نشونت بدم! یه گزینه از بالا انتخاب کن 👆\n\nیا همین الان مشاوره رایگان رزرو کن!",
-            Language.AR: "أرى اهتمامك! 👀\n\nتعرف شيئاً؟ رأيت للتو عقارين رائعين طرحا اليوم.\n\nلنواصل حتى أريك! اختر خياراً أعلاه 👆\n\nأو احجز استشارة مجانية الآن!",
-            Language.RU: "Вижу, вам интересно! 👀\n\nЗнаете что? Только что увидел 2 потрясающих объекта, которые появились СЕГОДНЯ.\n\nДавайте продолжим, покажу! Выберите вариант выше 👆\n\nИли забронируйте бесплатную консультацию сейчас!"
+        # 4. Unrecognized input - CONVERSATIONAL response WITHOUT buttons
+        # User clearly wants to move forward - help them conversationally!
+        conversational_nudge = {
+            Language.EN: "I see you're ready to move forward! 🎯\n\nLet me help you find the perfect property. Could you tell me:\n\n• **Budget range?** (e.g., 500K-1M AED)\n• **Number of bedrooms?** (e.g., 2 or 3)\n• **Preferred area?** (e.g., Downtown, Marina)\n\nJust type naturally - I understand! 💬",
+            Language.FA: "می‌بینم آماده‌ای که جلو بریم! 🎯\n\nبذار کمکت کنم بهترین ملک رو پیدا کنیم. می‌تونی بگی:\n\n• **بودجه‌ت چقدره؟** (مثلاً 500 هزار تا 1 میلیون درهم)\n• **چند خوابه می‌خوای؟** (مثلاً 2 یا 3)\n• **کدوم منطقه؟** (مثلاً داون‌تاون، مارینا)\n\nراحت بنویس - من می‌فهمم! 💬",
+            Language.AR: "أرى أنك مستعد للمضي قدماً! 🎯\n\nدعني أساعدك في العثور على العقار المثالي. هل يمكنك إخباري:\n\n• **نطاق الميزانية؟** (مثلاً 500 ألف - 1 مليون درهم)\n• **عدد غرف النوم؟** (مثلاً 2 أو 3)\n• **المنطقة المفضلة؟** (مثلاً داون تاون، مارينا)\n\nاكتب بشكل طبيعي - أنا أفهم! 💬",
+            Language.RU: "Вижу, вы готовы двигаться дальше! 🎯\n\nПозвольте мне помочь найти идеальную недвижимость. Не могли бы вы сказать:\n\n• **Бюджет?** (например, 500K-1M AED)\n• **Количество спален?** (например, 2 или 3)\n• **Предпочтительный район?** (например, Даунтаун, Марина)\n\nПишите свободно - я понимаю! 💬"
         }
         
-        # Add consultation button
-        consultation_btn = {
-            Language.FA: "📅 رزرو مشاوره رایگان",
-            Language.EN: "📅 Book Free Consultation",
-            Language.AR: "📅 حجز استشارة مجانية",
-            Language.RU: "📅 Забронировать консультацию"
-        }
-        
-        buttons = self._get_buttons_for_state(expected_state, conversation_data, lang) or []
-        buttons.append({"text": consultation_btn.get(lang, consultation_btn[Language.EN]), "callback_data": "schedule_consultation"})
-        
+        # NO consultation button, NO "select option above" - pure conversational
         return BrainResponse(
-            message=nudge_messages.get(lang, nudge_messages[Language.EN]),
-            buttons=buttons,
+            message=conversational_nudge.get(lang, conversational_nudge[Language.EN]),
+            buttons=[],  # NO BUTTONS!
             next_state=expected_state
         )
     
@@ -2749,6 +2740,11 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         """
         COLLECTING_NAME Phase: Ask for customer's name and personalize all future messages
         This runs immediately after language selection
+        
+        CRITICAL INTELLIGENCE: Use AI to extract name + property info from first message
+        If user says "من اپارتمان دو خوابه میخوام اقامت بگیرم", extract:
+        - goal=residency, bedrooms=2, property_type=apartment
+        Then ask for name separately (don't save full sentence as name!)
         """
         # Validate name input
         if not message or len(message.strip()) < 2:
@@ -2765,18 +2761,97 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 buttons=[]
             )
         
-        # Save customer's name
-        customer_name = message.strip()
-        lead_updates["name"] = customer_name
-        
-        # Initialize conversation_data if needed
+        # Initialize conversation_data
         conversation_data = lead.conversation_data or {}
-        conversation_data["customer_name"] = customer_name
-        lead_updates["conversation_data"] = conversation_data
+        
+        # 🧠 SMART AI EXTRACTION: Check if message contains property info (not just name)
+        intent_data = await self.extract_user_intent(
+            message, 
+            lang, 
+            ["goal", "bedrooms", "property_type", "location", "budget"]
+        )
+        
+        # If message contains property info (goal, bedrooms, type, etc.)
+        if any(intent_data.values()):
+            logger.info(f"✅ Extracted property info from first message: {intent_data}")
+            
+            # Save all extracted data to conversation
+            for key, value in intent_data.items():
+                if value is not None:
+                    conversation_data[key] = value
+            
+            lead_updates["conversation_data"] = conversation_data
+            
+            # Build summary of what we understood
+            understood_items = []
+            if intent_data.get("goal"):
+                goal_text = {
+                    "residency": {"en": "dream home to live in", "fa": "خونه رویایی برای زندگی", "ar": "منزل أحلامك للعيش", "ru": "дом мечты для жизни"},
+                    "investment": {"en": "high-ROI investment", "fa": "سرمایه‌گذاری پرسود", "ar": "استثمار عالي العائد", "ru": "инвестиция с высокой доходностью"}
+                }.get(intent_data["goal"], {}).get(lang.value, intent_data["goal"])
+                understood_items.append(goal_text)
+            
+            if intent_data.get("bedrooms"):
+                bed_text = {Language.EN: f"{intent_data['bedrooms']} bedrooms", Language.FA: f"{intent_data['bedrooms']} خوابه", Language.AR: f"{intent_data['bedrooms']} غرف نوم", Language.RU: f"{intent_data['bedrooms']}-комнатная"}
+                understood_items.append(bed_text.get(lang, f"{intent_data['bedrooms']}BR"))
+            
+            if intent_data.get("property_type"):
+                type_text = {
+                    "apartment": {"en": "apartment", "fa": "آپارتمان", "ar": "شقة", "ru": "квартира"},
+                    "villa": {"en": "villa", "fa": "ویلا", "ar": "فيلا", "ru": "вилла"},
+                    "townhouse": {"en": "townhouse", "fa": "تاون‌هاوس", "ar": "تاون هاوس", "ru": "таунхаус"}
+                }.get(intent_data["property_type"], {}).get(lang.value, intent_data["property_type"])
+                understood_items.append(type_text)
+            
+            summary = " - ".join(understood_items) if understood_items else ""
+            
+            # Ask for name separately (DON'T save full sentence as name!)
+            ask_name_messages = {
+                Language.EN: f"Perfect! I understood: {summary} ✅\n\nWhat's your name? (just your name, please 😊)",
+                Language.FA: f"عالی! متوجه شدم: {summary} ✅\n\nاسمت چیه؟ (فقط اسمت، لطفاً 😊)",
+                Language.AR: f"ممتاز! فهمت: {summary} ✅\n\nما اسمك؟ (اسمك فقط من فضلك 😊)",
+                Language.RU: f"Отлично! Понял: {summary} ✅\n\nКак вас зовут? (только имя, пожалуйста 😊)"
+            }
+            
+            return BrainResponse(
+                message=ask_name_messages.get(lang, ask_name_messages[Language.EN]),
+                next_state=ConversationState.COLLECTING_NAME,
+                lead_updates=lead_updates,
+                buttons=[]
+            )
+        
+        # Simple name pattern (2-30 characters, letters/spaces only)
+        # This catches actual names like "Arezoo", "علی", "Mohammed"
+        import re
+        simple_name_pattern = r'^[A-Za-z\u0600-\u06FF\u0400-\u04FF\s]{2,30}$'
+        
+        if re.match(simple_name_pattern, message.strip()):
+            # This is a simple name! Save it
+            customer_name = message.strip()
+            lead_updates["name"] = customer_name
+            conversation_data["customer_name"] = customer_name
+            lead_updates["conversation_data"] = conversation_data
+        else:
+            # Message doesn't match name pattern - ask again
+            retry_msg = {
+                Language.EN: "Just your first name, please 😊 (e.g., 'John' or 'Sara')",
+                Language.FA: "فقط اسمت، لطفاً 😊 (مثلاً 'علی' یا 'سارا')",
+                Language.AR: "اسمك الأول فقط من فضلك 😊 (مثال: 'محمد' أو 'فاطمة')",
+                Language.RU: "Только ваше имя, пожалуйста 😊 (например, 'Иван' или 'Анна')"
+            }
+            return BrainResponse(
+                message=retry_msg.get(lang, retry_msg[Language.EN]),
+                next_state=ConversationState.COLLECTING_NAME,
+                lead_updates={},
+                buttons=[]
+            )
         
         # ✨ CRITICAL CHANGE: Request phone IMMEDIATELY after name with ROI Hook
         # This captures lead info EARLY (after only 2 steps instead of 6)
         # Expected improvement: 70% drop-off reduction, 150% increase in phone capture rate
+        
+        # Get name from lead_updates (if we just saved it)
+        customer_name = lead_updates.get("name", conversation_data.get("customer_name", "there"))
         
         roi_hook_messages = {
             Language.EN: f"Perfect, {customer_name}! 🎯\n\n**Quick question:** Are you looking for a **dream home** to live in, or a **high-ROI investment** property?\n\nJust type it naturally - I understand! 💬",
@@ -3714,11 +3789,16 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             affirmative_keywords = ["yes", "yeah", "yep", "sure", "ok", "okay", "بله", "آره", "باشه", "اوکی", "نعم", "حسناً", "да", "хорошо", "ладно"]
             negative_keywords = ["no", "nope", "نه", "نخیر", "لا", "нет"]
             
+            # NEW: Detect "show me properties" requests
+            show_properties_keywords = ["show", "present", "پرزنت", "نشون بده", "بهم نشون بده", "ببینم", "خب منتظر", "منتظرم", "أرني", "اعرض", "покажи", "показать"]
+            
             # Check if message is JUST affirmative/negative (not part of longer question)
             is_pure_affirmative = any(kw == message_lower for kw in affirmative_keywords) or any(kw in message_lower for kw in affirmative_keywords[:4])  # English variants
             is_pure_negative = any(kw == message_lower for kw in negative_keywords)
+            is_show_properties_request = any(kw in message_lower for kw in show_properties_keywords)
             
-            if is_pure_affirmative:
+            # CRITICAL: User explicitly wants to see properties!
+            if is_show_properties_request or is_pure_affirmative:
                 logger.info(f"✅ AFFIRMATIVE RESPONSE detected from lead {lead.id} - Triggering property presentation with photos+PDFs")
                 
                 # User wants to see properties with details - GET REAL PROPERTIES FROM DATABASE
