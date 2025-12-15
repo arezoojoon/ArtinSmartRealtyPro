@@ -129,7 +129,7 @@ services:
       - WHATSAPP_RESTART_ON_FAIL=True
       - WHATSAPP_AUTOREFRESH_QR=True
       - WAHA_PRINT_QR=True
-      - WHATSAPP_HOOK_URL=http://router:5000/webhook
+      - WHATSAPP_HOOK_URL=http://router:8001/webhook/waha
       - WAHA_API_KEY=${WAHA_API_KEY:-waha_artinsmartrealty_secure_key_2024}
     ports:
       - "3001:3000"  # Changed to 3001 to avoid conflict with frontend
@@ -141,27 +141,28 @@ services:
     # Health check disabled - WAHA CORE doesn't support API authentication
     # Service is considered healthy if container is running
 
-  # WhatsApp Router - Multi-Service Message Router (DISABLED - folder not found)
-  # router:
-  #   build:
-  #     context: ./whatsapp_router
-  #     dockerfile: Dockerfile
-  #   container_name: artinrealty-whatsapp-router
-  #   restart: unless-stopped
-  #   environment:
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - REALTY_WEBHOOK=http://backend:8000/api/webhook/waha
-  #     - TRAVEL_WEBHOOK=${TRAVEL_WEBHOOK:-http://travel.artinsmartagent.com/api/webhook/waha}
-  #     - EXPO_WEBHOOK=${EXPO_WEBHOOK:-http://expo.artinsmartagent.com/api/webhook/waha}
-  #     - CLINIC_WEBHOOK=${CLINIC_WEBHOOK:-http://clinic.artinsmartagent.com/api/webhook/waha}
-  #   ports:
-  #     - "5000:5000"
-  #   depends_on:
-  #     - redis
-  #     - waha
-  #   networks:
-  #     - artinrealty-network
+  # WhatsApp Gateway Router - Multi-Tenant Deep Link Router
+  router:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artinrealty-router
+    command: uvicorn whatsapp_router:app --host 0.0.0.0 --port 8001
+    restart: unless-stopped
+    environment:
+      - BACKEND_API_URL=http://backend:8000/api/webhook/waha
+      - WAHA_API_URL=http://waha:3000/api
+      - WAHA_API_KEY=${WAHA_API_KEY:-waha_artinsmartrealty_secure_key_2024}
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend:/app
+      - router_data:/app/data
+    depends_on:
+      - backend
+      - waha
+    networks:
+      - artinrealty-network
 
 volumes:
   postgres_data:
@@ -169,6 +170,7 @@ volumes:
   pdf_reports:
   waha_sessions:
   waha_cache:
+  router_data:  # Persistent user-tenant mappings
 
 networks:
   artinrealty-network:

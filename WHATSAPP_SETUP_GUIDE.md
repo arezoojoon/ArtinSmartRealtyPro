@@ -40,7 +40,13 @@ Status: SCAN_QR_CODE (waiting for phone scan)
 2. **ورود با credentials:**
    ```
    Username: admin
-   Password: 7a4889d3a0d24ed5a9fa7485d5939d8c
+   Password: 45a6df4393af42f5a8a02314bf508d7c
+   ```
+   
+   **⚠️ نکته مهم:** Password در هر بار restart تغییر می‌کند!  
+   برای دریافت password جدید از logs استفاده کنید:
+   ```bash
+   docker logs artinrealty-waha 2>&1 | grep "WAHA_DASHBOARD_PASSWORD" | tail -1
    ```
 
 3. **اسکن QR Code:**
@@ -58,9 +64,10 @@ $qr = ($response.Content | ConvertFrom-Json)
 Write-Host $qr.value
 
 # 2. نمایش QR در Swagger UI
-# باز کنید: http://localhost:3001/swagger
+# باز کنید: http://localhost:3001/api  (API docs - بدون password!)
+# یا Dashboard: http://localhost:3001
 # Username: admin
-# Password: 7a4889d3a0d24ed5a9fa7485d5939d8c
+# Password: (از logs دریافت کنید - هر بار تغییر می‌کند)
 
 # 3. اسکن QR با موبایل
 # WhatsApp > تنظیمات > دستگاه‌های متصل > افزودن دستگاه
@@ -292,11 +299,11 @@ await send_waha_document(
 - [x] API Key تنظیم شد
 - [x] Session "default" ایجاد شد
 - [x] Session شروع شد (status: SCAN_QR_CODE)
-- [ ] QR Code اسکن شود با موبایل
-- [ ] Session به WORKING تغییر کند
+- [x] QR Code اسکن شد با موبایل ✅
+- [x] Session به WORKING تغییر کرد ✅ (971557357753@c.us)
 - [ ] شماره تنانت در database ثبت شود
 - [ ] تست ارسال پیام انجام شود
-- [ ] Webhook تنظیم شود (اگر router فعال باشد)
+- [ ] تست دریافت پیام از ربات
 
 ---
 
@@ -338,8 +345,30 @@ curl http://localhost:3001/api/sessions -H "X-Api-Key: waha_artinsmartrealty_sec
    اگر می‌خواهید multi-vertical routing داشته باشید
 
 ---
-
 **🎉 WAHA آماده است - فقط QR Code اسکن کنید!**
 
-باز کنید: http://localhost:3001  
-Login: admin / 7a4889d3a0d24ed5a9fa7485d5939d8c
+### روش ساده: Dashboard
+باز کنید: http://72.62.91.26:3001  
+Login: admin / 45a6df4393af42f5a8a02314bf508d7c
+
+### روش بدون Password: API Docs
+باز کنید: http://72.62.91.26:3001/api  
+(نیاز به login ندارد - مستقیم QR Code می‌بینید)
+
+### دانلود QR به Desktop
+**⚠️ این دستور را روی کامپیوتر خودتان (Windows) اجرا کنید - نه روی سرور!**
+
+از **Windows PowerShell محلی** اجرا کنید:
+```powershell
+scp root@72.62.91.26:/tmp/qr.png $env:USERPROFILE\Desktop\whatsapp_qr.png
+Start-Process "$env:USERPROFILE\Desktop\whatsapp_qr.png"
+```
+
+**یا اگر دسترسی SSH ندارید:**
+```powershell
+# دانلود مستقیم QR از API
+Invoke-WebRequest -Uri "http://72.62.91.26:3001/api/default/auth/qr" `
+    -Headers @{"X-Api-Key"="waha_artinsmartrealty_secure_key_2024"} `
+    -OutFile "$env:USERPROFILE\Desktop\whatsapp_qr.png"
+Start-Process "$env:USERPROFILE\Desktop\whatsapp_qr.png"
+```

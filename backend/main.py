@@ -2020,10 +2020,17 @@ async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
 
 
 @app.post("/api/webhook/waha")
-async def waha_webhook(payload: dict, background_tasks: BackgroundTasks):
+async def waha_webhook(
+    request: Request,
+    payload: dict,
+    background_tasks: BackgroundTasks,
+    x_tenant_id: Optional[int] = Header(None, alias="X-Tenant-ID")
+):
     """
     Handle incoming Waha (self-hosted WhatsApp) webhook updates.
-    This receives messages from the WhatsApp Router.
+    This receives messages from the WhatsApp Router with tenant routing.
+    
+    Router adds X-Tenant-ID header to indicate which tenant this message belongs to.
     """
     async def process_waha_webhook():
         try:
@@ -2033,13 +2040,19 @@ async def waha_webhook(payload: dict, background_tasks: BackgroundTasks):
             from whatsapp_providers import WahaWhatsAppProvider
             from database import Tenant
             
-            # Get default tenant (or extract from router metadata)
+            # Get tenant from router header or fallback to default
             async with AsyncSessionLocal() as db:
-                result = await db.execute(select(Tenant).where(Tenant.id == 1))
+                if x_tenant_id:
+                    logger.info(f"🔀 Routed message for Tenant {x_tenant_id}")
+                    result = await db.execute(select(Tenant).where(Tenant.id == x_tenant_id))
+                else:
+                    logger.warning("⚠️ No X-Tenant-ID header - using default tenant")
+                    result = await db.execute(select(Tenant).where(Tenant.id == 1))
+                
                 tenant = result.scalar_one_or_none()
                 
                 if not tenant:
-                    logger.error("No tenant found for Waha webhook")
+                    logger.error(f"❌ Tenant {x_tenant_id} not found")
                     return
                 
                 provider = WahaWhatsAppProvider(tenant)
@@ -2057,7 +2070,7 @@ async def waha_webhook(payload: dict, background_tasks: BackgroundTasks):
                             "value": {
                                 "messages": [{
                                     "from": message_data["from_phone"],
-                                    "type": message_data["message_type"],
+                    "type": message_data["message_type"],
                                     "text": {"body": message_data.get("text", "")}
                                 }],
                                 "contacts": [{
