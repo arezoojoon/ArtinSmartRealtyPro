@@ -2212,70 +2212,58 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             لیستی از دیکشنری‌های property با تمام اطلاعات
         """
         async with async_session() as db:
+            # Start with base query - tenant_id + is_available only (LESS RESTRICTIVE)
             query = select(TenantProperty).where(
                 TenantProperty.tenant_id == lead.tenant_id,
                 TenantProperty.is_available == True
-            ).distinct()  # Prevent duplicates
+            ).distinct()
             
-            # Filter by transaction type
             conversation_data = lead.conversation_data or {}
-            transaction_type = conversation_data.get("transaction_type")
-            if transaction_type:
-                query = query.where(
-                    TenantProperty.transaction_type == transaction_type
-                )
             
-            # 🔥 ENHANCED: Filter by budget - use saved preferences first, then conversation_data
+            # SOFT FILTERS (optional - if missing, show all properties)
+            # These won't block results, just order them better
+            
+            # 1. Budget filter (OPTIONAL - wide range)
             budget_min = lead.budget_min or conversation_data.get("budget_min")
             budget_max = lead.budget_max or conversation_data.get("budget_max")
             
-            if budget_min:
-                query = query.where(TenantProperty.price >= budget_min)
             if budget_max:
-                query = query.where(TenantProperty.price <= budget_max)
+                # Allow 50% flexibility above budget
+                flexible_max = int(budget_max * 1.5)
+                query = query.where(TenantProperty.price <= flexible_max)
+                logger.info(f"💰 Budget filter (flexible): ≤ {flexible_max:,} AED")
             
-            logger.info(f"🔍 Budget filter: {budget_min} - {budget_max} AED")
-            
-            # 🔥 ENHANCED: Filter by property type - use saved preference first
-            property_type = lead.property_type or conversation_data.get("property_type")
-            if property_type:
-                # Convert enum to string if needed
-                if hasattr(property_type, 'value'):
-                    property_type = property_type.value
-                query = query.where(TenantProperty.property_type == property_type)
-                logger.info(f"🏠 Property type filter: {property_type}")
-            
-            # 🔥 ENHANCED: Filter by bedrooms - use saved preferences first
+            # 2. Bedrooms filter (OPTIONAL)
             bedrooms_min = lead.bedrooms_min or conversation_data.get("bedrooms_min")
-            bedrooms_max = lead.bedrooms_max or conversation_data.get("bedrooms_max")
-            
             if bedrooms_min:
-                query = query.where(TenantProperty.bedrooms >= bedrooms_min)
-            if bedrooms_max:
-                query = query.where(TenantProperty.bedrooms <= bedrooms_max)
+                # Allow ±1 bedroom flexibility
+                flex_min = max(0, bedrooms_min - 1)
+                flex_max = bedrooms_min + 2
+                query = query.where(
+                    TenantProperty.bedrooms >= flex_min,
+                    TenantProperty.bedrooms <= flex_max
+                )
+                logger.info(f"🛏️ Bedrooms filter (flexible): {flex_min}-{flex_max}BR")
             
-            if bedrooms_min or bedrooms_max:
-                logger.info(f"🛏️ Bedrooms filter: {bedrooms_min} - {bedrooms_max}")
+            # 3. Location preference (OPTIONAL - fuzzy match)
+            preferred_location = conversation_data.get("preferred_location")
+            if preferred_location:
+                # Fuzzy match - show properties in similar areas
+                query = query.where(
+                    TenantProperty.location.ilike(f"%{preferred_location}%")
+                )
+                logger.info(f"📍 Location filter: ~{preferred_location}")
             
-            # 🔥 ENHANCED: Filter by location - check if property location matches preferred_locations
-            if lead.preferred_locations and len(lead.preferred_locations) > 0:
-                # Use OR condition to match any preferred location
-                location_filters = []
-                for loc in lead.preferred_locations:
-                    location_filters.append(TenantProperty.location.ilike(f"%{loc}%"))
-                
-                if location_filters:
-                    query = query.where(or_(*location_filters))
-                    logger.info(f"📍 Location filter: {lead.preferred_locations}")
-            
-            # Order by featured > price
+            # ✅ ALWAYS ORDER BY: Featured first, then price
             query = query.order_by(
                 TenantProperty.is_featured.desc(),
                 TenantProperty.price.asc()
-            ).limit(limit).offset(offset)  # Add offset for pagination
+            ).limit(limit).offset(offset)
             
             result = await db.execute(query)
             properties = result.scalars().all()
+            
+            logger.info(f"✅ Found {len(properties)} properties for tenant {lead.tenant_id} (offset={offset})")
         
         # Convert to dict
         properties_list = []
