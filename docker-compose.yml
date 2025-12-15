@@ -132,15 +132,17 @@ services:
       - WHATSAPP_HOOK_URL=http://artinrealty-router:8001/webhook/waha
       - WHATSAPP_HOOK_EVENTS=message,message.any,session.status
       - WAHA_API_KEY=${WAHA_API_KEY:-waha_artinsmartrealty_secure_key_2024}
+      - WAHA_DASHBOARD_USERNAME=admin
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD:-ArtinSmartRealty2024!}
+      - WHATSAPP_SWAGGER_USERNAME=admin
+      - WHATSAPP_SWAGGER_PASSWORD=${WAHA_DASHBOARD_PASSWORD:-ArtinSmartRealty2024!}
     ports:
-      - "3001:3000"  # Changed to 3001 to avoid conflict with frontend
+      - "3001:3000"
     volumes:
       - waha_sessions:/app/.wwebjs_auth
       - waha_cache:/app/.wwebjs_cache
     networks:
       - artinrealty-network
-    # Health check disabled - WAHA CORE doesn't support API authentication
-    # Service is considered healthy if container is running
 
   # WhatsApp Gateway Router - Multi-Tenant Deep Link Router
   router:

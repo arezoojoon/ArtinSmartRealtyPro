@@ -270,6 +270,73 @@ async def unlock_user(phone: str):
         }
 
 
+
+@app.post("/router/generate-link")
+async def generate_deep_link(request: Request):
+    """
+    ساخت اتوماتیک دیپ لینک واتساپ با شماره مشتری
+    
+    Body:
+    {
+        "tenant_id": 2,
+        "customer_phone": "971501234567",
+        "gateway_number": "971557357753",
+        "message": "سلام" (optional)
+    }
+    
+    Returns:
+    {
+        "deep_link": "https://wa.me/971557357753?text=start_realty_2",
+        "qr_code_url": "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=...",
+        "short_link": "https://wa.me/971557357753?text=start_realty_2"
+    }
+    """
+    try:
+        data = await request.json()
+        tenant_id = data.get("tenant_id")
+        customer_phone = data.get("customer_phone", "").replace("+", "")
+        gateway_number = data.get("gateway_number", "971557357753").replace("+", "")
+        custom_message = data.get("message", "")
+        
+        if not tenant_id:
+            return {
+                "status": "error",
+                "detail": "tenant_id is required"
+            }
+        
+        start_command = f"start_realty_{tenant_id}"
+        if custom_message:
+            message_text = f"{start_command}\n{custom_message}"
+        else:
+            message_text = start_command
+        
+        import urllib.parse
+        encoded_message = urllib.parse.quote(message_text)
+        
+        deep_link = f"https://wa.me/{gateway_number}?text={encoded_message}"
+        
+        qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(deep_link)}"
+        
+        logger.info(f"📲 GENERATED LINK: Tenant {tenant_id} → Customer {customer_phone}")
+        
+        return {
+            "status": "success",
+            "tenant_id": tenant_id,
+            "customer_phone": customer_phone,
+            "gateway_number": gateway_number,
+            "deep_link": deep_link,
+            "qr_code_url": qr_code_url,
+            "short_link": deep_link,
+            "preview_text": message_text
+        }
+        
+    except Exception as e:
+        logger.exception(f"Error generating link: {e}")
+        return {
+            "status": "error",
+            "detail": str(e)
+        }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
