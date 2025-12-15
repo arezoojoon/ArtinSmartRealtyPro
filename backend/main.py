@@ -50,6 +50,7 @@ from roi_engine import generate_roi_pdf
 
 # Import API routers
 from api import broadcast, catalogs, lotteries, admin
+import whatsapp_router
 from auth_config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, PASSWORD_SALT
 
 
@@ -609,6 +610,7 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(broadcast.router)
 app.include_router(catalogs.router)
 app.include_router(lotteries.router)
+app.include_router(whatsapp_router.router)  # WhatsApp Gateway Router
 
 
 # ==================== HEALTH CHECK ====================
