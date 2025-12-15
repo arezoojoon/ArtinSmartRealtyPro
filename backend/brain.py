@@ -4139,9 +4139,9 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                     {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
                 ]
             )
-        else:
-            # No matching properties
-            no_match_message = {
+        
+        # Fallback: No matching properties (should never reach here due to earlier property query logic)
+        no_match_message = {
                 Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Would you like that?",
                 Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. می‌خواهید؟",
                 Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تريد ذلك؟",
