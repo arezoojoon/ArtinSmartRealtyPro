@@ -2135,7 +2135,64 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         return presentation
 
-    async def get_real_properties_from_db(self, lead: Lead, limit: int = 5) -> List[Dict]:
+    async def extract_user_intent(self, message: str, lang: Language, expected_entities: List[str]) -> Dict:
+        """
+        🧠 Use Gemini to extract structured data from free-form text
+        
+        Args:
+            message: User's raw text
+            lang: Language code
+            expected_entities: ["goal", "budget", "bedrooms", "location", "property_type"]
+        
+        Returns:
+            {
+                "goal": "investment" | "living" | "residency" | null,
+                "budget": 750000 | null,
+                "bedrooms": 2 | null,
+                "location": "Dubai Marina" | null,
+                "property_type": "apartment" | null
+            }
+        """
+        prompt = f"""
+Analyze this real estate inquiry and extract structured data.
+
+USER MESSAGE: "{message}"
+LANGUAGE: {lang}
+EXTRACT: {expected_entities}
+
+RULES:
+- goal: "investment" (if mentions ROI/profit/سرمایه/استثمار/инвестиц) | "living" (if mentions home/family/زندگی/سكن/жилье) | "residency" (if mentions visa/اقامت/إقامة/виза) | null
+- budget: Extract number in AED (convert K/M to actual numbers, e.g., 750k = 750000) | null if not mentioned
+- bedrooms: Extract number (1, 2, 3, etc.) | null
+- location: Extract area name (e.g., "Dubai Marina", "Downtown", "مارینا", "داون تاون") | null
+- property_type: "apartment" | "villa" | "penthouse" | "townhouse" | "commercial" | null
+
+RESPOND IN JSON ONLY (no markdown, no explanation):
+{{
+    "goal": "investment",
+    "budget": 750000,
+    "bedrooms": 2,
+    "location": "Dubai Marina",
+    "property_type": "apartment"
+}}
+"""
+        
+        try:
+            response = await self.gemini_client.generate_content(prompt)
+            response_text = response.text.strip()
+            # Remove markdown code blocks if present
+            response_text = response_text.replace("```json", "").replace("```", "").strip()
+            
+            import json
+            extracted = json.loads(response_text)
+            logger.info(f"✅ Intent extracted from '{message}': {extracted}")
+            return extracted
+        except Exception as e:
+            logger.error(f"❌ Intent extraction failed: {e}")
+            # Fallback: return empty dict
+            return {}
+    
+    async def get_real_properties_from_db(self, lead: Lead, limit: int = 5, offset: int = 0) -> List[Dict]:
         """
         🏠 گرفتن املاک واقعی از دیتابیس (نه فقط tenant_context)
         
@@ -2149,7 +2206,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         Args:
             lead: اطلاعات lead
             limit: تعداد املاک
-            offset: برای pagination - skip کردن املاک قبلی
+            offset: برای pagination - skip کردن املاک قبلی (default: 0)
         
         Returns:
             لیستی از دیکشنری‌های property با تمام اطلاعات
@@ -2734,8 +2791,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         # Expected improvement: 70% drop-off reduction, 150% increase in phone capture rate
         
         roi_hook_messages = {
-            Language.EN: f"Great to meet you, {customer_name}! 🎯\n\nI'm {self.agent_name}, your Dubai real estate specialist.\n\n🎁 **FREE ROI Analysis Just for You:**\n\nI'll send you an exclusive report with:\n✅ Precise ROI calculations for your budget\n✅ Rental income projections\n✅ Golden Visa eligibility analysis\n✅ Off-market deals (not public!)\n\n🔐 **Security Protocol:** To send this personalized report securely, I need to verify your contact.\n\n📱 Please share your phone number:\n\n**Format:** +971501234567\n(Click button below or type your number)",
-            Language.FA: f"{customer_name} عزیز، خوشحالم آشنا شدیم! 🎯\n\nمن {self.agent_name} هستم، متخصص املاک دبی.\n\n🎁 **گزارش رایگان ROI مخصوص شما:**\n\nبرات یه گزارش اختصاصی میفرستم با:\n✅ محاسبات دقیق ROI برای بودجه شما\n✅ پیش‌بینی درآمد اجاره\n✅ تحلیل واجد شرایط بودن گلدن ویزا\n✅ معاملات خارج از بازار (عمومی نیست!)\n\n🔐 **پروتکل امنیتی:** برای ارسال امن این گزارش شخصی، باید شماره تماستون رو تایید کنم.\n\n📱 لطفاً شماره تلفنتون رو به اشتراک بذارید:\n\n**فرمت:** 09123456789 یا +989123456789\n(دکمه پایین رو بزن یا شماره بنویس)",
+            Language.EN: f"Perfect, {customer_name}! 🎯\n\n**Quick question:** Are you looking for a **dream home** to live in, or a **high-ROI investment** property?\n\nJust type it naturally - I understand! 💬",
+            Language.FA: f"{customer_name} عزیز، عالی! 🎯\n\n**یه سوال سریع:** دنبال **خونه رویایی** برای زندگی هستی، یا دنبال یه ملک **سرمایه‌گذاری پرسود**؟\n\nراحت بنویس - من می‌فهمم! 💬",
             Language.AR: f"سعيد بلقائك يا {customer_name}! 🎯\n\nأنا {self.agent_name}، أخصائي العقارات في دبي.\n\n🎁 **تحليل ROI مجاني خاص بك:**\n\nسأرسل لك تقريراً حصرياً يحتوي على:\n✅ حسابات ROI دقيقة لميزانيتك\n✅ توقعات دخل الإيجار\n✅ تحليل الأهلية للتأشيرة الذهبية\n✅ صفقات خارج السوق (غير عامة!)\n\n🔐 **بروتوكول الأمان:** لإرسال هذا التقرير الشخصي بأمان، أحتاج للتحقق من جهة اتصالك.\n\n📱 يرجى مشاركة رقم هاتفك:\n\n**التنسيق:** +971501234567\n(اضغط الزر أدناه أو اكتب رقمك)",
             Language.RU: f"Приятно познакомиться, {customer_name}! 🎯\n\nЯ {self.agent_name}, ваш специалист по недвижимости в Дубае.\n\n🎁 **БЕСПЛАТНЫЙ ROI-анализ специально для вас:**\n\nОтправлю вам эксклюзивный отчёт с:\n✅ Точными расчётами ROI для вашего бюджета\n✅ Прогнозами арендного дохода\n✅ Анализом на Golden Visa\n✅ Закрытыми сделками (не публичны!)\n\n🔐 **Протокол безопасности:** Для безопасной отправки персонального отчёта нужно подтвердить контакт.\n\n📱 Пожалуйста, поделитесь номером телефона:\n\n**Формат:** +971501234567\n(Нажмите кнопку ниже или введите номер)"
         }
@@ -2793,10 +2850,41 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 buttons=[]
             )
         
-        # Save phone number
+        # Save phone number and mark as contacted
         lead_updates["phone"] = phone
+        lead_updates["status"] = LeadStatus.CONTACTED
         
-        # Move to WARMUP phase
+        # 🧠 SMART FLOW: Check if user already mentioned goal in conversation
+        conversation_data = lead.conversation_data or {}
+        existing_goal = conversation_data.get("goal")
+        
+        if existing_goal:
+            # User already stated their goal! Skip WARMUP, go straight to budget
+            logger.info(f"✅ Goal already known: {existing_goal}. Skipping WARMUP, asking budget.")
+            
+            # Ask budget with context based on goal
+            if existing_goal == "investment":
+                budget_question = {
+                    Language.EN: f"Perfect, {lead.name}! 💰\n\nTo find you the best cash-generating asset, what price range are you comfortable with?\n\n**Common ranges:**\n• 500K-1M: Studios/1BR (8-10% ROI)\n• 1M-2M: 2BR Apartments (7-9% ROI)\n• 2M-5M: Villas/Penthouses (6-8% ROI)\n\nJust type your budget (e.g., \"1.5 million\" or \"750k\")",
+                    Language.FA: f"{lead.name} عزیز، عالی! 💰\n\nبرای پیدا کردن بهترین دارایی درآمدزا، بودجه‌ات چقدره؟\n\n**رنج‌های معمول:**\n• ۵۰۰-۱ میلیون: استودیو/۱ خوابه (بازده ۸-۱۰٪)\n• ۱-۲ میلیون: آپارتمان ۲ خوابه (بازده ۷-۹٪)\n• ۲-۵ میلیون: ویلا/پنت‌هاوس (بازده ۶-۸٪)\n\nفقط بودجت رو بنویس (مثلاً \"۱.۵ میلیون\" یا \"۷۵۰ هزار\")"
+                }
+            else:
+                budget_question = {
+                    Language.EN: f"Great, {lead.name}! 🏠\n\nWhat's your budget range? Just type it (e.g., \"1 million\" or \"2.5M\")",
+                    Language.FA: f"{lead.name} عزیز، عالی! 🏠\n\nبودجه‌ات چقدره؟ فقط بنویس (مثلاً \"۱ میلیون\" یا \"۲.۵ میلیون\")"
+                }
+            
+            return BrainResponse(
+                message=budget_question.get(lang, budget_question[Language.EN]),
+                next_state=ConversationState.SLOT_FILLING,
+                lead_updates=lead_updates | {
+                    "conversation_data": conversation_data,
+                    "pending_slot": "budget"
+                },
+                buttons=[]
+            )
+        
+        # Goal not known yet - ask conversationally (NO buttons!)
         warmup_msg = {
             Language.EN: f"Thank you! 🙏\n\nNow, let's understand your goals better.\n\n🎯 **What's your primary objective for Dubai property?**",
             Language.FA: f"ممنون! 🙏\n\nحالا بذار اهداف شما رو بهتر بفهمم.\n\n🎯 **هدف اصلی شما از خرید ملک در دبی چیه؟**",
@@ -2846,12 +2934,66 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         lead_updates: Dict
     ) -> BrainResponse:
         """
-        WARMUP Phase: Quick rapport building (1-2 questions max)
-        Goal: Identify primary objective (Investment, Living, or Residency)
+        🎯 WARMUP Phase: Conversational Discovery (Wolf of Wall Street Mode)
+        Goal: Identify primary objective through NATURAL CONVERSATION
+        NO button dependency - AI extracts intent from text
         """
-        # If button clicked, capture goal and ask buy/rent BEFORE budget
+        user_name = lead.name or ("دوست من" if lang == Language.FA else "my friend" if lang == Language.EN else "صديقي" if lang == Language.AR else "друг мой")
+        
+        # Extract goal from button OR text message
+        goal = None
+        
         if callback_data and callback_data.startswith("purpose_"):
             goal = callback_data.replace("purpose_", "")  # purpose_investment, purpose_living, purpose_residency
+            logger.info(f"✅ Goal selected via button: {goal}")
+        elif message:
+            # 🧠 AI-POWERED: Extract intent from natural language
+            intent_data = await self.extract_user_intent(message, lang, ["goal", "budget", "bedrooms", "property_type", "location"])
+            
+            if intent_data.get("goal"):
+                goal = intent_data["goal"]
+                logger.info(f"✅ Goal extracted from text '{message}': {goal}")
+                
+                # BONUS: Also save any other extracted data
+                conversation_data = lead.conversation_data or {}
+                filled_slots = lead.filled_slots or {}
+                
+                if intent_data.get("budget"):
+                    budget_val = int(intent_data["budget"])
+                    conversation_data["budget_min"] = budget_val * 0.8
+                    conversation_data["budget_max"] = budget_val * 1.2
+                    filled_slots["budget"] = True
+                    lead_updates["budget_min"] = int(budget_val * 0.8)
+                    lead_updates["budget_max"] = int(budget_val * 1.2)
+                    logger.info(f"💰 Budget extracted: {budget_val}")
+                
+                if intent_data.get("bedrooms"):
+                    bedrooms = int(intent_data["bedrooms"])
+                    conversation_data["bedrooms_min"] = bedrooms
+                    conversation_data["bedrooms_max"] = bedrooms
+                    filled_slots["bedrooms"] = True
+                    lead_updates["bedrooms_min"] = bedrooms
+                    lead_updates["bedrooms_max"] = bedrooms
+                    logger.info(f"🛏️ Bedrooms extracted: {bedrooms}")
+                
+                if intent_data.get("location"):
+                    location = intent_data["location"]
+                    conversation_data["preferred_location"] = location
+                    filled_slots["location"] = True
+                    lead_updates["preferred_location"] = location
+                    logger.info(f"📍 Location extracted: {location}")
+                
+                if intent_data.get("property_type"):
+                    prop_type = intent_data["property_type"]
+                    conversation_data["property_type"] = prop_type
+                    filled_slots["property_type"] = True
+                    logger.info(f"🏠 Property type extracted: {prop_type}")
+                
+                lead_updates["conversation_data"] = conversation_data
+                lead_updates["filled_slots"] = filled_slots
+        
+        # Process goal if we have it
+        if goal:
             
             # Store in conversation_data
             conversation_data = lead.conversation_data or {}
@@ -2864,12 +3006,6 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             lead_updates["conversation_data"] = conversation_data
             lead_updates["filled_slots"] = filled_slots
             
-            # 🔥 NEW FLOW: Investment/Residency → Residential/Commercial → Budget 0-750k
-            #              Living → Rent/Buy
-            
-            # Get user's name for personalization
-            user_name = lead.name or ("دوست من" if lang == Language.FA else "my friend")
-            
             if goal == "investment" or goal == "residency":
                 # Auto-set transaction type to BUY (investment/residency = always buy)
                 conversation_data["transaction_type"] = "buy"
@@ -2879,12 +3015,12 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 lead_updates["transaction_type"] = TransactionType.BUY
                 lead_updates["purpose"] = Purpose.INVESTMENT if goal == "investment" else Purpose.RESIDENCY
                 
-                # Ask: Residential or Commercial? (with name + voice encouragement)
+                # 💰 WOLF OF WALL STREET MODE: Numbers-driven, high-energy sales pitch
                 category_question = {
-                    Language.EN: f"🚀 Great choice, {user_name}! Dubai is perfect for that!\n\n💰 **Investment Benefits:**\n• 7-10% Annual ROI\n• Zero Tax on Profits\n• Golden Visa eligible\n\n🎤 **Tip:** You can send me a voice message anytime!\n\n📸 Also, do you have a photo of your dream property? Share it!\n\nNow, Residential or Commercial?",
-                    Language.FA: f"🚀 انتخاب عالی {user_name}! دبی برای این کامل مناسبه!\n\n💰 **مزایای سرمایه‌گذاری:**\n• بازده سالانه ۷-۱۰٪\n• مالیات صفر روی سود\n• ویزای طلایی\n\n🎤 **نکته:** هر وقت خواستی میتونی ویس بفرستی!\n\n📸 راستی، عکس ملک رویاییت رو داری؟ بفرست!\n\nحالا، مسکونی یا تجاری؟",
-                    Language.AR: f"🚀 اختيار ممتاز {user_name}! دبي مثالية لذلك!\n\n💰 **فوائد الاستثمار:**\n• عائد سنوي 7-10%\n• صفر ضريبة على الأرباح\n• تأشيرة ذهبية\n\n🎤 **نصيحة:** يمكنك إرسال رسالة صوتية في أي وقت!\n\n📸 أيضًا، هل لديك صورة لعقارك المثالي؟ شاركها!\n\nالآن، سكني أم تجاري؟",
-                    Language.RU: f"🚀 Отличный выбор, {user_name}! Дубай идеален для этого!\n\n💰 **Преимущества инвестиций:**\n• Годовой ROI 7-10%\n• Ноль налогов на прибыль\n• Золотая виза\n\n🎤 **Совет:** Вы можете отправить голосовое сообщение!\n\n📸 Есть фото вашей мечты? Поделитесь!\n\nТеперь, жилая или коммерческая?"
+                    Language.EN: f"**Smart move, {user_name}!** 🚀\n\nDubai is CRUSHING it right now:\n\n💰 **Your Investment Returns:**\n• 7-10% net ROI (beats most global markets)\n• Zero tax on rental income (100% yours!)\n• Golden Visa from 750K AED\n• Capital appreciation: +8% annually\n\n💡 **Pro Tip:** Most investors use 70% financing - rental income covers the mortgage!\n\n🎤 Send voice messages anytime | 📸 Share property photos you like\n\n**Quick question:** Residential (apartments/villas) or Commercial (offices/shops)?",
+                    Language.FA: f"**{user_name} عزیز، انتخاب هوشمندانه!** 🚀\n\nدبی الان داره رکورد میزنه:\n\n💰 **بازده سرمایه‌گذاری شما:**\n• بازده خالص ۷-۱۰٪ (از اکثر بازارهای جهانی بهتره)\n• مالیات صفر روی اجاره (۱۰۰٪ مال خودته!)\n• ویزای طلایی از ۷۵۰ هزار درهم\n• رشد ارزش: سالانه +۸٪\n\n💡 **نکته حرفه‌ای:** اکثر سرمایه‌گذارها ۷۰٪ فاینانس میگیرن - درآمد اجاره وام رو پرداخت میکنه!\n\n🎤 هر وقت خواستی ویس بفرست | 📸 عکس ملک مورد علاقت رو share کن\n\n**یه سوال سریع:** مسکونی (آپارتمان/ویلا) یا تجاری (دفتر/مغازه)؟",
+                    Language.AR: f"**{user_name}، اختيار ذكي!** 🚀\n\nدبي تحطم الأرقام الآن:\n\n💰 **عوائد استثمارك:**\n• عائد صافٍ 7-10% (يتفوق على معظم الأسواق العالمية)\n• صفر ضريبة على دخل الإيجار (100% لك!)\n• تأشيرة ذهبية من 750 ألف درهم\n• ارتفاع قيمة رأس المال: +8% سنوياً\n\n💡 **نصيحة احترافية:** معظم المستثمرين يستخدمون تمويل 70% - دخل الإيجار يغطي الرهن!\n\n🎤 أرسل رسائل صوتية في أي وقت | 📸 شارك صور العقارات التي تعجبك\n\n**سؤال سريع:** سكني (شقق/فلل) أم تجاري (مكاتب/محلات)؟",
+                    Language.RU: f"**{user_name}, умный выбор!** 🚀\n\nДубай сейчас бьёт рекорды:\n\n💰 **Ваша доходность:**\n• 7-10% чистой ROI (превосходит большинство мировых рынков)\n• Ноль налогов на арендный доход (100% ваши!)\n• Золотая виза от 750K AED\n• Рост стоимости: +8% в год\n\n💡 **Профи совет:** Большинство инвесторов берут 70% финансирования - аренда покрывает ипотеку!\n\n🎤 Отправляйте голосовые в любое время | 📸 Делитесь фото объектов\n\n**Быстрый вопрос:** Жилая (квартиры/виллы) или коммерческая (офисы/магазины)?"
                 }
                 
                 category_buttons = [
@@ -2909,12 +3045,12 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             if goal == "living":
                 lead_updates["purpose"] = Purpose.LIVING
                 
-                # Ask: Buy or Rent? (with name + voice encouragement)
+                # 🏠 EMOTIONAL APPEAL: Sell the dream lifestyle, not just property
                 transaction_question = {
-                    Language.EN: f"Perfect {user_name}! Living in Dubai is amazing!\n\n🎤 **Tip:** Send me a voice message anytime!\n\n📸 Got a photo of your dream home? Share it!\n\nAre you looking to **Buy** or **Rent**?",
-                    Language.FA: f"عالی {user_name}! زندگی تو دبی فوق‌العادست!\n\n🎤 **نکته:** هر وقت خواستی ویس بفرست!\n\n📸 عکس خونه رویاییت رو داری؟ بفرست!\n\nمی‌خوای **بخری** یا **اجاره** کنی؟",
-                    Language.AR: f"ممتاز {user_name}! العيش في دبي رائع!\n\n🎤 **نصيحة:** أرسل رسالة صوتية في أي وقت!\n\n📸 عندك صورة منزل أحلامك؟ شاركها!\n\nهل تريد **الشراء** أم **الإيجار**؟",
-                    Language.RU: f"Отлично {user_name}! Жить в Дубае потрясающе!\n\n🎤 **Совет:** Отправь голосовое сообщение!\n\n📸 Есть фото дома мечты? Поделись!\n\nВы хотите **купить** или **арендовать**?"
+                    Language.EN: f"**Perfect choice, {user_name}!** 🏠\n\nDubai lifestyle is incredible:\n• Year-round sunshine ☀️\n• World-class schools & hospitals\n• Zero crime, ultra-safe for families\n• Beach, desert, city - all in one place\n\n🎤 Voice messages welcome | 📸 Share your dream home pics\n\n**Quick question:** Looking to **buy your forever home** or **rent first** to explore?",
+                    Language.FA: f"**{user_name} عزیز، انتخاب عالی!** 🏠\n\nزندگی تو دبی فوق‌العادست:\n• آفتاب ۳۶۵ روز سال ☀️\n• مدارس و بیمارستان‌های جهانی\n• جرم صفر، امنیت کامل برای خانواده\n• ساحل، بیابون، شهر - همه تو یه جا\n\n🎤 ویس بفرست | 📸 عکس خونه رویاییت رو share کن\n\n**یه سوال سریع:** می‌خوای **خونه دائمی بخری** یا **اول اجاره** کنی تا شناخت پیدا کنی؟",
+                    Language.AR: f"**{user_name}، اختيار مثالي!** 🏠\n\nنمط الحياة في دبي مذهل:\n• شمس طوال العام ☀️\n• مدارس ومستشفيات عالمية\n• صفر جريمة، آمان تام للعائلات\n• شاطئ، صحراء، مدينة - كل شيء في مكان واحد\n\n🎤 رسائل صوتية مرحب بها | 📸 شارك صور منزل أحلامك\n\n**سؤال سريع:** تبحث عن **شراء منزل دائم** أم **إيجار أولاً** للاستكشاف؟",
+                    Language.RU: f"**{user_name}, отличный выбор!** 🏠\n\nЖизнь в Дубае невероятна:\n• Круглогодичное солнце ☀️\n• Мировые школы и больницы\n• Ноль преступности, безопасно для семей\n• Пляж, пустыня, город - всё в одном месте\n\n🎤 Голосовые приветствуются | 📸 Делитесь фото дома мечты\n\n**Быстрый вопрос:** Хотите **купить навсегда** или **сначала арендовать**?"
                 }
                 
                 # Show Buy/Rent buttons
@@ -2972,16 +3108,17 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             
             # Check if message is a goal selection in text form (for voice users)
             goal_keywords = {
-                "investment": ["سرمایه‌گذاری", "investment", "invest", "استثمار", "инвестиция"],
-                "living": ["زندگی", "living", "live", "سكن", "жилье"],
-                "residency": ["اقامت", "residency", "visa", "visa", "виза", "تأشيرة"]
+                "investment": ["سرمایه‌گذاری", "investment", "invest", "استثمار", "инвестиция", "سرمایه", "roi", "return", "بازده"],
+                "living": ["زندگی", "living", "live", "سكن", "жилье", "خونه", "منزل", "home"],
+                "residency": ["اقامت", "residency", "visa", "виза", "تأشيرة", "ویزا", "اقامة"]
             }
             
             message_lower = message.lower()
             for goal, keywords in goal_keywords.items():
                 if any(kw.lower() in message_lower or kw in message for kw in keywords):
                     # User specified goal in text - treat as button click
-                    return await self._handle_warmup(lang, None, f"goal_{goal}", lead, lead_updates)
+                    logger.info(f"✅ Goal '{goal}' extracted from text: '{message}'")
+                    return await self._handle_warmup(lang, None, f"purpose_{goal}", lead, lead_updates)
             
             # Otherwise: This is an FAQ or off-topic question in WARMUP
             # Answer it, but DON'T append the goal question again
@@ -3236,9 +3373,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 property_recs = await self.get_property_recommendations(lead)
                 
                 # Build comprehensive message with financial education + location/photo prompt
+                # 🔥 FOMO + URGENCY MESSAGING (Wolf of Wall Street Style)
                 financial_benefits = {
-                    Language.EN: "\n\n💰 **Investment Highlights:**\n\n✅ 7-10% Annual ROI - Beat inflation, grow wealth\n✅ Rental Yield covers mortgage - Passive income stream\n✅ Payment Plans Available - Start with 25% down\n✅ Tax-Free Income - No rental tax in UAE\n✅ Capital Appreciation - Dubai property values rising 5-8% yearly\n\n💡 Most investors use 70% financing and rental income pays it off!",
-                    Language.FA: "\n\n💰 **نکات کلیدی سرمایه‌گذاری:**\n\n✅ بازگشت سالانه 7-10% - تورم رو شکست بده، ثروت بساز\n✅ درآمد اجاره وام رو میپوشونه - درآمد منفعل\n✅ طرح‌های پرداخت - با 25% پیش‌پرداخت شروع کن\n✅ درآمد بدون مالیات - مالیات اجاره در امارات صفره\n✅ رشد ارزش - املاک دبی سالانه 5-8% گرون میشن\n\n💡 اکثر سرمایه‌گذارها 70% وام میگیرن و اجاره همه‌شو پرداخت میکنه!",
+                    Language.EN: "\n\n💰 **Your Investment Numbers:**\n\n✅ 7-10% Annual ROI (beats S&P 500!)\n✅ Rental income: 110% mortgage coverage\n✅ Zero tax on profits (100% yours!)\n✅ Capital gains: +8% yearly (Dubai rising fast!)\n✅ Golden Visa eligible from 750K\n\n⚠️ **MARKET ALERT:** Dubai prices up 12% this year. Every month you wait costs you 1% appreciation!\n\n💡 Pro move: 70% financing = rental income exceeds payment. You make money from day 1!",
+                    Language.FA: "\n\n💰 **اعداد سرمایه‌گذاری شما:**\n\n✅ بازده سالانه ۷-۱۰٪ (از S&P 500 بهتر!)\n✅ درآمد اجاره: ۱۱۰٪ پوشش وام\n✅ مالیات صفر روی سود (۱۰۰٪ مال خودته!)\n✅ رشد ارزش: سالانه +۸٪ (دبی داره سریع میره بالا!)\n✅ ویزای طلایی از ۷۵۰ هزار\n\n⚠️ **هشدار بازار:** قیمت‌های دبی امسال ۱۲٪ بالا رفته. هر ماه تأخیر یعنی از دست دادن ۱٪ رشد!\n\n💡 حرکت حرفه‌ای: ۷۰٪ فاینانس = درآمد اجاره بیشتر از قسط. از روز اول سود میکنی!",
                     Language.AR: "\n\n💰 **أبرز نقاط الاستثمار:**\n\n✅ عائد سنوي 7-10% - تغلب على التضخم، اِبنِ ثروة\n✅ دخل الإيجار يغطي الرهن - دخل سلبي\n✅ خطط دفع متاحة - ابدأ بدفعة أولى 25%\n✅ دخل معفى من الضرائب - لا ضريبة إيجار في الإمارات\n✅ ارتفاع قيمة رأس المال - قيمة عقارات دبي ترتفع 5-8% سنوياً\n\n💡 معظم المستثمرين يستخدمون تمويل 70% ودخل الإيجار يسدده!",
                     Language.RU: "\n\n💰 **Инвестиционные преимущества:**\n\n✅ 7-10% годовых ROI - Обгоняем инфляцию, растим капитал\n✅ Арендный доход покрывает ипотеку - Пассивный доход\n✅ Планы рассрочки - Начните с 25% первого взноса\n✅ Доход без налогов - Нет налога на аренду в ОАЭ\n✅ Рост стоимости - Недвижимость в Дубае растёт 5-8% в год\n\n💡 Большинство инвесторов берут 70% финансирования, а аренда его окупает!"
                 }
