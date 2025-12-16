@@ -106,22 +106,22 @@ async def send_property_with_roi(
             
             buttons_row1 = [
                 InlineKeyboardButton(
-                    {"en": "📅 Book Viewing", "fa": "رزرو بازدید", "ar": "حجز معاينة", "ru": "Записаться"}[lang[:2]], 
+                    {"en": "🎯 I Want This!", "fa": "🎯 این رو میخوام!", "ar": "🎯 أريد هذا!", "ru": "🎯 Хочу это!"}[lang[:2]], 
                     callback_data=f"book_viewing_{property_data.get('id')}"
                 ),
                 InlineKeyboardButton(
-                    {"en": "📊 Full ROI PDF", "fa": "گزارش ROI کامل", "ar": "تقرير ROI", "ru": "Полный ROI"}[lang[:2]], 
+                    {"en": "📊 Investment Analysis", "fa": "📊 تحلیل سرمایه‌گذاری", "ar": "📊 تحليل الاستثمار", "ru": "📊 Анализ инвестиций"}[lang[:2]], 
                     callback_data=f"get_roi_{property_data.get('id')}"
                 )
             ]
             
             buttons_row2 = [
                 InlineKeyboardButton(
-                    {"en": "💬 Ask Questions", "fa": "پرسش سوال", "ar": "طرح أسئلة", "ru": "Задать вопрос"}[lang[:2]], 
-                    callback_data=f"ask_about_{property_data.get('id')}"
+                    {"en": "📞 Talk to Expert Now", "fa": "📞 مشاوره آنلاین فوری", "ar": "📞 تحدث إلى خبير الآن", "ru": "📞 Консультация"}[lang[:2]], 
+                    callback_data="schedule_consultation"
                 ),
                 InlineKeyboardButton(
-                    {"en": "➡️ Next Property", "fa": "ملک بعدی", "ar": "العقار التالي", "ru": "Следующий"}[lang[:2]], 
+                    {"en": "➡️ Show Me More", "fa": "➡️ بیشتر نشون بده", "ar": "➡️ أرني المزيد", "ru": "➡️ Покажи ещё"}[lang[:2]], 
                     callback_data="next_property"
                 )
             ]

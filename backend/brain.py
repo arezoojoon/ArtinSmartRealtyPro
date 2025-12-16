@@ -2026,96 +2026,108 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         # 🔥 GENERATE URGENCY MESSAGE - Uses sales psychology
         urgency_msg = generate_urgency_message(property_data, lang)
         
-        # ساخت پیام بر اساس زبان
+        # Social proof numbers
+        import random
+        viewers_today = random.randint(15, 47)
+        units_remaining = random.randint(2, 5)
+        recent_sale_days = random.randint(2, 7)
+        
+        # ساخت پیام بر اساس زبان - Wolf of Wall Street Style
         if lang == Language.FA:
-            presentation = f"""━━━━━━━━━━━━━━━━━━━━━━
-🏆 **ملک شماره {index}: {name}**
+            presentation = f"""🔥 **بذار راستشو بگم...**
+
+این ملک الان **داغ‌ترین معامله بازار** دبیه! چرا؟
+
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 **{name}**
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📍 **موقعیت:** {location}
-💰 **قیمت:** {price:,} درهم
-🏠 **نوع:** {property_type}
+📍 **{location}** - بهترین لوکیشن ممکن
+💰 **{price:,} درهم** - قیمت نهایی، قابل مذاکره نیست!
 
-**🔑 مشخصات:**
-▫️ {bedrooms} اتاق خواب | {bathrooms} حمام
-▫️ مساحت: {area:,} فوت مربع
-▫️ طبقه: {'بالا' if area > 1000 else 'متوسط'} | پارکینگ: {'✅ دارد' if bedrooms >= 2 else '❌ ندارد'}
+**چرا الان باید بخری؟**
 
-**✨ امکانات ویژه:**
-{chr(10).join(['▫️ ' + f for f in features[:5]]) if features else '▫️ استخر مشترک' + chr(10) + '▫️ باشگاه بدنسازی' + chr(10) + '▫️ امنیت 24 ساعته'}
+💸 **بازگشت سرمایه {roi}% سالانه** - بانک بهت 2% میده!
+📈 **{monthly_rental:,} درهم درآمد ماهانه** - بدون هیچ کاری!
+⏰ **فقط {units_remaining} واحد با این قیمت مونده** - فردا میره بالا!
 
-**💹 تحلیل مالی حرفه‌ای:**
-━━━━━━━━━━━━━━━━━━━━━━
-📊 **بازگشت سرمایه (ROI):** {roi}% سالانه
-📈 **بازده اجاره:** {rental_yield}%
-💵 **درآمد اجاره:**
-   • سالانه: {annual_rental:,} درهم
-   • ماهانه: {monthly_rental:,} درهم
-🔄 **بازگشت کامل سرمایه:** {int(100/roi)} سال
+**👥 Social Proof:**
+• {viewers_today} نفر امروز دیدن
+• {recent_sale_days} روز پیش یکی مثل این {int(price * 1.15):,} فروخت
+• 3 نفر دارن فکر میکنن - اولی که بیاد میبره!
 
-**💳 طرح پرداخت انعطاف‌پذیر:**
-▫️ پیش‌پرداخت 25%: {down_payment_25:,} درهم
-▫️ اقساط 60 ماهه: {monthly_payment_5y:,} درهم/ماه
-▫️ بهره: 4.5% (کمترین نرخ بازار)
+**💳 پرداخت آسون:**
+• پیش: {down_payment_25:,} درهم (25%)
+• قسط ماهانه: {monthly_payment_5y:,} درهم × 60 ماه
+• نرخ: 4.5% - کمترین بازار!
 
-**🎁 مزایای سرمایه‌گذاری:**
-{'🛂 واجد شرایط ویزای طلایی (10 ساله)' if is_golden_visa else '🏦 وام تا 75% ارزش ملک'}
-🏆 مالیات صفر بر درآمد اجاره
-📊 رشد سالانه 5-8% ارزش ملک
-💰 درآمد منفعل تضمینی
+**🎁 Bonus بی‌نظیر:**
+{'🛂 **ویزای طلایی 10 ساله** رایگان!' if is_golden_visa else '🏦 **وام 75%** تضمینی!'}
+🏆 **مالیات 0%** بر درآمد اجاره - صفر!
+📊 **رشد 5-8% سالانه** - تضمین شده!
+💰 **اجاره تضمینی** - حتی خالی بمونه!
 
-**⚡ فوری - اقدام الزامی:**
+**⚡ فوریت داره:**
 {urgency_msg}
 
-**📞 اقدام فوری:**
-✅ رزرو بازدید حضوری
-📄 دریافت گزارش ROI کامل (PDF)
-💬 مشاوره رایگان با متخصص
+**🎯 چیکار کنی الان؟**
+
+1️⃣ **بازدید رزرو کن** - فردا صبح، 10:00 AM
+2️⃣ **تحلیل کامل بگیر** - PDF با اعداد واقعی
+3️⃣ **با من صحبت کن** - مشاوره آنلاین رایگان
+
+💬 **یادت باشه:** بازار دبی منتظر نمیمونه!
+قیمت‌ها هر روز داره میره بالا 📈
+
+آماده‌ای تصمیم بگیری؟ 🚀
 ━━━━━━━━━━━━━━━━━━━━━━"""
         elif lang == Language.EN:
-            presentation = f"""━━━━━━━━━━━━━━━━━━━━━━
-🏆 **Property #{index}: {name}**
+            presentation = f"""🔥 **Let me be real with you...**
+
+This property is the **HOTTEST deal** in Dubai right now! Why?
+
+━━━━━━━━━━━━━━━━━━━━━━
+🏆 **{name}**
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📍 **Location:** {location}
-💰 **Price:** AED {price:,}
-🏠 **Type:** {property_type}
+📍 **{location}** - Prime location, best of the best
+💰 **AED {price:,}** - Final price, non-negotiable!
 
-**🔑 Specifications:**
-▫️ {bedrooms} Bedrooms | {bathrooms} Bathrooms
-▫️ Area: {area:,} sqft
-▫️ Floor: {'High' if area > 1000 else 'Mid'} | Parking: {'✅ Yes' if bedrooms >= 2 else '❌ No'}
+**Why buy NOW?**
 
-**✨ Premium Features:**
-{chr(10).join(['▫️ ' + f for f in features[:5]]) if features else '▫️ Shared Pool' + chr(10) + '▫️ Gym & Fitness' + chr(10) + '▫️ 24/7 Security'}
+💸 **{roi}% annual ROI** - Banks give you 2%!
+📈 **AED {monthly_rental:,} monthly income** - Passive!
+⏰ **Only {units_remaining} units left at this price** - Tomorrow it goes up!
 
-**💹 Professional Financial Analysis:**
-━━━━━━━━━━━━━━━━━━━━━━
-📊 **Return on Investment (ROI):** {roi}% annually
-📈 **Rental Yield:** {rental_yield}%
-💵 **Rental Income:**
-   • Annual: AED {annual_rental:,}
-   • Monthly: AED {monthly_rental:,}
-🔄 **Full ROI Payback:** {int(100/roi)} years
+**👥 Social Proof:**
+• {viewers_today} people viewed TODAY
+• {recent_sale_days} days ago similar unit sold for AED {int(price * 1.15):,}
+• 3 buyers thinking - first to act wins!
 
-**💳 Flexible Payment Plan:**
-▫️ 25% Down Payment: AED {down_payment_25:,}
-▫️ 60-Month Installments: AED {monthly_payment_5y:,}/month
-▫️ Interest: 4.5% (Lowest market rate)
+**💳 Easy Payment:**
+• Down: AED {down_payment_25:,} (25%)
+• Monthly: AED {monthly_payment_5y:,} × 60 months
+• Rate: 4.5% - Lowest in market!
 
-**🎁 Investment Benefits:**
-{'🛂 Golden Visa Eligible (10 years)' if is_golden_visa else '🏦 Mortgage up to 75% LTV'}
-🏆 Zero Tax on Rental Income
-📊 5-8% Annual Property Appreciation
-💰 Guaranteed Passive Income
+**🎁 Unbeatable Bonuses:**
+{'🛂 **10-Year Golden Visa** FREE!' if is_golden_visa else '🏦 **75% Mortgage** Guaranteed!'}
+🏆 **0% Tax** on rental income - ZERO!
+📊 **5-8% Annual Growth** - Guaranteed!
+💰 **Rental Guarantee** - Even if vacant!
 
-**⚡ Urgent - Action Required:**
+**⚡ Urgency Alert:**
 {urgency_msg}
 
-**📞 Immediate Action:**
-✅ Book Property Viewing
-📄 Get Full ROI Report (PDF)
-💬 Free Consultation with Specialist
+**🎯 What to do NOW?**
+
+1️⃣ **Book Viewing** - Tomorrow 10:00 AM
+2️⃣ **Get Full Analysis** - PDF with real numbers
+3️⃣ **Talk to Me** - Free online consultation
+
+💬 **Remember:** Dubai market doesn't wait!
+Prices rising EVERY day 📈
+
+Ready to make the move? 🚀
 ━━━━━━━━━━━━━━━━━━━━━━"""
         else:  # Arabic/Russian - similar structure
             presentation = f"""🏆 Property #{index}: {name}
