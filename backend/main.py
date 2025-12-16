@@ -1087,6 +1087,29 @@ async def list_all_tenants(
     ]
 
 
+@app.get("/api/admin/tenants/{tenant_id}/credentials")
+async def get_tenant_credentials(
+    tenant_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get tenant login credentials (email only - password cannot be retrieved). Super admin only."""
+    await verify_super_admin(credentials)
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    return {
+        "id": tenant.id,
+        "name": tenant.name,
+        "email": tenant.email,
+        "note": "Password is hashed and cannot be retrieved. Use /reset-password endpoint to set a new password."
+    }
+
+
 @app.post("/api/admin/tenants")
 async def create_tenant(
     data: dict,
@@ -1179,6 +1202,36 @@ async def delete_tenant(
     await db.commit()
     
     return {"message": "Tenant deleted successfully"}
+
+
+@app.post("/api/admin/tenants/{tenant_id}/reset-password")
+async def reset_tenant_password(
+    tenant_id: int,
+    new_password: str = Body(..., embed=True, min_length=8),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Reset tenant password. Super admin only."""
+    await verify_super_admin(credentials)
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Hash new password
+    tenant.password_hash = hash_password(new_password)
+    tenant.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    logger.info(f"🔐 Password reset for tenant {tenant.name} (ID: {tenant_id})")
+    
+    return {
+        "message": "Password reset successfully",
+        "tenant_email": tenant.email,
+        "new_password": new_password  # Return it so admin can share with tenant
+    }
 
 
 @app.get("/api/auth/me")
