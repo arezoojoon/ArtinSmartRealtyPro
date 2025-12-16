@@ -2182,7 +2182,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
 """
         
         try:
-            response = await self.gemini_client.generate_content(prompt)
+            response = await self.model.generate_content(prompt)
             response_text = response.text.strip()
             # Remove markdown code blocks if present
             response_text = response_text.replace("```json", "").replace("```", "").strip()
@@ -3309,19 +3309,26 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         has_property_type = filled_slots.get("property_type") or conversation_data.get("property_type") or lead.property_type
         
         if has_location and has_budget and has_property_type:
-            logger.info(f"🎯 SWITCH ACTIVATED: Location+Budget+PropertyType present → PRESENTING PROPERTIES NOW")
+            logger.info(f"🎯 SWITCH ACTIVATED: Location+Budget+PropertyType present → FETCHING AND PRESENTING PROPERTIES NOW")
             
             # Save all data before switching
             lead_updates["conversation_data"] = conversation_data
             lead_updates["filled_slots"] = filled_slots
             lead_updates["conversation_state"] = ConversationState.VALUE_PROPOSITION
             
-            # Switch to VALUE_PROPOSITION - empty message triggers property_presenter
-            return BrainResponse(
-                message="",  # Empty - property_presenter handles presentation
-                next_state=ConversationState.VALUE_PROPOSITION,
-                lead_updates=lead_updates,
-                buttons=[]
+            # Apply updates to lead object so _handle_value_proposition has fresh data
+            for key, value in lead_updates.items():
+                if hasattr(lead, key):
+                    setattr(lead, key, value)
+            
+            # Call VALUE_PROPOSITION handler to fetch and present properties
+            logger.info(f"🔄 Calling _handle_value_proposition to present properties for lead {lead.id}")
+            return await self._handle_value_proposition(
+                lang=lang,
+                message=None,  # No message - triggered by button
+                callback_data=callback_data,
+                lead=lead,
+                lead_updates=lead_updates
             )
         
         # 🎯 FLOATING LOGIC: Check if user went off-script (text/voice instead of button)
