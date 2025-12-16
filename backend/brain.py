@@ -2220,7 +2220,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             query = select(TenantProperty).where(
                 TenantProperty.tenant_id == lead.tenant_id,
                 TenantProperty.is_available == True
-            ).distinct()
+            )
             
             conversation_data = lead.conversation_data or {}
             
