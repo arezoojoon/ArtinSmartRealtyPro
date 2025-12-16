@@ -3248,14 +3248,81 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         lead_updates: Dict
     ) -> BrainResponse:
         """
-        SLOT_FILLING Phase: Intelligent qualification with FAQ tolerance.
-        Required slots: budget, property_type, transaction_type
-        KEY FEATURE: If user asks FAQ mid-filling, answer it and return to slot collection.
-        VOICE SUPPORT: Extracts entities from voice_entities field (populated by process_voice).
-        FLOATING LOGIC: Handles off-script input gracefully.
+        SLOT_FILLING Phase: AGGRESSIVE CLOSER MODE.
+        
+        SYSTEM INSTRUCTION IMPLEMENTATION:
+        1. Extract Location/Budget/PropertyType from EVERY input using AI
+        2. SWITCH TO PRESENTATION when all 3 present - NO MORE QUESTIONS
+        3. One question max per missing slot - direct and professional
+        4. Handle lazy/messy user input intelligently
+        
+        This bot is a SALESPERSON, not a chatbot.
         """
         conversation_data = lead.conversation_data or {}
         filled_slots = lead.filled_slots or {}
+        
+        # === CRITICAL: EXTRACT FROM CURRENT MESSAGE FIRST (LAZY USER PROTOCOL) ===
+        if message and not callback_data:
+            logger.info(f"🔍 CLOSER MODE: Analyzing message for Location/Budget/PropertyType extraction: '{message[:100]}'")
+            
+            # Use AI to extract ALL preferences from messy user input
+            intent_data = await self.extract_user_intent(
+                message, 
+                lang, 
+                ["budget", "property_type", "location", "bedrooms", "transaction_type"]
+            )
+            
+            # Update conversation_data with extracted info
+            if intent_data.get("budget"):
+                budget_val = int(intent_data["budget"])
+                conversation_data["budget_min"] = int(budget_val * 0.8)
+                conversation_data["budget_max"] = int(budget_val * 1.2)
+                filled_slots["budget"] = True
+                lead_updates["budget_min"] = conversation_data["budget_min"]
+                lead_updates["budget_max"] = conversation_data["budget_max"]
+                logger.info(f"💰 Extracted budget: {budget_val}")
+            
+            if intent_data.get("location"):
+                conversation_data["location"] = intent_data["location"]
+                lead_updates["preferred_location"] = intent_data["location"]
+                logger.info(f"📍 Extracted location: {intent_data['location']}")
+            
+            if intent_data.get("property_type"):
+                pt_str = str(intent_data["property_type"]).lower()
+                conversation_data["property_type"] = pt_str
+                filled_slots["property_type"] = True
+                
+                # Map to enum
+                pt_map = {"apartment": PropertyType.APARTMENT, "villa": PropertyType.VILLA, "penthouse": PropertyType.PENTHOUSE, "townhouse": PropertyType.TOWNHOUSE, "commercial": PropertyType.COMMERCIAL, "land": PropertyType.LAND}
+                if pt_str in pt_map:
+                    lead_updates["property_type"] = pt_map[pt_str]
+                logger.info(f"🏠 Extracted property_type: {pt_str}")
+            
+            if intent_data.get("bedrooms"):
+                conversation_data["bedrooms_min"] = intent_data["bedrooms"]
+                conversation_data["bedrooms_max"] = intent_data["bedrooms"]
+                logger.info(f"🛏️ Extracted bedrooms: {intent_data['bedrooms']}")
+        
+        # === THE SWITCH: CHECK IF READY TO PRESENT (Location+Budget+PropertyType) ===
+        has_location = conversation_data.get("location") or lead.preferred_location
+        has_budget = filled_slots.get("budget") or conversation_data.get("budget_min") or lead.budget_min
+        has_property_type = filled_slots.get("property_type") or conversation_data.get("property_type") or lead.property_type
+        
+        if has_location and has_budget and has_property_type:
+            logger.info(f"🎯 SWITCH ACTIVATED: Location+Budget+PropertyType present → PRESENTING PROPERTIES NOW")
+            
+            # Save all data before switching
+            lead_updates["conversation_data"] = conversation_data
+            lead_updates["filled_slots"] = filled_slots
+            lead_updates["conversation_state"] = ConversationState.VALUE_PROPOSITION
+            
+            # Switch to VALUE_PROPOSITION - empty message triggers property_presenter
+            return BrainResponse(
+                message="",  # Empty - property_presenter handles presentation
+                next_state=ConversationState.VALUE_PROPOSITION,
+                lead_updates=lead_updates,
+                buttons=[]
+            )
         
         # 🎯 FLOATING LOGIC: Check if user went off-script (text/voice instead of button)
         if message and not callback_data:
@@ -3844,12 +3911,17 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             is_pure_negative = any(kw == message_lower for kw in negative_keywords)
             is_show_properties_request = any(kw in message_lower for kw in show_properties_keywords)
             
-            # CRITICAL: User explicitly wants to see properties - BUT ONLY IF WE HAVE BUDGET!
+            # CRITICAL: User explicitly wants to see properties - CHECK COMPLETENESS
             conversation_data = lead.conversation_data or {}
             filled_slots = lead.filled_slots or {}
-            has_budget = filled_slots.get("budget") or conversation_data.get("budget_min") or lead.budget_min
             
-            if is_show_properties_request and has_budget:
+            # THE SWITCH CHECK: Need Location+Budget+PropertyType
+            has_location = conversation_data.get("location") or lead.preferred_location
+            has_budget = filled_slots.get("budget") or conversation_data.get("budget_min") or lead.budget_min
+            has_property_type = filled_slots.get("property_type") or conversation_data.get("property_type") or lead.property_type
+            
+            # If user asks for properties and we have ALL requirements → SHOW
+            if is_show_properties_request and has_location and has_budget and has_property_type:
                 logger.info(f"✅ AFFIRMATIVE RESPONSE detected from lead {lead.id} - Triggering property presentation with photos+PDFs")
                 
                 # User wants to see properties with details - GET REAL PROPERTIES FROM DATABASE
@@ -3935,15 +4007,39 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                             ]
                         )
             
-            # User wants properties but NO BUDGET YET - extract from message first
+            # User wants properties but MISSING requirements - tell them what's needed (DIRECT)
             elif is_show_properties_request or is_pure_affirmative:
-                logger.info(f"💬 User wants properties but missing budget - extracting from message: '{message}'")
+                logger.info(f"📋 User wants properties - checking completeness: Location={has_location}, Budget={has_budget}, Type={has_property_type}")
                 
-                # Try to extract budget/preferences from current message using AI
+                # Tell user what's missing in ONE direct question
+                missing_parts = []
+                if not has_budget:
+                    missing_parts.append("budget")
+                if not has_location:
+                    missing_parts.append("location")
+                if not has_property_type:
+                    missing_parts.append("property type")
+                
+                # CLOSER MODE: Ask for missing info directly, no flowery language
+                missing_msg = {
+                    Language.EN: f"To show you properties, I need: {', '.join(missing_parts)}. Quick - budget in AED?",
+                    Language.FA: f"برای نمایش املاک نیاز دارم: {', '.join(missing_parts)}. سریع - بودجه به درهم؟",
+                    Language.AR: f"لعرض العقارات، أحتاج: {', '.join(missing_parts)}. سريعاً - الميزانية بالدرهم؟",
+                    Language.RU: f"Чтобы показать объекты, нужно: {', '.join(missing_parts)}. Быстро - бюджет в AED?"
+                }
+                
+                return BrainResponse(
+                    message=missing_msg.get(lang, missing_msg[Language.EN]),
+                    next_state=ConversationState.SLOT_FILLING,  # Back to slot filling
+                    lead_updates=lead_updates,
+                    buttons=[]  # No buttons - let them type
+                )
+                
+            # Fallback: Try to extract from message anyway
+            else:
                 intent_data = await self.extract_user_intent(message, lang, ["budget", "bedrooms", "property_type", "location"])
                 
                 if intent_data.get("budget"):
-                    # Found budget in message! Save and show properties
                     budget_val = int(intent_data["budget"])
                     conversation_data["budget_min"] = int(budget_val * 0.8)
                     conversation_data["budget_max"] = int(budget_val * 1.2)
