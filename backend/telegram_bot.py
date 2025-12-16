@@ -219,7 +219,7 @@ class TelegramBotHandler:
                     await update.callback_query.edit_message_text(
                         text=response.message,
                         reply_markup=reply_markup if not response.request_contact else None,
-                        parse_mode='HTML'
+                        parse_mode='Markdown'
                     )
                     # Send contact request as new message if needed
                     if response.request_contact:
@@ -242,14 +242,14 @@ class TelegramBotHandler:
                         chat_id=chat_id,
                         text=response.message,
                         reply_markup=reply_markup,
-                        parse_mode='HTML'
+                        parse_mode='Markdown'
                     )
             else:
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=response.message,
                     reply_markup=reply_markup,
-                    parse_mode='HTML'
+                    parse_mode='Markdown'
                 )
         elif response.message == "":
             logger.info(f"📭 Empty message - property_presenter will handle presentation")
@@ -770,11 +770,10 @@ class TelegramBotHandler:
             # CRITICAL: Process transcript as text message through brain for AI intent extraction
             if lead.conversation_state in [ConversationState.WARMUP, ConversationState.SLOT_FILLING]:
                 logger.info(f"🧠 Re-processing transcript through brain for AI intent extraction...")
-                response = await self.brain.generate_ai_response(
+                response = await self.brain.process_message(
                     lead=lead,
                     message=transcript,  # Pass transcript as text
-                    callback_data=None,
-                    platform="telegram"
+                    callback_data=None
                 )
                 logger.info(f"✅ Brain processed voice transcript - extracted intents")
             
