@@ -4068,7 +4068,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                         buttons=[]
                     )
             
-            elif is_pure_negative:
+            if is_pure_negative:
                 logger.info(f"❌ NEGATIVE RESPONSE detected from lead {lead.id} - Moving to engagement")
                 
                 engagement_msg = {
