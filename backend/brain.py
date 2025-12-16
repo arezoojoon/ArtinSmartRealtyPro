@@ -4291,7 +4291,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             for i, prop in enumerate(real_properties, 1):
                 props_summary += f"\n{i}. **{prop['name']}**\n"
                 props_summary += f"   📍 {prop['location']} | 💰 AED {prop['price']:,}\n"
-                props_summary += f"   🛏️ {prop['bedrooms']}BR | 📐 {prop['area']:,}sqft\n"
+                props_summary += f"   🛏️ {prop['bedrooms']}BR | 📐 {prop['area_sqft']:,}sqft\n"
             
             value_message = {
                 Language.EN: f"Perfect{f', {customer_name}' if customer_name else ''}! Here are the best properties matching your criteria:\n{props_summary}\n\n💰 **Your Investment Numbers:**\n\n✅ 7-10% Annual ROI (beats most global markets)\n✅ Rental income: 110% mortgage coverage\n✅ Zero tax on profits (100% yours!)\n✅ Capital appreciation: +8% yearly (Dubai is BOOMING!)\n✅ Golden Visa from 750K\n\n⚠️ **Market Alert:** Dubai prices up 12% this year. Every month delay = 1% appreciation loss!\n\n💡 Pro Move: 70% financing = rental income > mortgage. You profit from day 1!\n\n📍 **Want personalized help?**\nSend location/photo of area you like, I'll find exact matches!\n\n📋 Want to see full details & financing calculator?",
