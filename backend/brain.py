@@ -3346,6 +3346,22 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 lead_updates["budget_min"] = min_val
                 lead_updates["budget_max"] = max_val
                 
+                # CRITICAL: If we have goal + budget, SHOW PROPERTIES IMMEDIATELY!
+                if filled_slots.get("goal") or conversation_data.get("goal"):
+                    logger.info(f"✅ Budget button clicked + have goal - SHOWING PROPERTIES immediately!")
+                    
+                    # Save everything to database
+                    lead_updates["conversation_data"] = conversation_data
+                    lead_updates["filled_slots"] = filled_slots
+                    
+                    # Go to VALUE_PROPOSITION to show properties
+                    return BrainResponse(
+                        message="",  # Empty - will show properties in VALUE_PROPOSITION
+                        next_state=ConversationState.VALUE_PROPOSITION,
+                        lead_updates=lead_updates,
+                        buttons=[]
+                    )
+                
                 # Get property category to show appropriate property types
                 category_str = conversation_data.get("property_category")
                 
@@ -3683,7 +3699,23 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 lead_updates["budget_max"] = int(budget_extracted * 1.5)
                 logger.info(f"💰 Extracted budget from text: {budget_extracted}")
                 
-                # Move to next slot
+                # CRITICAL: If we have goal + budget, SHOW PROPERTIES IMMEDIATELY!
+                if filled_slots.get("goal") or conversation_data.get("goal"):
+                    logger.info(f"✅ Have budget + goal - SHOWING PROPERTIES immediately!")
+                    
+                    # Save everything to database
+                    lead_updates["conversation_data"] = conversation_data
+                    lead_updates["filled_slots"] = filled_slots
+                    
+                    # Go to VALUE_PROPOSITION to show properties
+                    return BrainResponse(
+                        message="",  # Empty - will show properties in VALUE_PROPOSITION
+                        next_state=ConversationState.VALUE_PROPOSITION,
+                        lead_updates=lead_updates,
+                        buttons=[]
+                    )
+                
+                # Otherwise ask for next slot
                 property_question = {
                     Language.EN: "Perfect! What type of property are you looking for?",
                     Language.FA: "عالی! چه نوع ملکی مد نظر دارید",
@@ -3805,15 +3837,19 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             negative_keywords = ["no", "nope", "نه", "نخیر", "لا", "нет"]
             
             # NEW: Detect "show me properties" requests
-            show_properties_keywords = ["show", "present", "پرزنت", "نشون بده", "بهم نشون بده", "ببینم", "خب منتظر", "منتظرم", "أرني", "اعرض", "покажи", "показать"]
+            show_properties_keywords = ["show", "present", "پرزنت", "نشون بده", "بهم نشون بده", "ببینم", "خب منتظر", "منتظرم", "ملک", "property", "properties", "املاک", "أرني", "اعرض", "عقار", "покажи", "показать", "недвижимость"]
             
             # Check if message is JUST affirmative/negative (not part of longer question)
             is_pure_affirmative = any(kw == message_lower for kw in affirmative_keywords) or any(kw in message_lower for kw in affirmative_keywords[:4])  # English variants
             is_pure_negative = any(kw == message_lower for kw in negative_keywords)
             is_show_properties_request = any(kw in message_lower for kw in show_properties_keywords)
             
-            # CRITICAL: User explicitly wants to see properties!
-            if is_show_properties_request or is_pure_affirmative:
+            # CRITICAL: User explicitly wants to see properties - BUT ONLY IF WE HAVE BUDGET!
+            conversation_data = lead.conversation_data or {}
+            filled_slots = lead.filled_slots or {}
+            has_budget = filled_slots.get("budget") or conversation_data.get("budget_min") or lead.budget_min
+            
+            if is_show_properties_request and has_budget:
                 logger.info(f"✅ AFFIRMATIVE RESPONSE detected from lead {lead.id} - Triggering property presentation with photos+PDFs")
                 
                 # User wants to see properties with details - GET REAL PROPERTIES FROM DATABASE
@@ -3898,6 +3934,43 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                                 {"text": "📅 " + self.get_text("btn_schedule_consultation", lang), "callback_data": "schedule_consultation"}
                             ]
                         )
+            
+            # User wants properties but NO BUDGET YET - extract from message first
+            elif is_show_properties_request or is_pure_affirmative:
+                logger.info(f"💬 User wants properties but missing budget - extracting from message: '{message}'")
+                
+                # Try to extract budget/preferences from current message using AI
+                intent_data = await self.extract_user_intent(message, lang, ["budget", "bedrooms", "property_type", "location"])
+                
+                if intent_data.get("budget"):
+                    # Found budget in message! Save and show properties
+                    budget_val = int(intent_data["budget"])
+                    conversation_data["budget_min"] = int(budget_val * 0.8)
+                    conversation_data["budget_max"] = int(budget_val * 1.2)
+                    filled_slots["budget"] = True
+                    lead_updates["budget_min"] = int(budget_val * 0.8)
+                    lead_updates["budget_max"] = int(budget_val * 1.2)
+                    lead_updates["conversation_data"] = conversation_data
+                    lead_updates["filled_slots"] = filled_slots
+                    logger.info(f"✅ Extracted budget {budget_val} from message - proceeding to show properties")
+                    
+                    # Now get properties with extracted budget (RECURSION - will hit first condition)
+                    # FALLTHROUGH to property search below
+                else:
+                    # No budget mentioned - ask directly instead of showing random properties
+                    need_budget_msg = {
+                        Language.EN: "I'd love to show you the best properties! 🏠\n\nTo find perfect matches, I need to know your budget range first.\n\n**Example:**\n• \"500,000 AED\"\n• \"1.5 million\"\n• \"750K\"\n\nWhat's your comfortable budget?",
+                        Language.FA: "خیلی دوست دارم بهترین املاک رو نشونت بدم! 🏠\n\nولی اول باید بودجه‌ت رو بدونم تا گزینه‌های مناسب پیدا کنم.\n\n**مثلاً:**\n• \"۵۰۰ هزار درهم\"\n• \"۱.۵ میلیون\"\n• \"۷۵۰K\"\n\nبودجه راحتت چقدره؟",
+                        Language.AR: "أود أن أريك أفضل العقارات! 🏠\n\nولكن أولاً أحتاج معرفة نطاق ميزانيتك لإيجاد التطابقات المثالية.\n\n**مثال:**\n• \"500,000 درهم\"\n• \"1.5 مليون\"\n• \"750K\"\n\nما ميزانيتك المريحة؟",
+                        Language.RU: "Хочу показать вам лучшие объекты! 🏠\n\nНо сначала мне нужно знать ваш бюджет, чтобы найти идеальные варианты.\n\n**Например:**\n• \"500,000 AED\"\n• \"1.5 миллиона\"\n• \"750K\"\n\nКакой у вас комфортный бюджет?"
+                    }
+                    
+                    return BrainResponse(
+                        message=need_budget_msg.get(lang, need_budget_msg[Language.EN]),
+                        next_state=ConversationState.SLOT_FILLING,
+                        lead_updates={"pending_slot": "budget"},
+                        buttons=[]
+                    )
             
             elif is_pure_negative:
                 logger.info(f"❌ NEGATIVE RESPONSE detected from lead {lead.id} - Moving to engagement")
