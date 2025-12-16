@@ -4142,20 +4142,20 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         
         # Fallback: No matching properties (should never reach here due to earlier property query logic)
         no_match_message = {
-                Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Would you like that?",
-                Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. می‌خواهید؟",
-                Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تريد ذلك؟",
-                Language.RU: "У меня нет точных совпадений прямо сейчас, но я могу отправить подробный анализ рынка. Хотите это?"
-            }
-            
-            return BrainResponse(
-                message=no_match_message.get(lang, no_match_message[Language.EN]),
-                next_state=ConversationState.VALUE_PROPOSITION,
-                buttons=[
-                    {"text": self.get_text("btn_yes", lang), "callback_data": "analysis_yes"},
-                    {"text": self.get_text("btn_no", lang), "callback_data": "analysis_no"}
-                ]
-            )
+            Language.EN: "I don't have exact matches right now, but I can send you a detailed market analysis. Would you like that?",
+            Language.FA: "الان ملک دقیقاً مچ ندارم، اما می‌تونم یک تحلیل بازار کامل بفرستم. می‌خواهید؟",
+            Language.AR: "ليس لدي تطابقات دقيقة الآن، لكن يمكنني إرسال تحليل مفصل للسوق. هل تريد ذلك؟",
+            Language.RU: "У меня нет точных совпадений прямо сейчас, но я могу отправить подробный анализ рынка. Хотите это?"
+        }
+        
+        return BrainResponse(
+            message=no_match_message.get(lang, no_match_message[Language.EN]),
+            next_state=ConversationState.VALUE_PROPOSITION,
+            buttons=[
+                {"text": self.get_text("btn_yes", lang), "callback_data": "analysis_yes"},
+                {"text": self.get_text("btn_no", lang), "callback_data": "analysis_no"}
+            ]
+        )
     
     async def _handle_hard_gate(
         self,
