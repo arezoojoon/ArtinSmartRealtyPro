@@ -1052,19 +1052,20 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                         next_state=expected_state  # Stay in same state
                     )
         
-        # 4. Unrecognized input - CONVERSATIONAL response WITHOUT buttons
-        # User clearly wants to move forward - help them conversationally!
-        conversational_nudge = {
-            Language.EN: "I see you're ready to move forward! 🎯\n\nLet me help you find the perfect property. Could you tell me:\n\n• **Budget range?** (e.g., 500K-1M AED)\n• **Number of bedrooms?** (e.g., 2 or 3)\n• **Preferred area?** (e.g., Downtown, Marina)\n\nJust type naturally - I understand! 💬",
-            Language.FA: "می‌بینم آماده‌ای که جلو بریم! 🎯\n\nبذار کمکت کنم بهترین ملک رو پیدا کنیم. می‌تونی بگی:\n\n• **بودجه‌ت چقدره؟** (مثلاً 500 هزار تا 1 میلیون درهم)\n• **چند خوابه می‌خوای؟** (مثلاً 2 یا 3)\n• **کدوم منطقه؟** (مثلاً داون‌تاون، مارینا)\n\nراحت بنویس - من می‌فهمم! 💬",
-            Language.AR: "أرى أنك مستعد للمضي قدماً! 🎯\n\nدعني أساعدك في العثور على العقار المثالي. هل يمكنك إخباري:\n\n• **نطاق الميزانية؟** (مثلاً 500 ألف - 1 مليون درهم)\n• **عدد غرف النوم؟** (مثلاً 2 أو 3)\n• **المنطقة المفضلة؟** (مثلاً داون تاون، مارينا)\n\nاكتب بشكل طبيعي - أنا أفهم! 💬",
-            Language.RU: "Вижу, вы готовы двигаться дальше! 🎯\n\nПозвольте мне помочь найти идеальную недвижимость. Не могли бы вы сказать:\n\n• **Бюджет?** (например, 500K-1M AED)\n• **Количество спален?** (например, 2 или 3)\n• **Предпочтительный район?** (например, Даунтаун, Марина)\n\nПишите свободно - я понимаю! 💬"
+        # 4. Unrecognized input - Engaging nudge with urgency + Show current step buttons
+        nudge_messages = {
+            Language.EN: "I see you're interested! 👀\n\n🔥 **Market Alert:** Dubai prices up 12% this year. Properties move FAST!\n\n💡 Let me show you today's best deals matching your needs.\n\nPick an option or type your preferences:",
+            Language.FA: "می‌بینم علاقه‌مندی! 👀\n\n🔥 **هشدار بازار:** قیمت‌ها امسال 12% بالا رفته. املاک خیلی سریع میرن!\n\n💡 بذار بهترین معاملات امروز رو که با نیازت مچ میشه نشونت بدم.\n\nیکی انتخاب کن یا ترجیحاتت رو بنویس:",
+            Language.AR: "أرى اهتمامك! 👀\n\n🔥 **تنبيه السوق:** أسعار دبي ارتفعت 12% هذا العام. العقارات تتحرك بسرعة!\n\n💡 دعني أريك أفضل الصفقات اليوم المطابقة لاحتياجاتك.\n\nاختر خياراً أو اكتب تفضيلاتك:",
+            Language.RU: "Вижу, вам интересно! 👀\n\n🔥 **Тревога рынка:** Цены в Дубае выросли на 12% в этом году. Объекты уходят БЫСТРО!\n\n💡 Позвольте показать лучшие сделки под ваши требования.\n\nВыберите опцию или напишите предпочтения:"
         }
         
-        # NO consultation button, NO "select option above" - pure conversational
+        # Show buttons for current expected state
+        buttons = self._get_buttons_for_state(expected_state, conversation_data, lang) or []
+        
         return BrainResponse(
-            message=conversational_nudge.get(lang, conversational_nudge[Language.EN]),
-            buttons=[],  # NO BUTTONS!
+            message=nudge_messages.get(lang, nudge_messages[Language.EN]),
+            buttons=buttons,
             next_state=expected_state
         )
     
@@ -2947,21 +2948,26 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 buttons=[]
             )
         
-        # Goal not known yet - ask conversationally (NO buttons!)
+        # Goal not known yet - ask with BUTTONS but also accept text!
         warmup_msg = {
-            Language.EN: f"Thank you! 🙏\n\nNow let me understand what you're looking for.\n\n🎯 **What brings you to Dubai property market?**\n\n💬 Just type naturally:\n• \"I want investment property\"\n• \"Looking for a family home\"\n• \"Need residency visa\"\n\nOr send me a voice message! 🎤",
-            Language.FA: f"ممنون! 🙏\n\nحالا بذار بفهمم دنبال چی هستی.\n\n🎯 **چی باعث شده به بازار املاک دبی علاقه‌مند بشی؟**\n\n💬 راحت بنویس:\n• \"میخوام سرمایه‌گذاری کنم\"\n• \"دنبال خونه برای خانواده‌ام\"\n• \"برای اقامت میخوام\"\n\nیا برام ویس بفرست! 🎤",
-            Language.AR: f"شكراً! 🙏\n\nالآن دعني أفهم ما تبحث عنه.\n\n🎯 **ما الذي يجذبك إلى سوق العقارات في دبي؟**\n\n💬 اكتب بحرية:\n• \"أريد عقار استثماري\"\n• \"أبحث عن منزل للعائلة\"\n• \"أحتاج تأشيرة إقامة\"\n\nأو أرسل لي رسالة صوتية! 🎤",
-            Language.RU: f"Спасибо! 🙏\n\nТеперь давайте пойму, что вы ищете.\n\n🎯 **Что привело вас на рынок недвижимости Дубая?**\n\n💬 Пишите свободно:\n• \"Хочу инвестиционную недвижимость\"\n• \"Ищу семейный дом\"\n• \"Нужна виза резидента\"\n\nИли отправьте голосовое! 🎤"
+            Language.EN: f"Thank you! 🙏\n\nNow let me understand what you're looking for.\n\n🎯 **What brings you to Dubai property market?**\n\n**Pick one or just tell me:**",
+            Language.FA: f"ممنون! 🙏\n\nحالا بذار بفهمم دنبال چی هستی.\n\n🎯 **چی باعث شده به بازار املاک دبی علاقه‌مند بشی؟**\n\n**یکی انتخاب کن یا خودت بگو:**",
+            Language.AR: f"شكراً! 🙏\n\nالآن دعني أفهم ما تبحث عنه.\n\n🎯 **ما الذي يجذبك إلى سوق العقارات في دبي؟**\n\n**اختر واحداً أو أخبرني:**",
+            Language.RU: f"Спасибо! 🙏\n\nТеперь давайте пойму, что вы ищете.\n\n🎯 **Что привело вас на рынок недвижимости Дубая?**\n\n**Выберите или напишите:**"
         }
         
-        # NO BUTTONS - Conversational only!
-        buttons = []
+        # Buttons for those who prefer clicking
+        goal_buttons = [
+            {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment" if lang == Language.EN else "استثمار" if lang == Language.AR else "Инвестиция"), "callback_data": "goal_investment"},
+            {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living" if lang == Language.EN else "سكن" if lang == Language.AR else "Жилье"), "callback_data": "goal_living"},
+            {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency" if lang == Language.EN else "إقامة" if lang == Language.AR else "Резидентство"), "callback_data": "goal_residency"}
+        ]
+        
         return BrainResponse(
             message=warmup_msg.get(lang, warmup_msg[Language.EN]),
             next_state=ConversationState.WARMUP,
             lead_updates=lead_updates,
-            buttons=[]  # NO BUTTONS - Pure conversation!
+            buttons=goal_buttons  # Show buttons but also accept text!
         )
     
     # ==================== NEW STATE MACHINE HANDLERS ====================
@@ -4108,11 +4114,17 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             }
             
             # Return message with photos+PDFs handled by property_presenter
+            # Add buttons for user actions
+            action_buttons = [
+                {"text": "📋 " + ("جزئیات کامل" if lang == Language.FA else "Full Details" if lang == Language.EN else "تفاصيل كاملة" if lang == Language.AR else "Полные детали"), "callback_data": "details_yes"},
+                {"text": "📞 " + ("تماس با مشاور" if lang == Language.FA else "Call Consultant" if lang == Language.EN else "اتصل بمستشار" if lang == Language.AR else "Связаться"), "callback_data": "schedule_consultation"}
+            ]
+            
             return BrainResponse(
                 message=value_message.get(lang, value_message[Language.EN]),
                 next_state=ConversationState.VALUE_PROPOSITION,
                 lead_updates=lead_updates | {"properties_sent": True},
-                buttons=[]  # NO BUTTONS - conversational responses only
+                buttons=action_buttons  # Show action buttons
             )
         else:
             # Build comprehensive message with financial education
