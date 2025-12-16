@@ -2641,9 +2641,6 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         elif current_state == ConversationState.WARMUP:
             return await self._handle_warmup(lang, message, callback_data, lead, lead_updates)
         
-        elif current_state == ConversationState.CAPTURE_CONTACT:
-            return await self._handle_capture_contact(lang, message, callback_data, lead, lead_updates)
-        
         elif current_state == ConversationState.SLOT_FILLING:
             return await self._handle_slot_filling(lang, message, callback_data, lead, lead_updates)
         
@@ -3003,8 +3000,8 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         # Extract goal from button OR text message
         goal = None
         
-        if callback_data and callback_data.startswith("purpose_"):
-            goal = callback_data.replace("purpose_", "")  # purpose_investment, purpose_living, purpose_residency
+        if callback_data and (callback_data.startswith("purpose_") or callback_data.startswith("goal_")):
+            goal = callback_data.replace("purpose_", "").replace("goal_", "")  # purpose_investment OR goal_investment
             logger.info(f"✅ Goal selected via button: {goal}")
         elif message:
             # 🧠 AI-POWERED: Extract intent from natural language
