@@ -1,204 +1,374 @@
-# 📱 راهنمای سریع WhatsApp Setup
+# 🟢 راهنمای راه‌اندازی WhatsApp (WAHA)
 
-## مرحله 1: Meta Business Account
-1. برو به https://business.facebook.com/
-2. ساخت Business Account (اگر نداری)
-3. Add Product → WhatsApp
+**تاریخ**: 15 دسامبر 2025  
+**وضعیت**: ✅ WAHA راه‌اندازی شد - آماده اسکن QR Code
 
-## مرحله 2: دریافت Credentials
-1. WhatsApp → Settings → API Setup
-2. کپی کن:
-   - **Phone Number ID**: `123456789012345`
-   - **Access Token**: `EAAB...` (از Test/Permanent token)
-   - **Business Account ID**: برای آینده
+---
 
-## مرحله 3: ثبت در Database
-روش 1 - از Dashboard:
-```
-1. Login به https://realty.artinsmartagent.com/super-admin
-2. Edit tenant
-3. وارد کردن:
-   - WhatsApp Phone Number ID
-   - WhatsApp Access Token
-   - WhatsApp Verify Token (generate شده توسط script)
+## 🔧 تغییرات انجام شده
+
+### 1. اضافه کردن API Key به `.env`
+```dotenv
+WAHA_API_KEY=waha_artinsmartrealty_secure_key_2024
 ```
 
-روش 2 - از Server:
+### 2. تنظیم docker-compose.yml
+```yaml
+waha:
+  environment:
+    - WAHA_API_KEY=${WAHA_API_KEY:-waha_artinsmartrealty_secure_key_2024}
+    # Health check disabled - WAHA CORE doesn't support API auth in /health
+```
+
+### 3. شروع Session WhatsApp
 ```bash
-# اتصال به database
-docker compose exec db psql -U artinrealty -d artinrealty_db
+# Session created and started successfully!
+Status: SCAN_QR_CODE (waiting for phone scan)
+```
 
-# Update tenant
+---
+
+## 📱 مراحل اتصال WhatsApp
+
+### روش 1: از طریق Dashboard (ساده‌تر)
+
+1. **باز کردن WAHA Dashboard:**
+   ```
+   http://localhost:3001
+   ```
+
+2. **ورود با credentials:**
+   ```
+   Username: admin
+   Password: 45a6df4393af42f5a8a02314bf508d7c
+   ```
+   
+   **⚠️ نکته مهم:** Password در هر بار restart تغییر می‌کند!  
+   برای دریافت password جدید از logs استفاده کنید:
+   ```bash
+   docker logs artinrealty-waha 2>&1 | grep "WAHA_DASHBOARD_PASSWORD" | tail -1
+   ```
+
+3. **اسکن QR Code:**
+   - به قسمت Sessions بروید
+   - Session "default" را انتخاب کنید
+   - QR Code را با WhatsApp موبایل اسکن کنید
+   - WhatsApp > Settings > Linked Devices > Link a Device
+
+### روش 2: از طریق API (پیشرفته)
+
+```powershell
+# 1. دریافت QR Code
+$response = Invoke-WebRequest -Uri "http://localhost:3001/api/default/auth/qr" -Headers @{"X-Api-Key"="waha_artinsmartrealty_secure_key_2024"}
+$qr = ($response.Content | ConvertFrom-Json)
+Write-Host $qr.value
+
+# 2. نمایش QR در Swagger UI
+# باز کنید: http://localhost:3001/api  (API docs - بدون password!)
+# یا Dashboard: http://localhost:3001
+# Username: admin
+# Password: (از logs دریافت کنید - هر بار تغییر می‌کند)
+
+# 3. اسکن QR با موبایل
+# WhatsApp > تنظیمات > دستگاه‌های متصل > افزودن دستگاه
+```
+
+---
+
+## ✅ تایید اتصال موفق
+
+### چک کردن وضعیت Session
+
+```powershell
+$response = Invoke-WebRequest -Uri "http://localhost:3001/api/sessions/default" -Headers @{"X-Api-Key"="waha_artinsmartrealty_secure_key_2024"}
+($response.Content | ConvertFrom-Json) | Select-Object status,me
+```
+
+**خروجی موفق:**
+```
+status : WORKING
+me     : @c.us {
+           "id": "971501234567@c.us",
+           "pushName": "نام شما"
+         }
+```
+
+---
+
+## 🧪 تست ارسال پیام
+
+### ارسال تست به خودتان
+
+```powershell
+$body = @{
+    chatId = "971501234567@c.us"  # شماره خودتان
+    text = "🤖 سلام! من ربات ArtinSmartRealty هستم - تست موفق!"
+} | ConvertTo-Json
+
+Invoke-WebRequest -Uri "http://localhost:3001/api/default/sendText" `
+    -Method POST `
+    -Headers @{
+        "X-Api-Key"="waha_artinsmartrealty_secure_key_2024"
+        "Content-Type"="application/json"
+    } `
+    -Body $body
+```
+
+---
+
+## 🔗 اتصال به Backend
+
+### تنظیمات Tenant
+
+در database، tenant باید `whatsapp_phone_number_id` داشته باشد:
+
+```sql
+-- چک کردن تنظیمات فعلی
+SELECT id, business_name, whatsapp_phone_number_id 
+FROM tenants 
+WHERE id = 2;
+
+-- اگر null بود، آپدیت کنید:
 UPDATE tenants 
-SET whatsapp_phone_number_id = '123456789012345',
-    whatsapp_access_token = 'YOUR_ACCESS_TOKEN',
-    whatsapp_verify_token = 'your-random-token-123'
-WHERE email = 'hr.damroodi@gmail.com';
+SET whatsapp_phone_number_id = '971501234567'  -- شماره متصل به WAHA
+WHERE id = 2;
 ```
 
-## مرحله 4: Webhook Configuration
-```bash
-# Run setup script
-cd /opt/ArtinSmartRealty
-python setup_whatsapp_webhook.py
-```
+### تست Webhook
 
-خروجی:
-```
-🌐 Enter your domain: realty.artinsmartagent.com
-
-📋 WhatsApp Webhook Setup Instructions:
-   Callback URL: https://realty.artinsmartagent.com/webhook/whatsapp
-   Verify Token: abc123xyz789...
-```
-
-## مرحله 5: ثبت Webhook در Meta
-1. برو به https://developers.facebook.com/apps
-2. انتخاب App → WhatsApp → Configuration
-3. Webhook → Edit:
-   ```
-   Callback URL: https://realty.artinsmartagent.com/webhook/whatsapp
-   Verify Token: [از output اسکریپت]
-   ```
-4. Verify and Save
-5. Subscribe to webhook fields:
-   - ✅ messages
-   - ✅ message_status
-
-## مرحله 6: Test
-```bash
-# ارسال پیام تست به WhatsApp Business number
-# مثال: +971 50 123 4567
-
-# بررسی logs
-docker compose logs -f backend | grep -i whatsapp
-```
-
-انتظار:
-```
-INFO - WhatsApp webhook verified
-INFO - Message sent to +971501234567
-```
-
----
-
-## 🔍 Troubleshooting
-
-### ❌ Webhook Verification Failed
-**علت:** Verify token در database ≠ verify token در Meta
-
-**حل:**
-```bash
-# چک کردن verify token در database
-docker compose exec db psql -U artinrealty -d artinrealty_db \
-  -c "SELECT email, whatsapp_verify_token FROM tenants WHERE whatsapp_phone_number_id IS NOT NULL;"
-
-# اگر NULL بود، set کن:
-UPDATE tenants SET whatsapp_verify_token = 'your-token' WHERE id = 1;
-```
-
-### ❌ No Response from Bot
-**بررسی:**
-1. Phone Number ID صحیح است؟
-2. Access Token valid است؟
-3. Webhook subscribed است؟
-
-```bash
-# تست webhook با curl
-curl -X POST "https://realty.artinsmartagent.com/webhook/whatsapp" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "entry": [{
-      "changes": [{
-        "value": {
-          "metadata": {"phone_number_id": "YOUR_PHONE_NUMBER_ID"},
-          "messages": [{
-            "from": "971501234567",
-            "type": "text",
-            "text": {"body": "test"}
-          }]
-        }
-      }]
-    }]
-  }'
-
-# Check logs
-docker compose logs backend | tail -20
-```
-
-### ❌ Access Token Expired
-Access tokens در Meta expire می‌شوند.
-
-**حل:**
-1. برو به Meta Business Settings
-2. System Users → Create Permanent Token
-3. Copy new token
-4. Update در database یا dashboard
-
----
-
-## 🎯 Quick Test Script
-
-```bash
-#!/bin/bash
-
-# Test 1: Webhook verification
-echo "🧪 Testing webhook verification..."
-curl "https://realty.artinsmartagent.com/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=YOUR_VERIFY_TOKEN&hub.challenge=test123"
-
-# Expected: test123
-
-# Test 2: Send message via API
-echo "📤 Sending test message..."
-curl -X POST "https://graph.facebook.com/v18.0/YOUR_PHONE_NUMBER_ID/messages" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messaging_product": "whatsapp",
-    "to": "971501234567",
-    "type": "text",
-    "text": {
-      "body": "Hello from ArtinSmartRealty! 🏠"
+```powershell
+# ارسال پیام تست به webhook
+$testMessage = @{
+    payload = @{
+        from = "971509876543@c.us"
+        body = "/start"
+        timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     }
-  }'
+} | ConvertTo-Json -Depth 5
 
-# Test 3: Check webhook registration
-echo "🔍 Checking webhook..."
-curl "https://graph.facebook.com/v18.0/YOUR_PHONE_NUMBER_ID?fields=webhooks&access_token=YOUR_ACCESS_TOKEN"
+Invoke-WebRequest -Uri "http://localhost:8000/api/webhook/waha" `
+    -Method POST `
+    -Headers @{"Content-Type"="application/json"} `
+    -Body $testMessage
 ```
 
 ---
 
-## 📊 Status Check
+## 🐛 عیب‌یابی
 
-بعد از setup:
+### مشکل: QR Code منقضی شد
+
+```powershell
+# Restart session
+Invoke-WebRequest -Uri "http://localhost:3001/api/sessions/default/stop" `
+    -Method POST `
+    -Headers @{"X-Api-Key"="waha_artinsmartrealty_secure_key_2024"}
+
+Start-Sleep -Seconds 3
+
+Invoke-WebRequest -Uri "http://localhost:3001/api/sessions/default/start" `
+    -Method POST `
+    -Headers @{"X-Api-Key"="waha_artinsmartrealty_secure_key_2024"}
+```
+
+### مشکل: Session Failed
+
+```powershell
+# پاک کردن session data و شروع مجدد
+docker-compose stop waha
+docker volume rm artinsmartrealty_waha_sessions
+docker volume rm artinsmartrealty_waha_cache
+docker-compose up -d waha
+
+# سپس session را مجدد start کنید
+```
+
+### مشکل: پیام‌ها دریافت نمی‌شوند
+
+```powershell
+# چک کردن webhook configuration
+$response = Invoke-WebRequest -Uri "http://localhost:3001/api/sessions/default" `
+    -Headers @{"X-Api-Key"="waha_artinsmartrealty_secure_key_2024"}
+($response.Content | ConvertFrom-Json).config
+```
+
+---
+
+## 📊 مانیتورینگ
+
+### چک کردن Logs
+
+```powershell
+# لاگ‌های لحظه‌ای WAHA
+docker logs artinrealty-waha -f --tail 50
+
+# جستجوی پیام‌های دریافتی
+docker logs artinrealty-waha | Select-String "message.any"
+
+# جستجوی خطاها
+docker logs artinrealty-waha | Select-String "ERROR"
+```
+
+### وضعیت Health
+
+```powershell
+# Session status
+Invoke-WebRequest -Uri "http://localhost:3001/api/sessions/default" `
+    -Headers @{"X-Api-Key"="waha_artinsmartrealty_secure_key_2024"} | 
+    Select-Object StatusCode
+
+# Container status
+docker ps | Select-String "waha"
+```
+
+---
+
+## 🔐 امنیت
+
+### API Key Management
+
+**⚠️ هرگز API key را commit نکنید!**
 
 ```bash
-# 1. Database check
-docker compose exec db psql -U artinrealty -d artinrealty_db \
-  -c "SELECT name, whatsapp_phone_number_id IS NOT NULL as whatsapp_configured FROM tenants;"
+# .gitignore باید شامل:
+.env
+*.env
+```
 
-# 2. Backend health
-curl https://realty.artinsmartagent.com/api/health
+### Credentials Dashboard
 
-# 3. Logs
-docker compose logs backend | grep -i "whatsapp" | tail -10
+**به صورت auto-generate در هر start:**
+```
+WAHA_DASHBOARD_USERNAME=admin
+WAHA_DASHBOARD_PASSWORD=<random-hash>
+```
+
+این credentials را از لاگ کپی کنید و در جای امنی ذخیره کنید.
+
+---
+
+## 🚀 Integration با Backend
+
+### whatsapp_bot.py
+
+Backend شما از **`whatsapp_providers.py`** استفاده می‌کند:
+
+```python
+# در whatsapp_providers.py
+WAHA_API_URL = "http://waha:3000/api"
+WAHA_API_KEY = os.getenv("WAHA_API_KEY")
+
+# Headers برای تمام requests
+headers = {
+    "X-Api-Key": WAHA_API_KEY,
+    "Content-Type": "application/json"
+}
+```
+
+### ارسال پیام از Bot
+
+```python
+from whatsapp_providers import send_waha_message
+
+# Text message
+await send_waha_message(
+    phone="971501234567",
+    message="سلام! این پیام از ربات است."
+)
+
+# Image با caption
+await send_waha_image(
+    phone="971501234567",
+    image_url="https://example.com/property.jpg",
+    caption="🏢 آپارتمان لوکس دبی مارینا"
+)
+
+# PDF
+await send_waha_document(
+    phone="971501234567",
+    document_url="https://example.com/roi_report.pdf",
+    filename="ROI_Analysis.pdf"
+)
 ```
 
 ---
 
-## ✅ Success Checklist
+## 📋 Checklist راه‌اندازی
 
-- [ ] Phone Number ID در database ذخیره شد
-- [ ] Access Token valid است
-- [ ] Verify Token match می‌کند
-- [ ] Webhook verified شد (green checkmark در Meta)
-- [ ] Webhook fields subscribed: messages ✅
-- [ ] Test message فرستادی → دریافت پاسخ ✅
-- [ ] Image/Voice/Location کار می‌کنند ✅
+- [x] WAHA container راه‌اندازی شد
+- [x] API Key تنظیم شد
+- [x] Session "default" ایجاد شد
+- [x] Session شروع شد (status: SCAN_QR_CODE)
+- [x] QR Code اسکن شد با موبایل ✅
+- [x] Session به WORKING تغییر کرد ✅ (971557357753@c.us)
+- [ ] شماره تنانت در database ثبت شود
+- [ ] تست ارسال پیام انجام شود
+- [ ] تست دریافت پیام از ربات
 
 ---
 
-**همه چیز درست کار کرد؟ WhatsApp bot آماده است! 🎉**
+## 🆘 دستورات سریع
 
-نکته: برای production، حتماً از Permanent Access Token استفاده کن، نه Test Token!
+```powershell
+# مشاهده وضعیت
+docker-compose ps waha
+
+# Restart WAHA
+docker-compose restart waha
+
+# مشاهده logs
+docker logs artinrealty-waha -f
+
+# دریافت QR (باید در browser باز شود)
+Start-Process "http://localhost:3001"
+
+# تست اتصال
+curl http://localhost:3001/api/sessions -H "X-Api-Key: waha_artinsmartrealty_secure_key_2024"
+```
+
+---
+
+## ✨ Next Steps
+
+1. **اسکن QR Code**  
+   باز کنید: `http://localhost:3001` → Login → اسکن QR
+
+2. **ثبت شماره در Tenant**  
+   ```sql
+   UPDATE tenants SET whatsapp_phone_number_id = '971XXXXXXXXX' WHERE id = 2;
+   ```
+
+3. **تست End-to-End**  
+   پیام بفرستید به شماره WhatsApp → باید ربات پاسخ دهد
+
+4. **Deploy Router** (اختیاری)  
+   اگر می‌خواهید multi-vertical routing داشته باشید
+
+---
+**🎉 WAHA آماده است - فقط QR Code اسکن کنید!**
+
+### روش ساده: Dashboard
+باز کنید: http://72.62.91.26:3001  
+Login: admin / 45a6df4393af42f5a8a02314bf508d7c
+
+### روش بدون Password: API Docs
+باز کنید: http://72.62.91.26:3001/api  
+(نیاز به login ندارد - مستقیم QR Code می‌بینید)
+
+### دانلود QR به Desktop
+**⚠️ این دستور را روی کامپیوتر خودتان (Windows) اجرا کنید - نه روی سرور!**
+
+از **Windows PowerShell محلی** اجرا کنید:
+```powershell
+scp root@72.62.91.26:/tmp/qr.png $env:USERPROFILE\Desktop\whatsapp_qr.png
+Start-Process "$env:USERPROFILE\Desktop\whatsapp_qr.png"
+```
+
+**یا اگر دسترسی SSH ندارید:**
+```powershell
+# دانلود مستقیم QR از API
+Invoke-WebRequest -Uri "http://72.62.91.26:3001/api/default/auth/qr" `
+    -Headers @{"X-Api-Key"="waha_artinsmartrealty_secure_key_2024"} `
+    -OutFile "$env:USERPROFILE\Desktop\whatsapp_qr.png"
+Start-Process "$env:USERPROFILE\Desktop\whatsapp_qr.png"
+```

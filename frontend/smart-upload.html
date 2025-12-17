@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Smart Property Upload - AI Powered</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 3rem;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 2.5rem;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+
+        .user-info {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: #f0f2ff;
+            border-radius: 10px;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .back-btn {
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            padding: 0.5rem 1rem;
+            background: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .back-btn:hover {
+            background: #5a6268;
+        }
+
+        .upload-zone {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 3rem;
+            text-align: center;
+            background: #f8f9ff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 2rem;
+        }
+
+        .upload-zone:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+            transform: scale(1.02);
+        }
+
+        .upload-zone.dragover {
+            border-color: #28a745;
+            background: #e8f5e9;
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-hint {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .options {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: #f8f9ff;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .option:hover {
+            background: #e8ebff;
+        }
+
+        .option input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 1rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results {
+            display: none;
+            margin-top: 2rem;
+            padding: 2rem;
+            background: #f8f9ff;
+            border-radius: 15px;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .success {
+            color: #28a745;
+            background: #d4edda;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+
+        .property-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .property-card h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .property-field {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 1rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .property-field:last-child {
+            border-bottom: none;
+        }
+
+        .field-label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .field-value {
+            color: #333;
+        }
+
+        .confidence-bar {
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            transition: width 1s ease;
+        }
+
+        .file-list {
+            margin: 1rem 0;
+        }
+
+        .file-item {
+            background: #f8f9ff;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← بازگشت به داشبورد / Back to Dashboard</a>
+        
+        <h1>🚀 Smart Property Upload</h1>
+        <p class="subtitle">Drop PDF brochures or images - AI extracts everything automatically!</p>
+        
+        <div class="user-info" id="userInfo">
+            👤 Loading user info...
+        </div>
+
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Drag & Drop files here</div>
+            <div class="upload-hint">or click to browse</div>
+            <div class="upload-hint" style="margin-top: 1rem; color: #667eea;">
+                Supports: PDF, JPG, PNG, WEBP
+            </div>
+        </div>
+
+        <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.webp">
+
+        <div class="file-list" id="fileList"></div>
+
+        <div class="options">
+            <label class="option">
+                <input type="checkbox" id="useAI" checked>
+                <span>🤖 Use Vision AI for Analysis & Extraction (FREE!)</span>
+            </label>
+            <label class="option">
+                <input type="checkbox" id="autoSave">
+                <span>💾 Auto-save valid properties</span>
+            </label>
+        </div>
+
+        <button class="btn btn-primary" id="uploadBtn" disabled>
+            Upload & Extract
+        </button>
+
+        <div class="results" id="results"></div>
+    </div>
+
+    <script>
+        // 🔐 CHECK AUTHENTICATION - Redirect if not logged in
+        const token = localStorage.getItem('tenant_token');
+        const tenantId = localStorage.getItem('tenant_id');
+        const tenantName = localStorage.getItem('tenant_name') || 'Agent';
+        
+        if (!token || !tenantId) {
+            alert('🔒 لطفا ابتدا وارد سیستم شوید!\nPlease login first!');
+            window.location.href = '/login.html';
+        }
+
+        // Display user info
+        document.getElementById('userInfo').textContent = 
+            `👤 Welcome ${tenantName} | Tenant ID: ${tenantId}`;
+
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const results = document.getElementById('results');
+        const useAI = document.getElementById('useAI');
+        const autoSave = document.getElementById('autoSave');
+
+        let selectedFiles = [];
+
+        // Click to browse
+        uploadZone.addEventListener('click', () => fileInput.click());
+
+        // File selection
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        // Drag & Drop
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            displayFileList();
+            uploadBtn.disabled = selectedFiles.length === 0;
+        }
+
+        function displayFileList() {
+            if (selectedFiles.length === 0) {
+                fileList.innerHTML = '';
+                return;
+            }
+
+            fileList.innerHTML = '<h3 style="margin-bottom: 0.5rem;">Selected Files:</h3>';
+            selectedFiles.forEach((file, index) => {
+                const div = document.createElement('div');
+                div.className = 'file-item';
+                div.innerHTML = `
+                    <span>${getFileIcon(file.name)}</span>
+                    <span>${file.name}</span>
+                    <span style="margin-left: auto; color: #666;">${formatFileSize(file.size)}</span>
+                `;
+                fileList.appendChild(div);
+            });
+        }
+
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            if (ext === 'pdf') return '📄';
+            if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return '🖼️';
+            return '📎';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        uploadBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<span class="spinner"></span>Extracting...';
+            results.innerHTML = '';
+            results.classList.remove('show');
+
+            try {
+                if (selectedFiles.length === 1) {
+                    await uploadSingleFile(selectedFiles[0]);
+                } else {
+                    await uploadBatchFiles(selectedFiles);
+                }
+            } catch (error) {
+                results.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                results.classList.add('show');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = 'Upload & Extract';
+            }
+        });
+
+        async function uploadSingleFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('use_ai', useAI.checked);
+            formData.append('auto_save', autoSave.checked);
+
+            // Use authenticated token and tenant ID from localStorage
+            const response = await fetch(`/api/tenants/${tenantId}/properties/smart-upload`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                // Handle unauthorized access
+                if (response.status === 401 || response.status === 403) {
+                    alert('🔒 دسترسی غیرمجاز! لطفا دوباره وارد شوید.\nUnauthorized! Please login again.');
+                    localStorage.clear();
+                    window.location.href = '/login.html';
+                    return;
+                }
+                throw new Error(data.detail || 'Upload failed');
+            }
+
+            displaySingleResult(data);
+        }
+
+        async function uploadBatchFiles(files) {
+            const formData = new FormData();
+            files.forEach(file => formData.append('files', file));
+            formData.append('use_ai', useAI.checked);
+            formData.append('auto_save', autoSave.checked);
+
+            // Use authenticated token and tenant ID from localStorage
+            const response = await fetch(`/api/tenants/${tenantId}/properties/batch-upload`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                // Handle unauthorized access
+                if (response.status === 401 || response.status === 403) {
+                    alert('🔒 دسترسی غیرمجاز! لطفا دوباره وارد شوید.\nUnauthorized! Please login again.');
+                    localStorage.clear();
+                    window.location.href = '/login.html';
+                    return;
+                }
+                throw new Error(data.detail || 'Batch upload failed');
+            }
+
+            displayBatchResults(data);
+        }
+
+        function displaySingleResult(data) {
+            let html = '';
+
+            if (data.success) {
+                html += `<div class="success">✅ ${data.message}</div>`;
+
+                if (data.confidence) {
+                    html += `
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" style="width: ${data.confidence}%">
+                                ${data.confidence}% Confidence
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (data.missing_fields && data.missing_fields.length > 0) {
+                    html += `<div class="error">⚠️ Missing fields: ${data.missing_fields.join(', ')}</div>`;
+                }
+
+                if (data.extracted_data) {
+                    html += displayPropertyCard(data.extracted_data);
+                }
+
+                if (data.property_id) {
+                    html += `<div class="success">💾 Saved as Property ID: ${data.property_id}</div>`;
+                }
+            } else {
+                html += `<div class="error">❌ ${data.error}</div>`;
+            }
+
+            results.innerHTML = html;
+            results.classList.add('show');
+        }
+
+        function displayBatchResults(data) {
+            let html = `
+                <div class="success">
+                    📦 Batch Upload Complete:<br>
+                    ✅ ${data.successful} successful<br>
+                    💾 ${data.auto_saved} auto-saved<br>
+                    ❌ ${data.failed} failed
+                </div>
+            `;
+
+            data.items.forEach((item, index) => {
+                html += `
+                    <div class="property-card">
+                        <h3>${index + 1}. ${item.filename}</h3>
+                        ${item.success 
+                            ? `<div style="color: #28a745;">✅ ${item.confidence}% confidence${item.property_id ? ` - ID: ${item.property_id}` : ''}</div>`
+                            : `<div style="color: #dc3545;">❌ ${item.error}</div>`
+                        }
+                    </div>
+                `;
+            });
+
+            results.innerHTML = html;
+            results.classList.add('show');
+        }
+
+        function displayPropertyCard(data) {
+            const fields = [
+                { label: 'Name', value: data.name },
+                { label: 'Price', value: data.price ? `AED ${data.price.toLocaleString()}` : null },
+                { label: 'Area', value: data.area_sqft ? `${data.area_sqft.toLocaleString()} sqft` : null },
+                { label: 'Bedrooms', value: data.bedrooms },
+                { label: 'Bathrooms', value: data.bathrooms },
+                { label: 'Location', value: data.location },
+                { label: 'Type', value: data.property_type },
+                { label: 'Transaction', value: data.transaction_type },
+                { label: 'ROI', value: data.roi_percentage ? `${data.roi_percentage}%` : null },
+                { label: 'Golden Visa', value: data.is_golden_visa_eligible ? '✅ Yes' : '❌ No' },
+                { label: 'Off-Plan', value: data.is_off_plan ? '✅ Yes' : '❌ No' },
+                { label: 'Payment Plan', value: data.payment_plan },
+                { label: 'Completion', value: data.completion_date },
+                { label: 'Amenities', value: data.amenities && data.amenities.length > 0 ? data.amenities.join(', ') : null }
+            ];
+
+            let html = '<div class="property-card"><h3>Extracted Property Details:</h3>';
+            
+            fields.forEach(field => {
+                if (field.value !== null && field.value !== undefined && field.value !== '') {
+                    html += `
+                        <div class="property-field">
+                            <div class="field-label">${field.label}:</div>
+                            <div class="field-value">${field.value}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            html += '</div>';
+            return html;
+        }
+    </script>
+</body>
+</html>

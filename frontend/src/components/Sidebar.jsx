@@ -1,10 +1,28 @@
-import { LayoutDashboard, Users, Building2, BarChart3, Settings, LogOut, QrCode, Send, BookOpen, Gift } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  Users, 
+  Building2, 
+  BarChart3, 
+  Settings, 
+  LogOut, 
+  QrCode, 
+  Send, 
+  BookOpen, 
+  Gift,
+  MessageSquare,
+  Target,
+  Calculator,
+  Flame
+} from 'lucide-react';
 
 export const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) => {
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'leads', icon: Users, label: 'Lead Pipeline' },
+    { id: 'leads', icon: Flame, label: 'Lead Management', badge: 'HOT' },
+    { id: 'followup', icon: MessageSquare, label: 'Follow-up', badge: 'Auto' },
+    { id: 'leadgen', icon: Target, label: 'Lead Generation' },
     { id: 'properties', icon: Building2, label: 'Properties' },
+    { id: 'roi', icon: Calculator, label: 'ROI Calculator' },
     { id: 'analytics', icon: BarChart3, label: 'Analytics' },
     { id: 'qr', icon: QrCode, label: 'QR Generator' },
     { id: 'broadcast', icon: Send, label: 'Broadcast' },
@@ -16,7 +34,9 @@ export const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) 
   return (
     <aside className={`w-72 glass-sidebar fixed h-screen left-0 top-0 z-50 flex flex-col animate-slide-in-left transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
       <div className="px-6 py-6 mb-4 flex items-center gap-3">
-        <div className="w-10 h-10 bg-gold-500 rounded-lg flex items-center justify-center font-bold text-navy-900">AS</div>
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+          <img src="/goldlogo.svg" alt="ArtinRealty Logo" className="w-full h-full object-contain" />
+        </div>
         <div>
           <h1 className="text-xl font-bold text-white">Artin<span className="text-gold-500">Realty</span></h1>
           <p className="text-xs text-gray-400">Smart Agent</p>
@@ -27,7 +47,7 @@ export const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) 
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative ${
               activeTab === item.id 
                 ? 'bg-gold-500/10 text-gold-500 border-r-2 border-gold-500' 
                 : 'text-gray-400 hover:bg-navy-800 hover:text-white'
@@ -35,6 +55,15 @@ export const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) 
           >
             <item.icon size={20} />
             <span className="font-medium">{item.label}</span>
+            {item.badge && (
+              <span className={`ml-auto px-2 py-0.5 text-xs font-bold rounded border ${
+                item.badge === 'HOT' 
+                  ? 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse' 
+                  : 'bg-green-500/20 text-green-400 border-green-500/30'
+              }`}>
+                {item.badge}
+              </span>
+            )}
           </button>
         ))}
       </nav>

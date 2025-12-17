@@ -6,7 +6,8 @@ Multi-Tenant Real Estate SaaS with Strict Data Isolation
 import os
 from datetime import datetime, timedelta, time
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncContextManager
+from contextlib import asynccontextmanager
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Time, Boolean, 
     ForeignKey, Enum as SQLEnum, JSON, Float, create_engine,
@@ -32,12 +33,29 @@ engine = create_async_engine(
     poolclass=NullPool
 )
 
-# Async session factory
-async_session = sessionmaker(
+# Async session factory (internal use only)
+_async_session_factory = sessionmaker(
     engine, 
     class_=AsyncSession, 
     expire_on_commit=False
 )
+
+
+# Public wrapper function with proper typing
+def async_session() -> AsyncContextManager[AsyncSession]:
+    """
+    Create async database session context manager.
+    Usage: async with async_session() as session:
+           ...use session...
+    """
+    return _async_session_factory()
+
+
+# Helper function for dependency injection
+async def get_db() -> AsyncSession:
+    """Get database session for FastAPI dependency injection"""
+    async with async_session() as session:
+        yield session
 
 Base = declarative_base()
 
@@ -104,11 +122,20 @@ class DayOfWeek(str, Enum):
     SUNDAY = "sunday"
 
 
+class SubscriptionPlan(str, Enum):
+    """Subscription Plans"""
+    FREE = "free"  # Trial only
+    BASIC = "basic"  # Bot + Follow-up only (No Lead Generation)
+    PRO = "pro"  # Full features: Bot + Follow-up + Lead Generation (LinkedIn Scraper)
+
+
 class SubscriptionStatus(str, Enum):
-    TRIAL = "trial"
-    ACTIVE = "active"
-    SUSPENDED = "suspended"
-    CANCELLED = "cancelled"
+    """Subscription Status"""
+    TRIAL = "trial"  # 7 days trial
+    ACTIVE = "active"  # Paid and active
+    SUSPENDED = "suspended"  # Payment failed
+    CANCELLED = "cancelled"  # User cancelled
+    EXPIRED = "expired"  # Trial or subscription expired
 
 
 class FeatureFlag(str, Enum):
@@ -205,9 +232,23 @@ class Tenant(Base):
     # Admin Settings
     admin_chat_id = Column(String(100), nullable=True)  # Telegram chat ID for admin notifications
     
-    # Subscription
+    # Booking & Contact Information (per tenant)
+    booking_url = Column(String(512), nullable=True)  # Calendly or other booking system URL
+    contact_phone = Column(String(50), nullable=True)  # WhatsApp/Direct call number
+    whatsapp_link = Column(String(512), nullable=True)  # wa.me link (auto-generated from contact_phone)
+    
+    # Subscription & Billing
+    subscription_plan = Column(SQLEnum(SubscriptionPlan), default=SubscriptionPlan.FREE)
     subscription_status = Column(SQLEnum(SubscriptionStatus), default=SubscriptionStatus.TRIAL)
     trial_ends_at = Column(DateTime, nullable=True)
+    subscription_starts_at = Column(DateTime, nullable=True)  # When paid subscription started
+    subscription_ends_at = Column(DateTime, nullable=True)  # When current billing cycle ends
+    
+    # Payment Info
+    billing_cycle = Column(String(20), default="monthly")  # "monthly" or "yearly"
+    payment_method = Column(String(50), nullable=True)  # "stripe", "paypal", "crypto", etc.
+    last_payment_date = Column(DateTime, nullable=True)
+    next_payment_date = Column(DateTime, nullable=True)
     
     # Settings
     default_language = Column(SQLEnum(Language), default=Language.EN)
@@ -222,6 +263,10 @@ class Tenant(Base):
     leads = relationship("Lead", back_populates="tenant", cascade="all, delete-orphan")
     availabilities = relationship("AgentAvailability", back_populates="tenant", cascade="all, delete-orphan")
     features = relationship("TenantFeature", back_populates="tenant", cascade="all, delete-orphan")
+    
+    # ✅ NEW: Unified Lead Management System Relationships
+    unified_leads = relationship("UnifiedLead", back_populates="tenant", cascade="all, delete-orphan")
+    followup_campaigns = relationship("FollowupCampaign", back_populates="tenant", cascade="all, delete-orphan")
 
 
 class TenantFeature(Base):

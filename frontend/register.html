@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - ArtinSmartRealty Pro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+
+        @media (max-width: 968px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            .pricing-cards {
+                order: -1;
+            }
+        }
+
+        /* Registration Form */
+        .register-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .register-card h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .register-card p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .plan-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .plan-option {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .plan-option.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .plan-option h3 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .plan-option p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .plan-option .price {
+            color: #667eea;
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .billing-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .billing-toggle button {
+            padding: 10px 20px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .billing-toggle button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .login-link {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+
+        .login-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        /* Pricing Cards */
+        .pricing-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .pricing-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .pricing-card.pro {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .pricing-card h2 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .pricing-card .price {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .pricing-card .price small {
+            font-size: 18px;
+            font-weight: normal;
+        }
+
+        .pricing-card ul {
+            list-style: none;
+            margin: 20px 0;
+        }
+
+        .pricing-card ul li {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .pricing-card.pro ul li {
+            border-bottom-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .pricing-card ul li:before {
+            content: "✓ ";
+            color: #4CAF50;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .pricing-card.pro ul li:before {
+            color: #FFD700;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Registration Form -->
+        <div class="register-card">
+            <h1>🚀 Start Your Free Trial</h1>
+            <p>No credit card required. 7-14 days free trial.</p>
+
+            <div id="alert" class="alert" style="display: none;"></div>
+
+            <form id="registerForm">
+                <!-- Plan Selection -->
+                <div class="form-group">
+                    <label>Choose Your Plan</label>
+                    <div class="plan-selector">
+                        <div class="plan-option" data-plan="basic">
+                            <h3>Basic</h3>
+                            <p>Bot + Follow-up</p>
+                            <div class="price" id="basicPrice">$99</div>
+                        </div>
+                        <div class="plan-option selected" data-plan="pro">
+                            <h3>Pro 🔥</h3>
+                            <p>+ Lead Generation</p>
+                            <div class="price" id="proPrice">$199</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Billing Cycle -->
+                <div class="billing-toggle">
+                    <button type="button" class="billing-btn active" data-cycle="monthly">Monthly</button>
+                    <button type="button" class="billing-btn" data-cycle="yearly">Yearly (Save 17%)</button>
+                </div>
+
+                <!-- Personal Info -->
+                <div class="form-group">
+                    <label for="name">Full Name</label>
+                    <input type="text" id="name" required placeholder="John Doe">
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" required placeholder="john@example.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required placeholder="Min 8 characters" minlength="8">
+                </div>
+
+                <div class="form-group">
+                    <label for="company">Company Name (Optional)</label>
+                    <input type="text" id="company" placeholder="Your Company">
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Phone Number (Optional)</label>
+                    <input type="tel" id="phone" placeholder="+971 50 123 4567">
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    Start Free Trial →
+                </button>
+            </form>
+
+            <div class="login-link">
+                Already have an account? <a href="/login">Login here</a>
+            </div>
+        </div>
+
+        <!-- Pricing Cards -->
+        <div class="pricing-cards">
+            <!-- Pro Plan -->
+            <div class="pricing-card pro">
+                <h2>Pro Plan 🔥</h2>
+                <div class="price">
+                    $199<small>/month</small>
+                </div>
+                <ul>
+                    <li>✅ All Basic Features</li>
+                    <li>LinkedIn Lead Scraper</li>
+                    <li>Automated Outreach</li>
+                    <li>Up to 10,000 leads</li>
+                    <li>100,000 messages/month</li>
+                    <li>Advanced Analytics</li>
+                    <li>CRM Integration</li>
+                    <li>White-label Branding</li>
+                    <li>Priority Support</li>
+                </ul>
+            </div>
+
+            <!-- Basic Plan -->
+            <div class="pricing-card">
+                <h2>Basic Plan</h2>
+                <div class="price">
+                    $99<small>/month</small>
+                </div>
+                <ul>
+                    <li>WhatsApp & Telegram Bot</li>
+                    <li>AI Conversations</li>
+                    <li>Automated Follow-ups</li>
+                    <li>Up to 1,000 leads</li>
+                    <li>10,000 messages/month</li>
+                    <li>Lead Scoring</li>
+                    <li>Appointment Booking</li>
+                    <li>Multi-language Support</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        
+        // Plan selection
+        const planOptions = document.querySelectorAll('.plan-option');
+        let selectedPlan = 'pro';
+        let selectedCycle = 'monthly';
+
+        planOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                planOptions.forEach(o => o.classList.remove('selected'));
+                option.classList.add('selected');
+                selectedPlan = option.dataset.plan;
+                updatePrices();
+            });
+        });
+
+        // Billing cycle toggle
+        const billingBtns = document.querySelectorAll('.billing-btn');
+        billingBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                billingBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedCycle = btn.dataset.cycle;
+                updatePrices();
+            });
+        });
+
+        function updatePrices() {
+            const prices = {
+                basic: { 
+                    monthly: 299, 
+                    yearly: 2397,
+                    yearlyOriginal: 3588,
+                    discount: 33
+                },
+                pro: { 
+                    monthly: 399, 
+                    yearly: 3597,
+                    yearlyOriginal: 4788,
+                    discount: 25
+                }
+            };
+
+            const basicPrice = selectedCycle === 'monthly' ? prices.basic.monthly : prices.basic.yearly;
+            const proPrice = selectedCycle === 'monthly' ? prices.pro.monthly : prices.pro.yearly;
+
+            // Update prices with discount display for yearly
+            if (selectedCycle === 'yearly') {
+                document.getElementById('basicPrice').innerHTML = `
+                    <span style="text-decoration: line-through; color: #999; font-size: 18px; margin-right: 8px;">
+                        $${prices.basic.yearlyOriginal}
+                    </span>
+                    <span style="color: #10b981; font-size: 14px; font-weight: 600;">
+                        ${prices.basic.discount}% off
+                    </span>
+                    <br>
+                    <span style="font-size: 36px; font-weight: 700; color: #667eea;">
+                        $${basicPrice}
+                    </span>
+                `;
+                document.getElementById('proPrice').innerHTML = `
+                    <span style="text-decoration: line-through; color: #999; font-size: 18px; margin-right: 8px;">
+                        $${prices.pro.yearlyOriginal}
+                    </span>
+                    <span style="color: #10b981; font-size: 14px; font-weight: 600;">
+                        ${prices.pro.discount}% off
+                    </span>
+                    <br>
+                    <span style="font-size: 36px; font-weight: 700; color: #667eea;">
+                        $${proPrice}
+                    </span>
+                `;
+            } else {
+                document.getElementById('basicPrice').textContent = `$${basicPrice}`;
+                document.getElementById('proPrice').textContent = `$${proPrice}`;
+            }
+        }
+
+        // Form submission
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            const alert = document.getElementById('alert');
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating account...';
+
+            const data = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                company_name: document.getElementById('company').value || null,
+                phone: document.getElementById('phone').value || null,
+                plan: selectedPlan,
+                billing_cycle: selectedCycle,
+                language: 'en'
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/api/subscription/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Success
+                    alert.className = 'alert alert-success';
+                    alert.textContent = result.message;
+                    alert.style.display = 'block';
+
+                    // Redirect to login after 2 seconds
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 2000);
+                } else {
+                    // Error
+                    alert.className = 'alert alert-error';
+                    alert.textContent = result.detail || 'Registration failed. Please try again.';
+                    alert.style.display = 'block';
+                    
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Start Free Trial →';
+                }
+            } catch (error) {
+                alert.className = 'alert alert-error';
+                alert.textContent = 'Network error. Please check your connection and try again.';
+                alert.style.display = 'block';
+                
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Start Free Trial →';
+            }
+        });
+    </script>
+</body>
+</html>

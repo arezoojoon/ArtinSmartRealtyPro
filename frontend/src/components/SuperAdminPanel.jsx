@@ -14,7 +14,8 @@ import {
     CheckCircle,
     XCircle,
     Clock,
-    Search
+    Search,
+    Key
 } from 'lucide-react';
 
 const API_BASE_URL = window.ENV?.VITE_API_URL || import.meta.env.VITE_API_URL || '';
@@ -112,6 +113,49 @@ const SuperAdminPanel = () => {
             }
         } catch (error) {
             console.error('Failed to delete tenant:', error);
+        }
+    };
+
+    const handleResetPassword = async (tenant) => {
+        const newPassword = prompt(
+            `رمز عبور جدید برای ${tenant.name}:\n(حداقل 8 کاراکتر)`
+        );
+        
+        if (!newPassword) return;
+        
+        if (newPassword.length < 8) {
+            alert('رمز عبور باید حداقل 8 کاراکتر باشد');
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/api/admin/tenants/${tenant.id}/reset-password`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders(),
+                    },
+                    body: JSON.stringify({ new_password: newPassword }),
+                }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                alert(
+                    `✅ رمز عبور با موفقیت تغییر یافت!\n\n` +
+                    `ایمیل: ${data.tenant_email}\n` +
+                    `رمز عبور جدید: ${data.new_password}\n\n` +
+                    `این اطلاعات را برای تنانت ارسال کنید.`
+                );
+            } else {
+                const error = await response.json();
+                alert(`خطا: ${error.detail || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.error('Failed to reset password:', error);
+            alert(`خطا در تغییر رمز عبور: ${error.message}`);
         }
     };
 
@@ -235,14 +279,23 @@ const SuperAdminPanel = () => {
                                     <td className="px-6 py-4">
                                         <div className="flex gap-2">
                                             <button
+                                                onClick={() => handleResetPassword(tenant)}
+                                                className="text-yellow-400 hover:text-yellow-300"
+                                                title="تغییر رمز عبور"
+                                            >
+                                                <Key size={18} />
+                                            </button>
+                                            <button
                                                 onClick={() => openModal(tenant)}
                                                 className="text-blue-400 hover:text-blue-300"
+                                                title="ویرایش"
                                             >
                                                 <Edit size={18} />
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(tenant.id)}
                                                 className="text-red-400 hover:text-red-300"
+                                                title="حذف"
                                             >
                                                 <Trash2 size={18} />
                                             </button>

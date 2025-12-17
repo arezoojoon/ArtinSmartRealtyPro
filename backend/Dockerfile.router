@@ -1,0 +1,23 @@
+# Dockerfile برای ArtinSmartAgent Standalone Router
+# استفاده: docker build -f Dockerfile.router -t artinrouter .
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# نصب dependencies
+COPY router_requirements.txt .
+RUN pip install --no-cache-dir -r router_requirements.txt
+
+# کپی فایل router
+COPY standalone_router.py .
+
+# پورت 5000
+EXPOSE 5000
+
+# Volume برای حافظه دائمی
+VOLUME /app/data
+
+# اجرا
+ENV ROUTES_DB_FILE=/app/data/user_routes.json
+CMD ["python", "standalone_router.py"]

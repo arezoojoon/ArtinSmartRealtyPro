@@ -1,346 +1,106 @@
-# 🏢 ArtinSmartRealty - AI Real Estate Assistant Platform
+# ArtinSmartRealty Pro
 
-> **"Your AI Real Estate Assistant - Never Sleep, Always Sell!"**
+**Enterprise-Grade Real Estate CRM with AI-Powered WhatsApp & Telegram Bots**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
 ---
 
-## 🎯 What is ArtinSmartRealty?
+## 🚀 Overview
 
-**ArtinSmartRealty** is a **multi-language SaaS platform** that provides real estate agents with a **24/7 AI assistant bot** to:
-- ✅ Chat with customers (Telegram + WhatsApp)
-- ✅ Understand and qualify their needs
-- ✅ Recommend properties (from agent's inventory)
-- ✅ Schedule appointments
-- ✅ Automatically follow up
+ArtinSmartRealty Pro is a **multi-tenant SaaS platform** for real estate agencies, featuring:
 
-**Live Demo**: [realty.artinsmartagent.com](https://realty.artinsmartagent.com)
+- 🤖 **AI Chatbots** (WhatsApp & Telegram) powered by Google Gemini 2.0
+- 📊 **Advanced CRM** with lead scoring and psychological profiling
+- 📈 **ROI Calculator** with automated PDF reports
+- 🎯 **Smart Follow-up Engine** with 7-stage Ghost Protocol
+- 🏢 **Multi-tenant Architecture** with role-based access control
+- 📱 **Modern React Admin Panel** with real-time analytics
+
+---
+
+## ✨ Key Features
+
+### 🤖 **AI-Powered Conversational Bots**
+
+- **Multi-channel**: WhatsApp (WAHA/Twilio) & Telegram
+- **Multi-language**: English, Persian, Arabic, Russian
+- **Smart Context**: Remembers conversation history via Redis
+- **Voice Support**: Processes voice messages with Gemini 2.0
+- **Image Analysis**: Analyzes property photos sent by users
+
+### 📊 **Lead Management**
+
+- **Lead Scoring**: BANT + Engagement + Response Time (0-100 scale)
+- **Psychological Profiling**: Hot/Warm/Cold classification
+- **Follow-up Automation**: 7-stage Ghost Protocol with FOMO triggers
+- **Smart Routing**: Auto-assign leads to available agents
+
+### 💰 **ROI Calculator**
+
+- **Dynamic Calculations**: Purchase price, rental income, ROI, Golden Visa eligibility
+- **PDF Generation**: Professional branded reports with charts
+- **Multi-currency**: AED, USD, EUR support
+
+---
+
+## 🚀 Quick Start
+
+### **Prerequisites**
+
+- Docker 20.10+ & Docker Compose 2.0+
+- Google Gemini API Key ([Get one here](https://makersuite.google.com/app/apikey))
+- Telegram Bot Token ([Create bot via @BotFather](https://t.me/BotFather))
+
+### **1. Clone & Configure**
+
+```bash
+git clone https://github.com/arezoojoon/ArtinSmartRealtyPro.git
+cd ArtinSmartRealtyPro
+cp .env.example .env
+# Edit .env with your API keys
+```
+
+### **2. Deploy**
+
+```bash
+./deploy.sh prod
+```
+
+### **3. Access**
+
+- **Admin Panel**: `http://localhost`
+- **API Docs**: `http://localhost/docs`
 
 ---
 
 ## 📚 Documentation
 
-| File | Description |
-|------|-------------|
-| 📖 [PRODUCT_PRESENTATION.md](PRODUCT_PRESENTATION.md) | Complete customer journey - from first message to property purchase |
-| 📄 [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | 1-page executive summary for investors |
-| 🎤 [PITCH_DECK_SCRIPT.md](PITCH_DECK_SCRIPT.md) | 10-slide pitch deck script (7 minutes) |
-| 📊 [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) | Competitive analysis - why we're better |
-| 🐛 [COMPREHENSIVE_QA_REPORT.md](COMPREHENSIVE_QA_REPORT.md) | QA report and bug fixes - Dec 10, 2025 |
+- [Installation Guide](docs/INSTALLATION.md)
+- [API Documentation](docs/API.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Bot Workflows](docs/BOT_WORKFLOWS.md)
 
 ---
-
-## 🚀 Quick Start (For Developers)
-
-```bash
-# Clone repository
-git clone https://github.com/arezoojoon/ArtinSmartRealty.git
-cd ArtinSmartRealty
-
-# Start with Docker
-docker-compose up -d
-
-# Dashboard: http://localhost:3000
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
-```
-
-**Default Login**:
-- Super Admin: `admin@artinsmartrealty.com` / `SuperAdmin123!`
-
-## 🚀 Features
-
-### 🏢 Multi-Tenant Architecture
-- **Strict Data Isolation**: Each agent has completely separate data
-- **Dedicated Bots**: Unique Telegram bot + WhatsApp number per agent
-- **Custom Branding**: Logo and primary color for PDFs
-- **Subscription Management**: Trial (14 days) → Active → Suspended
-
-### 🔐 Authentication & Roles
-| Role | Access |
-|------|--------|
-| **Super Admin** | Platform owner - view all tenants, access any dashboard |
-| **Tenant (Agent)** | Own data only - leads, schedule, settings |
-| **Lead (User)** | Bot interaction only |
-
-### 🤖 Dual-Channel Bot Integration
-- **Telegram**: Custom bot with inline keyboards
-- **WhatsApp**: Business API with interactive buttons
-- **Voice Intelligence**: Transcribe voice messages + extract entities
-- **Multi-Language**: EN, FA (Persian), AR (Arabic), RU (Russian)
-
-### 🧠 AI-Powered Features
-- **Google Gemini 2.0 Flash**: Smart entity extraction, language detection
-- **Tenant-Specific Data**: AI uses agent's property inventory, not generic data
-- **Dynamic Persona**: "I'm [Agent Name]'s AI Assistant"
-- **Property Matching**: Filter by budget, type, location, bedrooms
-
-### 💰 Sales Psychology Techniques
-| Technique | Implementation |
-|-----------|----------------|
-| **Pain & Solution** | Discover pain points → personalized salvation message |
-| **FOMO** | Ghost Protocol sends urgency messages |
-| **Scarcity** | Show only 3-4 available slots |
-| **Price Shock** | ROI PDF shows expected appreciation |
-
-### 📊 Agent Dashboard
-- **KPI Cards**: Total leads, conversion rate, revenue
-- **Lead Pipeline**: Kanban-style (New → Qualified → Scheduled → Won)
-- **Calendar**: Weekly availability scheduler
-- **Excel Export**: One-click CRM-ready download
-- **ROI PDF**: Branded reports with Golden Visa info
-
-## 📁 Project Structure
-
-```
-ArtinSmartRealty/
-├── backend/
-│   ├── database.py       # Multi-tenant schema with SQLAlchemy
-│   ├── brain.py          # AI core with Gemini + sales psychology
-│   ├── telegram_bot.py   # Telegram bot interface
-│   ├── whatsapp_bot.py   # WhatsApp Business API
-│   ├── main.py           # FastAPI + Auth + RBAC
-│   ├── roi_engine.py     # PDF generation with price shock
-│   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Login.jsx             # Login/Register/Forgot Password
-│   │   │   ├── Dashboard.jsx         # Agent dashboard
-│   │   │   ├── Settings.jsx          # Bot configuration
-│   │   │   └── SuperAdminDashboard.jsx # Admin panel
-│   │   ├── main.jsx                  # Auth routing
-│   │   └── index.css                 # Glassmorphism styles
-│   ├── package.json
-│   ├── tailwind.config.js
-│   └── Dockerfile
-├── docker-compose.yml
-├── nginx.conf
-├── deploy.sh
-└── .env.example
-```
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Backend | Python 3.11, FastAPI, SQLAlchemy (Async) |
-| Database | PostgreSQL 15 with asyncpg |
-| AI/ML | Google Gemini 2.0 Flash |
-| Telegram | python-telegram-bot |
-| WhatsApp | WhatsApp Cloud API (Meta) |
-| Frontend | React 18, Vite 5, Tailwind CSS, lucide-react |
-| Auth | JWT + PBKDF2 password hashing |
-| PDF | ReportLab |
-| Excel | openpyxl |
-| Deployment | Docker, Nginx |
-
-## 🚦 Quick Start
-
-### Prerequisites
-- Docker & Docker Compose
-- Google Gemini API Key
-- (Optional) Telegram Bot Token
-- (Optional) WhatsApp Business API credentials
-
-### 1. Clone & Configure
-```bash
-git clone https://github.com/arezoojoon/ArtinSmartRealty.git
-cd ArtinSmartRealty
-
-# Copy environment template
-cp .env.example .env
-
-# Edit .env with your values
-nano .env
-```
-
-### 2. Deploy with Docker
-```bash
-chmod +x deploy.sh
-./deploy.sh prod
-```
-
-### 3. Access the Platform
-- **Dashboard**: http://localhost (or your domain)
-- **Super Admin**: Login with credentials from `.env`
-- **API Docs**: http://localhost/docs
-
-## 👑 Super Admin Setup
-
-Default credentials (change in `.env`):
-```
-Email: admin@artinsmartrealty.com
-Password: SuperAdmin123!
-```
-
-Super Admin can:
-- View all registered agents
-- See subscription status and bot configuration
-- Access any agent's dashboard
-- Monitor platform usage
-
-## 📡 API Endpoints
-
-### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/register` | Create account (14-day trial) |
-| POST | `/api/auth/login` | Login, returns JWT |
-| POST | `/api/auth/forgot-password` | Request reset token |
-| POST | `/api/auth/reset-password` | Reset password |
-| GET | `/api/auth/me` | Get current user |
-
-### Tenants (Protected)
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/tenants` | Super Admin | List all tenants |
-| GET | `/api/tenants/{id}` | Owner/Admin | Get tenant details |
-| PUT | `/api/tenants/{id}` | Owner/Admin | Update settings |
-
-### Leads (Protected)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/tenants/{id}/leads` | List leads (with filters) |
-| PUT | `/api/tenants/{id}/leads/{lead_id}` | Update lead |
-| GET | `/api/tenants/{id}/leads/export` | Export to Excel |
-| GET | `/api/tenants/{id}/leads/{lead_id}/roi-pdf` | Generate ROI PDF |
-
-### Tenant Data (Protected)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| CRUD | `/api/tenants/{id}/properties` | Agent's property inventory |
-| CRUD | `/api/tenants/{id}/projects` | Off-plan projects |
-| CRUD | `/api/tenants/{id}/knowledge` | FAQ/Knowledge base |
-
-### Scheduling (Protected)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/tenants/{id}/schedule` | List availability |
-| POST | `/api/tenants/{id}/schedule` | Add slot |
-| DELETE | `/api/tenants/{id}/schedule/{slot_id}` | Remove slot |
-
-### Webhooks (Public)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/webhook/telegram/{bot_token}` | Telegram webhook |
-| GET | `/webhook/whatsapp` | WhatsApp verification |
-| POST | `/webhook/whatsapp` | WhatsApp messages |
-
-## 🤖 Lead Qualification Flow
-
-```
-START
-  │
-  ▼
-WELCOME → "Hello! I'm [Agent]'s AI Assistant"
-  │
-  ▼
-HOOK → "Get FREE ROI Analysis!" [Yes/No]
-  │
-  ▼
-PHONE_GATE → "Share your phone number" (REQUIRED)
-  │
-  ▼
-PAIN_DISCOVERY → "What's driving your interest?"
-  • Currency protection (inflation)
-  • Family residency (visa)
-  • Passive income (rental)
-  • Tax-free benefits
-  │
-  ▼
-TRANSACTION_TYPE → [Buy / Rent]
-  │
-  ▼
-PROPERTY_TYPE → [Apartment / Villa / Penthouse / Townhouse / Commercial / Land]
-  │
-  ▼
-BUDGET → [Under 500K / 500K-1M / 1M-2M / 2M-5M / 5M+]
-  │
-  ▼
-PAYMENT_METHOD → [Cash / Installment]
-  │
-  ▼
-PURPOSE → [Investment / Living / Residency (Golden Visa)]
-  │
-  ▼
-SOLUTION_BRIDGE → Personalized message + property recommendations
-  │
-  ▼
-SCHEDULE → "🔥 Only 4 slots remaining!" (Scarcity)
-  │
-  ▼
-COMPLETED → Confirmation + appointment details
-```
-
-## 🎨 Dashboard Theme
-
-Luxury dark glassmorphism theme:
-- **Background**: Deep Navy Blue (#0f1729)
-- **Cards**: Glass effect with backdrop-blur
-- **Accents**: Metallic Gold (#D4AF37)
-- **Icons**: lucide-react
-
-## 🔒 Security
-
-| Feature | Implementation |
-|---------|----------------|
-| Password Hashing | PBKDF2 with 100,000 iterations |
-| Authentication | JWT tokens (24h expiry) |
-| Authorization | Role-based access control |
-| API Protection | All endpoints require auth (except webhooks) |
-| CORS | Environment-configurable origins |
-
-## 📊 Database Schema
-
-### Core Tables
-- **Tenants**: Agent profiles, credentials, bot tokens, subscription
-- **Leads**: Contact info, qualification data, psychology tracking
-- **AgentAvailability**: Time slots for scheduling
-- **Appointments**: Booked meetings
-
-### Tenant Data Tables
-- **TenantProperty**: Property inventory (name, price, ROI, Golden Visa)
-- **TenantProject**: Off-plan projects with payment plans
-- **TenantKnowledge**: FAQ and custom responses
-
-## 🔄 Background Jobs
-
-| Job | Trigger | Action |
-|-----|---------|--------|
-| Ghost Protocol | 2h no response | Send FOMO message |
-| Appointment Reminders | 24h before | Notify agent + client |
-
-## 🚀 Deployment Checklist
-
-Before going live:
-
-1. **Environment Variables** (`.env`):
-   - [ ] `DB_PASSWORD` - Strong database password
-   - [ ] `GEMINI_API_KEY` - Google AI API key
-   - [ ] `JWT_SECRET` - Random 64+ character string
-   - [ ] `PASSWORD_SALT` - Random 32+ character string
-   - [ ] `SUPER_ADMIN_PASSWORD` - Change from default!
-   - [ ] `CORS_ORIGINS` - Your domain only
-
-2. **SSL/HTTPS**: Configure in nginx or use Cloudflare
-
-3. **Telegram Bot Setup**:
-   - Create bot via [@BotFather](https://t.me/BotFather)
-   - Set webhook: `https://yourdomain.com/webhook/telegram/{token}`
-
-4. **WhatsApp Setup**:
-   - Create WhatsApp Business Account in [Meta Business Manager](https://business.facebook.com/)
-   - Configure webhook: `https://yourdomain.com/webhook/whatsapp`
-
-## 📝 License
-
-MIT License
-
-## 🤝 Support
-
-For issues and feature requests, please open a GitHub issue.
+- **Backend**: FastAPI + Python 3.11 + SQLAlchemy
+- **AI**: Google Gemini 2.0 Flash
+- **Database**: PostgreSQL 15
+- **Cache**: Redis 7
+- **Frontend**: React 18 + Vite + Material-UI
+- **Infrastructure**: Docker + Nginx
 
 ---
 
-Built with ❤️ for Dubai Real Estate Professionals
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file.
+
+---
+
+**Built with ❤️ for Real Estate Professionals**

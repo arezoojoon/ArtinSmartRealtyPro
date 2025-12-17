@@ -9,7 +9,6 @@ import asyncio
 import secrets
 import hashlib
 import logging
-import httpx
 from datetime import datetime, time, timedelta
 from typing import Optional, List
 from contextlib import asynccontextmanager
@@ -17,7 +16,7 @@ from contextlib import asynccontextmanager
 # Setup logger
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header, UploadFile, File, Form, Body
+from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response, Header, UploadFile, File, Form, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -47,10 +46,13 @@ from database import (
 from telegram_bot import bot_manager, handle_telegram_webhook
 from whatsapp_bot import whatsapp_bot_manager, verify_webhook as verify_whatsapp_webhook
 from roi_engine import generate_roi_pdf
+from rate_limiter import rate_limit, rate_limiter, cleanup_rate_limiter
+from security_headers import add_security_headers
+from password_validator import validate_password_strength
+from input_sanitizer import sanitize_text, sanitize_email, sanitize_phone
 
 # Import API routers
-from api import broadcast, catalogs, lotteries, admin
-import whatsapp_router
+from api import broadcast, catalogs, lotteries, admin, smart_upload
 from auth_config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, PASSWORD_SALT
 
 
@@ -60,13 +62,23 @@ security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    """Hash password using PBKDF2 with SHA-256 (more secure than plain SHA-256)."""
-    return hashlib.pbkdf2_hmac('sha256', password.encode(), PASSWORD_SALT.encode(), 100000).hex()
+    """Hash password using PBKDF2 with SHA-256.
+    
+    Uses 600,000 iterations (OWASP 2023 recommendation).
+    Previous: 100,000 iterations (too weak for modern GPUs).
+    """
+    return hashlib.pbkdf2_hmac('sha256', password.encode(), PASSWORD_SALT.encode(), 600000).hex()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash."""
-    return hash_password(plain_password) == hashed_password
+    """Verify password against hash using constant-time comparison.
+    
+    Prevents timing attacks where attacker can determine correct password
+    characters by measuring response time differences.
+    """
+    computed_hash = hash_password(plain_password)
+    # Use secrets.compare_digest for constant-time comparison
+    return secrets.compare_digest(computed_hash, hashed_password)
 
 
 def create_jwt_token(tenant_id: int, email: str) -> str:
@@ -151,7 +163,7 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8, max_length=128, description="Password must be 8-128 characters with uppercase, lowercase, number, and special character")
     company_name: Optional[str] = Field(None, max_length=255)
     phone: Optional[str] = Field(None, max_length=50)
 
@@ -190,6 +202,26 @@ class TenantCreate(BaseModel):
     telegram_bot_token: Optional[str] = Field(None, max_length=255)
     logo_url: Optional[str] = Field(None, max_length=512)
     primary_color: Optional[str] = Field("#D4AF37", max_length=20)
+    # WhatsApp Business API fields
+    whatsapp_phone_number_id: Optional[str] = Field(None, max_length=100)
+    whatsapp_access_token: Optional[str] = Field(None, max_length=512)
+    whatsapp_business_account_id: Optional[str] = Field(None, max_length=100)
+    whatsapp_verify_token: Optional[str] = Field(None, max_length=255)
+
+
+class TenantUpdate(BaseModel):
+    """Model for partial tenant updates - all fields optional"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    company_name: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[str] = Field(None, max_length=255)
+    telegram_bot_token: Optional[str] = Field(None, max_length=255)
+    logo_url: Optional[str] = Field(None, max_length=512)
+    primary_color: Optional[str] = Field(None, max_length=20)
+    admin_chat_id: Optional[str] = Field(None, max_length=100)
+    booking_url: Optional[str] = Field(None, max_length=512)
+    contact_phone: Optional[str] = Field(None, max_length=50)
+    whatsapp_link: Optional[str] = Field(None, max_length=512)
     # WhatsApp Business API fields
     whatsapp_phone_number_id: Optional[str] = Field(None, max_length=100)
     whatsapp_access_token: Optional[str] = Field(None, max_length=512)
@@ -387,6 +419,23 @@ class TenantPropertyCreate(BaseModel):
     is_featured: bool = False
     
     model_config = {"extra": "ignore"}  # Ignore unknown fields from frontend
+    
+    @field_validator('image_urls', 'images', mode='before')
+    @classmethod
+    def convert_image_objects_to_urls(cls, v):
+        """Convert image objects from frontend to URL strings."""
+        if not v:
+            return []
+        
+        urls = []
+        for item in v:
+            if isinstance(item, dict):
+                # Frontend sends objects with 'url' field
+                urls.append(item.get('url', ''))
+            elif isinstance(item, str):
+                urls.append(item)
+        
+        return urls
 
 
 class TenantPropertyResponse(BaseModel):
@@ -400,10 +449,10 @@ class TenantPropertyResponse(BaseModel):
     features: Optional[List[str]]
     description: Optional[str]
     full_description: Optional[str]
-    golden_visa_eligible: bool
-    is_available: bool
-    is_featured: bool
-    is_urgent: bool
+    golden_visa_eligible: bool = False
+    is_available: bool = True
+    is_featured: bool = False
+    is_urgent: bool = False
     image_urls: Optional[List[str]]
     primary_image: Optional[str]
     image_files: Optional[List[dict]]
@@ -514,7 +563,7 @@ async def appointment_reminder_job():
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown."""
     # Startup
-    print("🚀 Starting ArtinSmartRealty V2...")
+    print("🚀 Starting ArtinSmartRealty V2 - Unified Platform...")
     
     # Initialize database
     await init_db()
@@ -556,6 +605,15 @@ async def lifespan(app: FastAPI):
     await bot_manager.start_scheduler()
     print("✅ Morning Coffee Report scheduler started")
     
+    # 🆕 Start Unified Follow-up Engine
+    from followup_engine import start_followup_engine
+    await start_followup_engine()
+    print("✅ Unified Follow-up Engine started")
+    
+    # Start rate limiter cleanup task
+    asyncio.create_task(cleanup_rate_limiter())
+    print("✅ Rate limiter cleanup task started")
+    
     yield
     
     # Shutdown
@@ -563,6 +621,11 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
     await bot_manager.stop_scheduler()
     await bot_manager.stop_all_bots()
+    
+    # Stop Follow-up Engine
+    from followup_engine import stop_followup_engine
+    await stop_followup_engine()
+    
     print("✅ Shutdown complete")
 
 
@@ -591,7 +654,27 @@ async def validation_exception_handler(request, exc):
     )
 
 # CORS Middleware - Use environment variable for allowed origins in production
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+# Security: NEVER use wildcard "*" with credentials enabled (CSRF risk)
+ALLOWED_ORIGINS_DEFAULT = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+]
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", ",".join(ALLOWED_ORIGINS_DEFAULT)).split(",")
+
+# Security check: Prevent wildcard with credentials
+if "*" in CORS_ORIGINS:
+    logger.error(
+        "SECURITY ERROR: CORS wildcard '*' detected with credentials enabled! "
+        "This allows ANY website to steal user data via CSRF. "
+        "Set CORS_ORIGINS in .env to specific domains only."
+    )
+    # In production, raise error. In dev, allow but warn
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        raise RuntimeError("CORS wildcard not allowed in production!")
+    else:
+        logger.warning("⚠️  DEVELOPMENT MODE: Allowing CORS wildcard (NOT FOR PRODUCTION)")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -599,6 +682,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add security headers middleware
+add_security_headers(app)
 
 # Mount static files for uploads
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
@@ -610,10 +696,34 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(broadcast.router)
 app.include_router(catalogs.router)
 app.include_router(lotteries.router)
-app.include_router(whatsapp_router.router)  # WhatsApp Gateway Router
+app.include_router(smart_upload.router)  # 🚀 Smart PDF/Image Upload with AI
+
+# 🆕 Include Unified Lead Management API
+from api.unified_routes import router as unified_router
+app.include_router(unified_router)
+
+# 🆕 Include LinkedIn Scraper Integration API (PRO PLAN)
+from api.linkedin_routes import router as linkedin_router
+app.include_router(linkedin_router)
+
+# 🤖 Include Follow-up Management API
+from api.followup_routes import router as followup_router
+app.include_router(followup_router)
+
+# 💳 Include Subscription & Registration API
+from api.subscription import router as subscription_router
+app.include_router(subscription_router)
+
+# 🔒 Include Super Admin Subscription Management API
+from api.admin_subscription import router as admin_subscription_router
+app.include_router(admin_subscription_router)
+
+# 🏥 Include Health Check API
+from api.health import router as health_router
+app.include_router(health_router)
 
 
-# ==================== HEALTH CHECK ====================
+# ==================== LEGACY HEALTH CHECK (DEPRECATED) ====================
 
 @app.get("/health")
 async def health_check():
@@ -753,18 +863,29 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
     
     # Uncomment below to enable public registration:
     """
+    # Validate password strength
+    validate_password_strength(data.password, min_length=8)
+    
+    # Sanitize inputs
+    email = sanitize_email(data.email)
+    name = sanitize_text(data.name, max_length=255)
+    
     # Check if email already exists
-    result = await db.execute(select(Tenant).where(Tenant.email == data.email))
+    result = await db.execute(select(Tenant).where(Tenant.email == email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Sanitize optional fields
+    company_name = sanitize_text(data.company_name, max_length=255) if data.company_name else None
+    phone = sanitize_phone(data.phone) if data.phone else None
+    
     # Create new tenant
     tenant = Tenant(
-        name=data.name,
-        email=data.email,
+        name=name,
+        email=email,
         password_hash=hash_password(data.password),
-        company_name=data.company_name,
-        phone=data.phone,
+        company_name=company_name,
+        phone=phone,
         trial_ends_at=datetime.utcnow() + timedelta(days=14)  # 14-day trial
     )
     db.add(tenant)
@@ -784,11 +905,32 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Login with email and password. Supports both tenants and super admin."""
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Login with email and password. Supports both tenants and super admin.
+    Rate limited: 5 attempts per minute to prevent brute force attacks.
+    """
     
-    # Check for Super Admin login first
-    if data.email == SUPER_ADMIN_EMAIL and data.password == SUPER_ADMIN_PASSWORD:
+    # Apply rate limit
+    client_ip = request.client.host if request.client else "unknown"
+    if "X-Forwarded-For" in request.headers:
+        client_ip = request.headers["X-Forwarded-For"].split(",")[0].strip()
+    
+    is_limited, retry_after = rate_limiter.is_rate_limited(
+        client_ip, "/api/auth/login", max_requests=5, window_seconds=60
+    )
+    
+    if is_limited:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many login attempts. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)}
+        )
+    
+    # Check for Super Admin login first (constant-time comparison)
+    email_match = secrets.compare_digest(data.email, SUPER_ADMIN_EMAIL)
+    password_match = secrets.compare_digest(data.password, SUPER_ADMIN_PASSWORD)
+    
+    if email_match and password_match:
         # Super admin uses tenant_id 0 to indicate admin status
         token = create_jwt_token(0, SUPER_ADMIN_EMAIL)
         return LoginResponse(
@@ -825,8 +967,27 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/api/auth/forgot-password")
-async def forgot_password(data: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
-    """Request password reset token."""
+async def forgot_password(request: Request, data: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+    """Request password reset token.
+    Rate limited: 3 attempts per hour to prevent email bombing.
+    """
+    
+    # Apply rate limit
+    client_ip = request.client.host if request.client else "unknown"
+    if "X-Forwarded-For" in request.headers:
+        client_ip = request.headers["X-Forwarded-For"].split(",")[0].strip()
+    
+    is_limited, retry_after = rate_limiter.is_rate_limited(
+        client_ip, "/api/auth/forgot-password", max_requests=3, window_seconds=3600
+    )
+    
+    if is_limited:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many password reset attempts. Try again in {retry_after // 60} minutes.",
+            headers={"Retry-After": str(retry_after)}
+        )
+    
     result = await db.execute(select(Tenant).where(Tenant.email == data.email))
     tenant = result.scalar_one_or_none()
     
@@ -926,6 +1087,29 @@ async def list_all_tenants(
     ]
 
 
+@app.get("/api/admin/tenants/{tenant_id}/credentials")
+async def get_tenant_credentials(
+    tenant_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get tenant login credentials (email only - password cannot be retrieved). Super admin only."""
+    await verify_super_admin(credentials)
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    return {
+        "id": tenant.id,
+        "name": tenant.name,
+        "email": tenant.email,
+        "note": "Password is hashed and cannot be retrieved. Use /reset-password endpoint to set a new password."
+    }
+
+
 @app.post("/api/admin/tenants")
 async def create_tenant(
     data: dict,
@@ -1020,6 +1204,36 @@ async def delete_tenant(
     return {"message": "Tenant deleted successfully"}
 
 
+@app.post("/api/admin/tenants/{tenant_id}/reset-password")
+async def reset_tenant_password(
+    tenant_id: int,
+    new_password: str = Body(..., embed=True, min_length=8),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    """Reset tenant password. Super admin only."""
+    await verify_super_admin(credentials)
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Hash new password
+    tenant.password_hash = hash_password(new_password)
+    tenant.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    logger.info(f"🔐 Password reset for tenant {tenant.name} (ID: {tenant_id})")
+    
+    return {
+        "message": "Password reset successfully",
+        "tenant_email": tenant.email,
+        "new_password": new_password  # Return it so admin can share with tenant
+    }
+
+
 @app.get("/api/auth/me")
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -1094,7 +1308,7 @@ async def get_tenant(
 @app.put("/api/tenants/{tenant_id}", response_model=TenantResponse)
 async def update_tenant(
     tenant_id: int, 
-    tenant_data: TenantCreate,
+    tenant_data: TenantUpdate,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1853,13 +2067,14 @@ async def whatsapp_webhook_verify(
     
     # Fallback to environment variable for initial setup
     env_token = os.getenv("WHATSAPP_VERIFY_TOKEN")
-    logger.info(f"🔑 Checking env token: {env_token[:20] if env_token else 'None'}...")
+    logger.info(f"🔑 Checking env token (hash): {hashlib.sha256(env_token.encode()).hexdigest()[:8] if env_token else 'None'}")
     
-    if env_token and hub_token == env_token:
+    if env_token and secrets.compare_digest(hub_token, env_token):
         logger.info(f"✅ Token matched environment variable")
         return Response(content=hub_challenge, media_type="text/plain")
     else:
-        logger.error(f"❌ Token mismatch! Received: {hub_token[:30]}..., Expected: {env_token[:30] if env_token else 'None'}...")
+        # Don't log actual token values - security risk
+        logger.error(f"❌ Token mismatch! Verification failed.")
     
     raise HTTPException(status_code=403, detail="Verification failed")
 
@@ -1867,7 +2082,7 @@ async def whatsapp_webhook_verify(
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
     """
-    Handle incoming WhatsApp webhook updates (Meta/Twilio).
+    Handle incoming WhatsApp webhook updates.
     Routes to appropriate tenant handler based on phone_number_id.
     """
     async def process_webhook():
@@ -1879,267 +2094,73 @@ async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
 
 @app.post("/api/webhook/waha")
 async def waha_webhook(
-    payload: dict, 
+    request: Request,
+    payload: dict,
     background_tasks: BackgroundTasks,
-    tenant_id: Optional[int] = None
+    x_tenant_id: Optional[int] = Header(None, alias="X-Tenant-ID")
 ):
     """
-    Handle incoming Waha WhatsApp webhook updates.
-    Multi-tenant support: Extracts tenant_id from query param or session name.
+    Handle incoming Waha (self-hosted WhatsApp) webhook updates.
+    This receives messages from the WhatsApp Router with tenant routing.
     
-    Waha sends events in this format:
-    {
-        "event": "message.any",
-        "session": "tenant_5",  ← Used to identify tenant
-        "payload": {
-            "from": "971505037158@c.us",
-            "body": "start_realty",
-            ...
-        }
-    }
+    Router adds X-Tenant-ID header to indicate which tenant this message belongs to.
     """
-    # Extract tenant_id if not provided in query param
-    if not tenant_id:
-        session = payload.get('session', 'default')
-        if session.startswith('tenant_'):
-            try:
-                tenant_id = int(session.replace('tenant_', ''))
-                logger.info(f"📩 [Waha] Extracted tenant {tenant_id} from session name")
-            except ValueError:
-                logger.error(f"❌ [Waha] Invalid session name: {session}")
-        else:
-            # Fallback: single tenant mode (default session)
-            logger.warning(f"⚠️ [Waha] Using default session - tenant_id not identified")
-    
-    logger.info(f"📩 [Waha Webhook] Event: {payload.get('event')} for Tenant: {tenant_id or 'unknown'}")
-    
     async def process_waha_webhook():
         try:
-            # Route to WhatsApp bot manager
-            await whatsapp_bot_manager.handle_webhook(payload)
+            logger.info(f"📨 Waha webhook received: {payload.get('event')}")
+            
+            # Parse webhook using Waha provider
+            from whatsapp_providers import WahaWhatsAppProvider
+            from database import Tenant
+            
+            # Get tenant from router header or fallback to default
+            async with AsyncSessionLocal() as db:
+                if x_tenant_id:
+                    logger.info(f"🔀 Routed message for Tenant {x_tenant_id}")
+                    result = await db.execute(select(Tenant).where(Tenant.id == x_tenant_id))
+                else:
+                    logger.warning("⚠️ No X-Tenant-ID header - using default tenant")
+                    result = await db.execute(select(Tenant).where(Tenant.id == 1))
+                
+                tenant = result.scalar_one_or_none()
+                
+                if not tenant:
+                    logger.error(f"❌ Tenant {x_tenant_id} not found")
+                    return
+                
+                provider = WahaWhatsAppProvider(tenant)
+                message_data = provider.parse_webhook(payload)
+                
+                if not message_data:
+                    logger.info("Waha webhook ignored (not a user message)")
+                    return
+                
+                # Route to WhatsApp bot manager
+                # Convert to Meta-like format for compatibility
+                meta_format = {
+                    "entry": [{
+                        "changes": [{
+                            "value": {
+                                "messages": [{
+                                    "from": message_data["from_phone"],
+                    "type": message_data["message_type"],
+                                    "text": {"body": message_data.get("text", "")}
+                                }],
+                                "contacts": [{
+                                    "profile": {"name": message_data.get("profile_name", "User")}
+                                }]
+                            }
+                        }]
+                    }]
+                }
+                
+                await whatsapp_bot_manager.handle_webhook(meta_format)
+                
         except Exception as e:
-            logger.error(f"❌ [Waha Webhook] Error processing: {e}")
+            logger.error(f"❌ Error processing Waha webhook: {e}", exc_info=True)
     
     background_tasks.add_task(process_waha_webhook)
-    return {"status": "received", "tenant_id": tenant_id}
-
-
-# ==================== WHATSAPP MULTI-SESSION MANAGEMENT ====================
-
-@app.post("/api/tenants/{tenant_id}/whatsapp/connect")
-async def connect_whatsapp(
-    tenant_id: int,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Create Waha session for tenant and return QR code URL.
-    Each tenant gets isolated WhatsApp connection.
-    """
-    tenant = await verify_tenant_access(credentials, tenant_id, db)
-    
-    # Check if already connected
-    if tenant.waha_session_name:
-        # Check if session is still active
-        waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
-        api_key = os.getenv('WAHA_API_KEY', '')
-        headers = {'X-Api-Key': api_key} if api_key else {}
-        
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(
-                    f"{waha_api}/sessions/{tenant.waha_session_name}",
-                    headers=headers,
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('status') == 'WORKING':
-                        return {
-                            "success": False,
-                            "message": "WhatsApp already connected",
-                            "phone": data.get('me', {}).get('id', '').replace('@c.us', '')
-                        }
-            except Exception as e:
-                logger.warning(f"Session check failed: {e}")
-    
-    # WAHA CORE limitation: Only 'default' session supported
-    # For multi-tenant, upgrade to WAHA PLUS or use Meta Cloud API
-    session_name = "default"
-    
-    # API URL for Waha
-    waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
-    api_key = os.getenv('WAHA_API_KEY', '')
-    headers = {'X-Api-Key': api_key} if api_key else {}
-    
-    # Webhook URL includes tenant_id for routing
-    webhook_url = f"http://backend:8000/api/webhook/waha?tenant_id={tenant.id}"
-    
-    payload = {
-        "config": {
-            "webhooks": [{
-                "url": webhook_url,
-                "events": ["message.any"]
-            }]
-        }
-    }
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            # Start session
-            response = await client.post(
-                f"{waha_api}/sessions/{session_name}/start",
-                json=payload,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code in [200, 201]:
-                # Save session name to tenant
-                tenant.waha_session_name = session_name
-                await db.commit()
-                
-                # Return QR code URL
-                server_url = os.getenv('SERVER_URL', 'http://localhost:3002')
-                qr_url = f"{server_url}/api/sessions/{session_name}/auth/qr"
-                if api_key:
-                    qr_url += f"?api_key={api_key}"
-                
-                logger.info(f"✅ Waha session created for tenant {tenant.id}: {session_name}")
-                
-                return {
-                    "success": True,
-                    "qr_url": qr_url,
-                    "session": session_name,
-                    "message": "Scan QR code with your WhatsApp to connect"
-                }
-            else:
-                raise HTTPException(500, f"Failed to create session: {response.text}")
-    
-    except httpx.HTTPError as e:
-        logger.error(f"❌ Waha API error: {e}")
-        raise HTTPException(500, f"Failed to connect to Waha service: {str(e)}")
-
-
-@app.get("/api/tenants/{tenant_id}/whatsapp/status")
-async def whatsapp_status(
-    tenant_id: int,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-):
-    """Check WhatsApp connection status for tenant."""
-    tenant = await verify_tenant_access(credentials, tenant_id, db)
-    
-    if not tenant.waha_session_name:
-        return {
-            "connected": False,
-            "message": "WhatsApp not configured. Click 'Connect WhatsApp' to start."
-        }
-    
-    waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
-    api_key = os.getenv('WAHA_API_KEY', '')
-    headers = {'X-Api-Key': api_key} if api_key else {}
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{waha_api}/sessions/{tenant.waha_session_name}",
-                headers=headers,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                status = data.get('status')
-                
-                if status == 'WORKING':
-                    phone = data.get('me', {}).get('id', '').replace('@c.us', '')
-                    return {
-                        "connected": True,
-                        "status": status,
-                        "phone": phone,
-                        "session": tenant.waha_session_name
-                    }
-                elif status in ['SCAN_QR_CODE', 'STARTING']:
-                    server_url = os.getenv('SERVER_URL', 'http://localhost:3002')
-                    qr_url = f"{server_url}/api/sessions/{tenant.waha_session_name}/auth/qr"
-                    if api_key:
-                        qr_url += f"?api_key={api_key}"
-                    return {
-                        "connected": False,
-                        "status": status,
-                        "qr_url": qr_url,
-                        "message": "Scan QR code to connect"
-                    }
-                else:
-                    return {
-                        "connected": False,
-                        "status": status,
-                        "message": f"Session status: {status}"
-                    }
-            else:
-                return {
-                    "connected": False,
-                    "message": "Session not found. Please reconnect."
-                }
-    
-    except httpx.HTTPError as e:
-        logger.error(f"❌ Waha API error: {e}")
-        return {
-            "connected": False,
-            "message": "Cannot connect to WhatsApp service"
-        }
-
-
-@app.post("/api/tenants/{tenant_id}/whatsapp/disconnect")
-async def disconnect_whatsapp(
-    tenant_id: int,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-):
-    """Disconnect WhatsApp for tenant."""
-    tenant = await verify_tenant_access(credentials, tenant_id, db)
-    
-    if not tenant.waha_session_name:
-        return {"success": True, "message": "Already disconnected"}
-    
-    waha_api = os.getenv('WAHA_API_URL', 'http://waha:3000/api')
-    api_key = os.getenv('WAHA_API_KEY', '')
-    headers = {'X-Api-Key': api_key} if api_key else {}
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            # Stop session
-            await client.post(
-                f"{waha_api}/sessions/{tenant.waha_session_name}/stop",
-                headers=headers,
-                timeout=10
-            )
-            
-            logger.info(f"✅ Waha session stopped for tenant {tenant.id}")
-    
-    except Exception as e:
-        logger.warning(f"Failed to stop Waha session: {e}")
-    
-    # Clear from tenant
-    session_name = tenant.waha_session_name
-    tenant.waha_session_name = None
-    await db.commit()
-    
-    return {
-        "success": True,
-        "message": f"WhatsApp disconnected (session: {session_name})"
-    }
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for Docker/Nginx."""
-    return {
-        "status": "healthy",
-        "service": "artinsmartrealty-backend",
-        "timestamp": datetime.now().isoformat()
-    }
+    return {"status": "ok"}
 
 
 # ==================== TENANT DATA MANAGEMENT ====================

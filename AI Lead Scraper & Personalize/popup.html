@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artin Lead Scraper & Personalizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 350px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+    }
+    
+    .container {
+      padding: 20px;
+    }
+    
+    h1 {
+      font-size: 20px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    
+    .subtitle {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-bottom: 20px;
+    }
+    
+    .settings-card {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      opacity: 0.95;
+    }
+    
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #333;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+    
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #fff;
+      background: #fff;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #fff;
+      color: #667eea;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      margin-top: 8px;
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    .status {
+      margin-top: 12px;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: center;
+    }
+    
+    .status.success {
+      background: rgba(76, 175, 80, 0.3);
+    }
+    
+    .status.error {
+      background: rgba(244, 67, 54, 0.3);
+    }
+    
+    .help-text {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Artin Lead Scraper</h1>
+    <p class="subtitle">Personalize your cold outreach with AI</p>
+    
+    <div class="settings-card">
+      <label for="productDescription">Your Product/Service</label>
+      <textarea 
+        id="productDescription" 
+        placeholder="e.g., I sell AI-powered sales automation software that helps B2B companies increase conversions by 40%"
+      ></textarea>
+      <p class="help-text">Describe what you offer in 1-2 sentences</p>
+    </div>
+    
+    <div class="settings-card">
+      <label for="apiEndpoint">Backend API Endpoint</label>
+      <input 
+        type="text" 
+        id="apiEndpoint" 
+        placeholder="http://localhost:8000"
+      />
+      <p class="help-text">Default: http://localhost:8000</p>
+    </div>
+    
+    <button class="btn btn-primary" id="saveSettings">Save Settings</button>
+    <button class="btn btn-secondary" id="openSidePanel">Open Side Panel</button>
+    <button class="btn btn-secondary" id="openCRM">📊 Open CRM Manager</button>
+    <button class="btn btn-secondary" id="openAutomation">🤖 Automation Dashboard</button>
+    
+    <div id="status" style="display: none;"></div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

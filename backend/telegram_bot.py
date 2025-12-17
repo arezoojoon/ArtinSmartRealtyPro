@@ -40,6 +40,7 @@ from redis_manager import redis_manager, init_redis, close_redis
 from context_recovery import save_context_to_redis, handle_user_message_with_recovery
 from inline_keyboards import edit_message_with_checkmark
 from lead_scoring import increment_engagement, update_lead_score
+from property_presenter import present_all_properties
 
 # Configure logging
 logging.basicConfig(
@@ -210,45 +211,48 @@ class TelegramBotHandler:
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to send media {media.get('name')}: {e}")
         
-        # Send message
-        if update.callback_query:
-            # Edit existing message for callback queries
-            try:
-                await update.callback_query.edit_message_text(
-                    text=response.message,
-                    reply_markup=reply_markup if not response.request_contact else None,  # Can't use ReplyKeyboard with edit
-                    parse_mode='HTML'
-                )
-                # Send contact request as new message if needed
-                if response.request_contact:
-                    button_text = {
-                        Language.EN: "📱 Share Phone Number",
-                        Language.FA: "📱 اشتراک‌گذاری شماره تلفن",
-                        Language.AR: "📱 شارك رقم الهاتف",
-                        Language.RU: "📱 Поделиться номером"
-                    }.get(lead.language, "📱 Share Phone Number")
-                    contact_button = KeyboardButton(button_text, request_contact=True)
-                    reply_markup = ReplyKeyboardMarkup([[contact_button]], resize_keyboard=True, one_time_keyboard=True)
+        # Send message (skip if empty - property_presenter will handle)
+        if response.message and response.message.strip():
+            if update.callback_query:
+                # Edit existing message for callback queries
+                try:
+                    await update.callback_query.edit_message_text(
+                        text=response.message,
+                        reply_markup=reply_markup if not response.request_contact else None,
+                        parse_mode='Markdown'
+                    )
+                    # Send contact request as new message if needed
+                    if response.request_contact:
+                        button_text = {
+                            Language.EN: "📱 Share Phone Number",
+                            Language.FA: "📱 اشتراک‌گذاری شماره تلفن",
+                            Language.AR: "📱 شارك رقم الهاتف",
+                            Language.RU: "📱 Поделиться номером"
+                        }.get(lead.language, "📱 Share Phone Number")
+                        contact_button = KeyboardButton(button_text, request_contact=True)
+                        reply_markup = ReplyKeyboardMarkup([[contact_button]], resize_keyboard=True, one_time_keyboard=True)
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="👇",
+                            reply_markup=reply_markup
+                        )
+                except Exception:
+                    # If edit fails, send new message
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="👇",
-                        reply_markup=reply_markup
+                        text=response.message,
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
                     )
-            except Exception:
-                # If edit fails, send new message
+            else:
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=response.message,
                     reply_markup=reply_markup,
-                    parse_mode='HTML'
+                    parse_mode='Markdown'
                 )
-        else:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=response.message,
-                reply_markup=reply_markup,
-                parse_mode='HTML'
-            )
+        elif response.message == "":
+            logger.info(f"📭 Empty message - property_presenter will handle presentation")
         
         # Update lead state if needed
         updates = response.lead_updates or {}
@@ -692,14 +696,29 @@ class TelegramBotHandler:
             if redis_context:
                 logger.info(f"📦 Loaded Redis context for lead {lead.id}: state={redis_context.get('state')}")
             
-            # Process through Brain
-            response = await self.brain.process_message(lead, message_text)
+            # Process through Brain (pass None as callback_data for text messages)
+            response = await self.brain.process_message(lead, message_text, callback_data=None)
             
             # Save context to Redis after processing
             await save_context_to_redis(lead)
             logger.info(f"💾 Saved context to Redis for lead {lead.id}")
             
             await self._send_response(update, context, response, lead)
+            
+            # 🏆 PROFESSIONAL PROPERTY PRESENTATION: Check if Brain has properties to show
+            if hasattr(self.brain, 'current_properties') and self.brain.current_properties:
+                logger.info(f"🏠 Brain has {len(self.brain.current_properties)} properties to present - using property_presenter")
+                await present_all_properties(
+                    bot_interface=self,
+                    lead=lead,
+                    tenant=self.tenant,
+                    properties=self.brain.current_properties,
+                    platform="telegram"
+                )
+                # Clear properties after presentation to avoid repetition
+                self.brain.current_properties = None
+                logger.info(f"✅ Professional property presentation complete for lead {lead.id}")
+            
             logger.info(f"🔓 Lock released for user {telegram_id}")
     
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -714,17 +733,8 @@ class TelegramBotHandler:
                 logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
                 lead = fresh_lead  # Replace object reference
         
-        # ZOMBIE STATE PROTECTION: If in SLOT_FILLING with pending button selection, guide them
-        if lead.conversation_state == ConversationState.SLOT_FILLING and lead.pending_slot:
-            lang = lead.language or Language.EN
-            voice_redirect = {
-                Language.EN: "I'll process your voice in a moment! First, please select an option from the buttons above to continue.",
-                Language.FA: "یه لحظه بعد صداتو پردازش میکنم! اول لطفاً یکی از دکمه‌های بالا رو انتخاب کن.",
-                Language.AR: "سأعالج رسالتك الصوتية بعد قليل! أولاً، اختر خياراً من الأزرار أعلاه.",
-                Language.RU: "Обработаю голосовое чуть позже! Сначала выберите вариант из кнопок выше."
-            }
-            await update.message.reply_text(voice_redirect.get(lang, voice_redirect[Language.EN]))
-            return
+        # ✅ REMOVED ZOMBIE STATE PROTECTION - Voice should ALWAYS be processed!
+        # Voice transcript will be analyzed by brain's AI intent extraction
         
         # Check if voice exists
         if not update.message.voice:
@@ -756,6 +766,16 @@ class TelegramBotHandler:
         if transcript:
             await update_lead(lead.id, voice_transcript=transcript)
             logger.info(f"🎤 Voice transcript saved for lead {lead.id}: {transcript[:100]}...")
+            
+            # CRITICAL: Process transcript as text message through brain for AI intent extraction
+            if lead.conversation_state in [ConversationState.WARMUP, ConversationState.SLOT_FILLING]:
+                logger.info(f"🧠 Re-processing transcript through brain for AI intent extraction...")
+                response = await self.brain.process_message(
+                    lead=lead,
+                    message=transcript,  # Pass transcript as text
+                    callback_data=None
+                )
+                logger.info(f"✅ Brain processed voice transcript - extracted intents")
             
             # Update lead score (voice = high engagement)
             async with async_session() as session:
@@ -859,7 +879,7 @@ class TelegramBotHandler:
             logger.info(f"📞 Lead {lead.id} shared phone number: {contact.phone_number}")
         
         # Process as if they entered the phone number
-        response = await self.brain.process_message(lead, contact.phone_number)
+        response = await self.brain.process_message(lead, contact.phone_number, callback_data=None)
         await self._send_response(update, context, response, lead)
     
     async def send_ghost_reminder(self, lead: Lead):

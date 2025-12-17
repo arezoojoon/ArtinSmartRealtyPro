@@ -6,14 +6,15 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies (use npm install instead of npm ci to regenerate lock file)
-RUN npm install --legacy-peer-deps
+# Install dependencies with clean cache
+RUN npm cache clean --force && \
+    npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application with verbose logging
+RUN npm run build || (echo "Build failed, listing directory:" && ls -la && exit 1)
 
 # Production stage
 FROM nginx:alpine
@@ -23,6 +24,9 @@ RUN apk add --no-cache curl
 
 # Copy built assets from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy smart-upload.html to nginx html directory
+COPY smart-upload.html /usr/share/nginx/html/smart-upload.html
 
 # Copy nginx configuration
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf

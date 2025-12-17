@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from './Layout';
-import { Eye, Users, Calendar, TrendingUp, AlertTriangle, Plus, X } from 'lucide-react';
+import { Eye, Users, Calendar, TrendingUp, AlertTriangle, Plus, X, Key } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -108,6 +108,51 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
     } catch (err) {
       console.error('Failed to update subscription:', err);
       alert(`❌ Failed: ${err.message}`);
+    }
+  };
+
+  const handleResetPassword = async (tenant) => {
+    const newPassword = prompt(
+      `Reset password for ${tenant.name}:\n(Minimum 8 characters)`
+    );
+    
+    if (!newPassword) return;
+    
+    if (newPassword.length < 8) {
+      alert('❌ Password must be at least 8 characters');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(
+        `${API_BASE_URL}/api/admin/tenants/${tenant.id}/reset-password`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ new_password: newPassword }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Unknown error');
+      }
+
+      const data = await response.json();
+      alert(
+        `✅ Password Reset Successful!\n\n` +
+        `Email: ${data.tenant_email}\n` +
+        `New Password: ${data.new_password}\n\n` +
+        `Share these credentials with the tenant.`
+      );
+    } catch (err) {
+      console.error('Failed to reset password:', err);
+      alert(`❌ Password reset failed: ${err.message}`);
     }
   };
 
@@ -288,14 +333,24 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
                       {tenant.created_at ? new Date(tenant.created_at).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => handleImpersonate(tenant)}
-                        className="btn-gold flex items-center gap-2 mx-auto text-sm py-2 px-4"
-                        title="Access this tenant's dashboard"
-                      >
-                        <Eye size={16} />
-                        Access Dashboard
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleResetPassword(tenant)}
+                          className="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-400 rounded-lg py-2 px-3 text-sm font-medium transition-all duration-200 flex items-center gap-2"
+                          title="Reset tenant password"
+                        >
+                          <Key size={16} />
+                          Reset Password
+                        </button>
+                        <button
+                          onClick={() => handleImpersonate(tenant)}
+                          className="btn-gold flex items-center gap-2 text-sm py-2 px-4"
+                          title="Access this tenant's dashboard"
+                        >
+                          <Eye size={16} />
+                          Access Dashboard
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -1,0 +1,45 @@
+# Docker Compose برای اجرای Standalone Router
+# استفاده: docker-compose -f docker-compose.router.yml up -d
+
+version: '3.8'
+
+services:
+  router:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.router
+    container_name: artinsmart-router
+    ports:
+      - "5000:5000"
+    volumes:
+      # حافظه دائمی - فایل JSON روی هاست ذخیره می‌شود
+      - ./router_data:/app/data
+    environment:
+      # ساب‌دامین‌های سرویس‌ها
+      - REALTY_WEBHOOK=https://realty.artinsmartagent.com/api/webhook/waha
+      - TRAVEL_WEBHOOK=https://travel.artinsmartagent.com/api/webhook/waha
+      - EXPO_WEBHOOK=https://expo.artinsmartagent.com/api/webhook/waha
+      - CLINIC_WEBHOOK=https://clinic.artinsmartagent.com/api/webhook/waha
+      
+      # تنظیمات router
+      - ROUTER_PORT=5000
+      - ROUTER_HOST=0.0.0.0
+      - ROUTES_DB_FILE=/app/data/user_routes.json
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  router_data:

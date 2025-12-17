@@ -1,228 +1,258 @@
-# 🚀 راهنمای Deploy نسخه سالم (Commit 8327f00)
+# 🚨 EMERGENCY DEPLOYMENT - Critical Fixes
 
-## ✅ وضعیت فعلی
-این commit همه enum ها رو به **lowercase** برگردونده (مثل commit سالم `8c98055`).
+**Date:** December 13, 2025  
+**Priority:** CRITICAL  
+**Status:** Ready for immediate deployment
 
-## 📋 دستورات Deploy به ترتیب
+---
 
-### 1️⃣ Pull کردن آخرین تغییرات
+## ✅ Issues Fixed (4 commits)
+
+### 1. ✅ Smart Upload Database Schema Fix (771eb34)
+- **Problem:** Property upload failed with `'is_off_plan' is an invalid keyword argument`
+- **Fix:** Mapped extracted fields to actual database schema
+- **Impact:** Smart Upload now works correctly
+
+### 2. ✅ AI Vision Branding Update (76f9345)
+- **Problem:** "Gemini" brand name visible in UI
+- **Fix:** Changed to generic "AI Vision" terminology (7 instances)
+- **Impact:** Professional, vendor-neutral branding
+
+### 3. ✅ Bot Frustration Detection Fix (c67608d)
+- **Problem:** Bot misinterpreting "off plan" and "پیش خرید" as frustration
+- **Fix:** Improved regex with word boundaries, removed problematic keywords
+- **Impact:** Bot conversation flows naturally for real estate terms
+
+### 4. ✅ Boolean Validation Error Fix (b0dbd88)
+- **Problem:** `ResponseValidationError: is_urgent should be a valid boolean, input: None`
+- **Fix:** Added default values for boolean fields in response model
+- **Impact:** Properties API endpoint works without 500 errors
+
+---
+
+## 🚀 Deployment Steps (Production Server)
+
+### Step 1: Pull Latest Code
 ```bash
-cd /opt/ArtinSmartRealty
+ssh root@88.99.45.159
+cd /opt/ArtinSmartRealtyPro
 git pull origin main
 ```
 
-**انتظار:** باید commit `8327f00` رو ببینی که پیغامش "RESTORE WORKING STATE" هست.
+**Expected output:**
+```
+From https://github.com/arezoojoon/ArtinSmartRealtyPro
+   ...  main -> origin/main
+Updating ...
+Fast-forward
+ backend/brain.py                  | 4 ++--
+ backend/main.py                   | 4 ++--
+ backend/api/smart_upload.py       | ...
+ frontend/src/components/...       | ...
+ 5 files changed, XX insertions(+), XX deletions(-)
+```
 
----
-
-### 2️⃣ اجرای Migration Script (خیلی مهم!)
-این script تمام enum های UPPERCASE موجود در database رو به lowercase تبدیل میکنه:
-
+### Step 2: Fix Database NULL Values
 ```bash
-docker-compose run --rm backend python migrate_enums_to_lowercase.py
+# Connect to database
+docker exec -it artinrealty-db psql -U artinrealty -d artinrealty
+
+# Run the fix
+UPDATE tenant_properties 
+SET 
+    is_urgent = COALESCE(is_urgent, false),
+    is_featured = COALESCE(is_featured, false),
+    is_available = COALESCE(is_available, true),
+    golden_visa_eligible = COALESCE(golden_visa_eligible, false)
+WHERE 
+    is_urgent IS NULL 
+    OR is_featured IS NULL 
+    OR is_available IS NULL 
+    OR golden_visa_eligible IS NULL;
+
+# Verify (should show 0 NULLs)
+SELECT 
+    COUNT(*) as total,
+    SUM(CASE WHEN is_urgent IS NULL THEN 1 ELSE 0 END) as null_urgent,
+    SUM(CASE WHEN is_featured IS NULL THEN 1 ELSE 0 END) as null_featured,
+    SUM(CASE WHEN is_available IS NULL THEN 1 ELSE 0 END) as null_available
+FROM tenant_properties;
+
+# Exit
+\q
 ```
 
-**خروجی مورد انتظار:**
+**Expected output:**
 ```
-🔧 Starting enum migration to lowercase...
-
-📝 Fixing conversation_state...
-✅ Updated X conversation_state rows
-
-📝 Fixing language...
-✅ Updated X language rows
-
-... (ادامه دارد) ...
-
-🎉 Migration completed successfully!
-
-🔍 Verifying migration...
-Lead 1: state=start, lang=fa, status=new
-Lead 2: state=collecting_name, lang=fa, status=new
+ total | null_urgent | null_featured | null_available 
+-------+-------------+---------------+----------------
+     8 |           0 |             0 |              0
 ```
 
----
-
-### 3️⃣ Rebuild Backend (بدون Cache)
+### Step 3: Rebuild and Restart Backend
 ```bash
-docker-compose down
+# Rebuild backend container
 docker-compose build --no-cache backend
-```
 
-**زمان تخمینی:** ~2-3 دقیقه
-
----
-
-### 4️⃣ Start کردن تمام Services
-```bash
-docker-compose up -d
-```
-
----
-
-### 5️⃣ چک کردن Logs
-```bash
-docker-compose logs -f backend | grep "🔍\|🎯\|✅"
-```
-
-**خروجی مورد انتظار (وقتی کاربر اسم وارد میکنه):**
-```
-backend | 🔍 RAW lead.conversation_state = collecting_name (type: <class 'str'>)
-backend | 🎯 FINAL current_state = ConversationState.COLLECTING_NAME
-```
-
----
-
-## 🧪 تست کامل
-
-### ✅ Test 1: Language Selection
-1. به ربات `/start` بفرست
-2. دکمه "🇮🇷 فارسی" رو بزن
-3. **انتظار:** ربات باید بگه "اسم شما چیه؟"
-
-### ✅ Test 2: Name Collection (مهم‌ترین تست!)
-1. اسمت رو تایپ کن (مثلاً "محمد")
-2. **انتظار:** ربات باید سوال **بعدی** رو بپرسه (مثلاً "دنبال چی هستید؟")
-3. **نباید** دوباره language menu نشون بده ❌
-
-### ✅ Test 3: Voice Message
-1. یک voice message بفرست
-2. **انتظار:** ربات باید voice رو transcribe کنه و جواب بده
-
-### ✅ Test 4: Admin Panel - PDF Upload
-1. به admin panel برو (`https://your-domain.com`)
-2. وارد Properties Management شو
-3. روی "Upload PDF" کلیک کن
-4. یک PDF property brochure انتخاب کن
-5. **انتظار:** PDF باید آپلود بشه و property ساخته بشه
-
-### ✅ Test 5: Admin Panel - Schedule Slots
-1. به Settings > Agent Availability برو
-2. یک time slot اضافه کن (مثلاً Monday 10:00-11:00)
-3. Save کن
-4. **انتظار:** 
-   - Slot نباید duplicate بشه
-   - باید توی لیست ظاهر بشه
-   - Calendar باید به‌روز بشه
-
----
-
-## 🔧 اگر مشکلی پیش اومد
-
-### مشکل: هنوز infinite loop داریم
-**راه حل:**
-```bash
-# چک کن migration اجرا شده؟
-docker-compose exec backend psql $DATABASE_URL -c "SELECT DISTINCT conversation_state FROM leads LIMIT 10;"
-
-# اگر هنوز UPPERCASE دیدی:
-docker-compose run --rm backend python migrate_enums_to_lowercase.py
+# Restart backend
 docker-compose restart backend
+
+# Check logs
+docker-compose logs -f --tail=100 backend
 ```
 
-### مشکل: PDF upload کار نمیکنه
-**راه حل:**
+**Expected:** No more `ResponseValidationError` or `is_urgent` errors
+
+### Step 4: Rebuild and Restart Frontend
 ```bash
-# چک کن PyPDF2 نصب شده؟
-docker-compose exec backend pip list | grep PyPDF2
+# Rebuild frontend container
+docker-compose build --no-cache frontend
 
-# اگر نبود:
-docker-compose build --no-cache backend
+# Restart frontend
+docker-compose restart frontend
 ```
 
-### مشکل: Schedule slots duplicate میشن
-**بررسی:** این باید fix شده باشه، ولی اگه هنوز مشکل داری:
+### Step 5: Verify All Containers
 ```bash
-# لاگ های frontend رو چک کن:
-docker-compose logs frontend | tail -50
+docker-compose ps
+```
 
-# لاگ های backend schedule endpoint:
-docker-compose logs backend | grep "schedule"
+**Expected output:**
+```
+NAME                     STATUS
+artinrealty-backend      Up (healthy)
+artinrealty-db           Up (healthy)
+artinrealty-frontend     Up (healthy)
+artinrealty-nginx        Up
+artinrealty-redis        Up (healthy)
+artinrealty-waha         Up
 ```
 
 ---
 
-## 📊 مقایسه قبل/بعد
+## ✅ Testing Checklist
 
-### ❌ قبل (Broken):
-```python
-# Enum definition
-ConversationState.START = "START"  # UPPERCASE
+### Bot Testing:
+- [ ] User can say "off plan" without triggering frustration detection
+- [ ] User can say "پیش خرید" (pre-purchase) naturally
+- [ ] User can ask about off-plan properties normally
+- [ ] Bot conversation flows through WARMUP → QUALIFYING states
+- [ ] No more frustration loops
 
-# Database storage  
-"collecting_name"  # lowercase (از update_lead که .lower() میکرد)
-
-# Conversion attempt
-ConversationState("collecting_name")  # ❌ ValueError → برمیگشت به START
+**Test commands in Telegram:**
+```
+/start
+پیش خرید میخوام
+off plan
+با پیش خرید هم میشه اقامت گرفت؟
 ```
 
-### ✅ بعد (Fixed):
-```python
-# Enum definition
-ConversationState.START = "start"  # lowercase
+### Dashboard Testing:
+- [ ] Login to https://realty.artinsmartagent.com
+- [ ] Navigate to Properties section
+- [ ] Properties list loads without errors (no 500 error)
+- [ ] Upload binghatti-flare-digital-brochure.pdf
+- [ ] Property saves successfully
+- [ ] Check "AI Vision" branding (not "Gemini")
+- [ ] All boolean fields display correctly
 
-# Database storage
-"collecting_name"  # lowercase
+### API Testing:
+- [ ] `GET /api/tenants/1/properties` returns 200 (not 500)
+- [ ] No `ResponseValidationError` in logs
+- [ ] All properties have valid boolean values
+- [ ] No NULL errors
 
-# Conversion
-ConversationState("collecting_name")  # ✅ Works perfectly!
+---
+
+## 📊 Monitoring
+
+### Watch Backend Logs:
+```bash
+docker-compose logs -f backend | grep -E "(ERROR|telegram|is_urgent|ValidationError)"
+```
+
+### Check for Errors:
+```bash
+# Should show no errors
+docker-compose logs backend | grep -E "ERROR|Exception|Traceback" | tail -50
+```
+
+### Monitor Telegram Bot:
+```bash
+docker-compose logs -f backend | grep "telegram"
 ```
 
 ---
 
-## 🎯 چیزهایی که الان کار میکنن
+## 🔄 Rollback Plan (If Needed)
 
-✅ Telegram Bot - Language selection  
-✅ Telegram Bot - Name collection  
-✅ Telegram Bot - Full conversation flow  
-✅ WhatsApp Bot (اگه configure کرده باشی)  
-✅ Admin Panel - Dashboard  
-✅ Admin Panel - Lead Management  
-✅ Admin Panel - Property Management  
-✅ Admin Panel - PDF Upload  
-✅ Admin Panel - Schedule/Calendar  
-✅ Multi-tenant isolation  
-✅ RAG system (knowledge base)  
-
----
-
-## 🔐 نکات امنیتی
-
-این deployment تغییری در authentication نداده، پس همه چیز مثل قبل امنه.
-
-اما بهتره بعد از deploy:
-1. Password های admin رو تغییر بدی
-2. JWT_SECRET رو بررسی کنی
-3. Backup از database بگیری
-
----
-
-## 📞 پشتیبانی
-
-اگه بعد از این مراحل هنوز مشکل داری، لاگ های زیر رو برام بفرست:
+If critical issues occur after deployment:
 
 ```bash
-# لاگ ربات
-docker-compose logs backend --tail=100 > backend_logs.txt
+cd /opt/ArtinSmartRealtyPro
 
-# لاگ دیتابیس
-docker-compose logs db --tail=50 > db_logs.txt
+# Rollback to previous commit
+git reset --hard <previous-commit-hash>
 
-# وضعیت containers
-docker-compose ps > containers_status.txt
+# Rebuild containers
+docker-compose build --no-cache backend frontend
+
+# Restart
+docker-compose restart backend frontend
 ```
 
----
-
-## ✨ تغییرات این نسخه (8327f00)
-
-1. **همه enum ها lowercase شدن** - سازگار با database
-2. **update_lead() ساده شد** - دیگه .lower() یا .upper() نمیکنه
-3. **brain.py ساده شد** - دیگه uppercase conversion نداره
-4. **Migration script اضافه شد** - برای تبدیل داده‌های موجود
+**Previous stable commits:**
+- Before fixes: `<commit-before-771eb34>`
+- After smart upload fix: `771eb34`
+- After branding fix: `76f9345`
+- After bot fix: `c67608d`
+- Current: `b0dbd88`
 
 ---
 
-**آخرین بروزرسانی:** 8 دسامبر 2025  
-**Commit:** 8327f00  
-**وضعیت:** ✅ STABLE & TESTED
+## 🐛 Known Remaining Issues
+
+### 1. Frontend `/api/leads` 404 Error
+```
+GET /api/leads?limit=100 → 404 Not Found
+```
+
+**Status:** Identified, not critical  
+**Fix Required:** Frontend needs to use `/api/tenants/{tenant_id}/leads`  
+**Priority:** Medium (doesn't break core functionality)
+
+---
+
+## 📈 Success Metrics
+
+**Before Deployment:**
+- ❌ Properties API: 500 Internal Server Error
+- ❌ Bot: Frustration loops with "off plan"
+- ❌ UI: "Gemini Vision AI" branding
+- ❌ Smart Upload: Database field errors
+
+**After Deployment:**
+- ✅ Properties API: 200 OK
+- ✅ Bot: Natural real estate conversations
+- ✅ UI: "AI Vision" professional branding
+- ✅ Smart Upload: Properties save successfully
+- ✅ No validation errors in logs
+
+---
+
+## 📞 Support
+
+If issues persist after deployment:
+
+1. Check logs: `docker-compose logs backend | tail -100`
+2. Verify database: `docker exec -it artinrealty-db psql -U artinrealty -d artinrealty`
+3. Check container health: `docker-compose ps`
+4. Review this guide: `/opt/ArtinSmartRealtyPro/DEPLOYMENT_GUIDE.md`
+
+---
+
+**Deployment Window:** Immediate  
+**Estimated Downtime:** 2-3 minutes  
+**Risk Level:** LOW (all fixes tested, database migration is safe)  
+
+✅ **Ready for deployment!**

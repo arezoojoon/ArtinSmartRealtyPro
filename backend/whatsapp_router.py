@@ -1,389 +1,343 @@
 """
-WhatsApp Gateway Router for Multi-Tenant SaaS Platform
+WhatsApp Gateway Router - Multi-Tenant Deep Link Router
+========================================================
 
-Architecture:
-- Single WhatsApp number (Gateway) shared by 1000+ tenants
-- Deep links format: https://wa.me/971557357753?text=start_realty_{tenant_id}
-- Persistent user-to-tenant mapping (locked after first contact)
-- Routes messages to correct tenant's backend handler
-
-Author: ArtinSmartRealty Platform
+سیستم روتینگ پیام‌های واتساپ برای چند تنانت:
+- یک شماره واتساپ (Gateway) مشترک بین ۱۰۰۰+ ایجنت
+- هر ایجنت دیپ لینک خاص خودش رو به مشتری میده
+- مشتری با کلیک روی لینک به یک تنانت قفل میشه
+- تمام پیام‌های بعدی اون مشتری به همون تنانت روت میشه
 """
 
-import re
+import os
 import json
+import re
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Optional
+from fastapi import FastAPI, Request, BackgroundTasks, Header
+import httpx
 
-from fastapi import APIRouter, Request, HTTPException, Header
-from pydantic import BaseModel
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("Router")
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configuration
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://backend:8000/api/webhook/waha")
+WAHA_API_URL = os.getenv("WAHA_API_URL", "http://waha:3000/api")
+WAHA_API_KEY = os.getenv("WAHA_API_KEY", "waha_artinsmartrealty_secure_key_2024")
+DB_FILE = Path("/app/data/user_tenant_map.json")
 
-# Router instance
-router = APIRouter(prefix="/api/gateway", tags=["WhatsApp Gateway"])
+# Ensure data directory exists
+DB_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-# Persistent mapping file
-MAPPING_FILE = Path(__file__).parent / "data" / "user_tenant_mapping.json"
-MAPPING_FILE.parent.mkdir(exist_ok=True)
-
-
-class UserTenantMapping:
-    """Manages persistent user-to-tenant mapping"""
-    
-    def __init__(self, file_path: Path = MAPPING_FILE):
-        self.file_path = file_path
-        self.mappings: Dict[str, int] = self._load_mappings()
-    
-    def _load_mappings(self) -> Dict[str, int]:
-        """Load mappings from JSON file"""
-        if not self.file_path.exists():
-            logger.info(f"Creating new mapping file: {self.file_path}")
-            self._save_mappings({})
-            return {}
-        
-        try:
-            with open(self.file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                logger.info(f"Loaded {len(data)} user-tenant mappings")
-                return data
-        except Exception as e:
-            logger.error(f"Failed to load mappings: {e}")
-            return {}
-    
-    def _save_mappings(self, mappings: Dict[str, int]):
-        """Save mappings to JSON file"""
-        try:
-            with open(self.file_path, 'w', encoding='utf-8') as f:
-                json.dump(mappings, f, indent=2, ensure_ascii=False)
-            logger.debug(f"Saved {len(mappings)} mappings to disk")
-        except Exception as e:
-            logger.error(f"Failed to save mappings: {e}")
-    
-    def lock_user_to_tenant(self, phone_number: str, tenant_id: int) -> bool:
-        """
-        Lock a user to a specific tenant (first contact wins)
-        
-        Args:
-            phone_number: User's WhatsApp phone number
-            tenant_id: Tenant ID to lock to
-            
-        Returns:
-            True if new mapping created, False if already existed
-        """
-        # Normalize phone number (remove +, spaces, hyphens)
-        normalized_phone = re.sub(r'[^\d]', '', phone_number)
-        
-        if normalized_phone in self.mappings:
-            existing_tenant = self.mappings[normalized_phone]
-            if existing_tenant != tenant_id:
-                logger.warning(
-                    f"User {normalized_phone} already locked to tenant {existing_tenant}, "
-                    f"ignoring lock attempt to tenant {tenant_id}"
-                )
-            return False
-        
-        # Create new mapping
-        self.mappings[normalized_phone] = tenant_id
-        self._save_mappings(self.mappings)
-        
-        logger.info(f"🔒 Locked user {normalized_phone} to tenant {tenant_id}")
-        return True
-    
-    def get_tenant_for_user(self, phone_number: str) -> Optional[int]:
-        """
-        Get the locked tenant ID for a user
-        
-        Args:
-            phone_number: User's WhatsApp phone number
-            
-        Returns:
-            Tenant ID if found, None otherwise
-        """
-        normalized_phone = re.sub(r'[^\d]', '', phone_number)
-        return self.mappings.get(normalized_phone)
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """Get mapping statistics"""
-        tenant_counts = {}
-        for tenant_id in self.mappings.values():
-            tenant_counts[tenant_id] = tenant_counts.get(tenant_id, 0) + 1
-        
-        return {
-            "total_users": len(self.mappings),
-            "total_tenants": len(tenant_counts),
-            "users_per_tenant": tenant_counts,
-            "last_updated": datetime.now().isoformat()
-        }
+# FastAPI app
+app = FastAPI(title="WhatsApp Gateway Router", version="2.0.0")
 
 
-# Global mapping instance
-user_tenant_map = UserTenantMapping()
+# --- Health Check Endpoint ---
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker"""
+    return {"status": "healthy", "service": "router"}
 
 
-class WahaWebhookPayload(BaseModel):
-    """Waha webhook payload structure"""
-    event: str
-    session: str
-    payload: Dict[str, Any]
-
-
-def extract_tenant_from_deep_link(message_text: str) -> Optional[int]:
-    """
-    Extract tenant_id from deep link start command
-    
-    Formats supported:
-    - start_realty_123
-    - start_realty_2
-    - START_REALTY_99 (case insensitive)
-    
-    Args:
-        message_text: The message body text
-        
-    Returns:
-        Tenant ID if found, None otherwise
-    """
-    if not message_text:
-        return None
-    
-    # Regex pattern: start_realty_{tenant_id}
-    pattern = r'^start_realty_(\d+)$'
-    match = re.match(pattern, message_text.strip().lower())
-    
-    if match:
-        tenant_id = int(match.group(1))
-        logger.info(f"✅ Extracted tenant_id={tenant_id} from deep link")
-        return tenant_id
-    
-    return None
-
-
-def get_phone_number_from_payload(payload: Dict[str, Any]) -> Optional[str]:
-    """
-    Extract phone number from Waha payload
-    
-    Args:
-        payload: Waha webhook payload
-        
-    Returns:
-        Phone number if found, None otherwise
-    """
-    # Waha structure: payload.from (sender phone)
-    sender = payload.get('from', '')
-    
-    # Remove @c.us suffix if present
-    phone = sender.replace('@c.us', '')
-    
-    if phone:
-        logger.debug(f"Extracted phone number: {phone}")
-        return phone
-    
-    logger.warning("Could not extract phone number from payload")
-    return None
-
-
-def get_message_text_from_payload(payload: Dict[str, Any]) -> Optional[str]:
-    """
-    Extract message text from Waha payload
-    
-    Args:
-        payload: Waha webhook payload
-        
-    Returns:
-        Message text if found, None otherwise
-    """
-    # Waha structure: payload.body (message text)
-    text = payload.get('body', '')
-    
-    return text if text else None
-
-
-@router.post("/waha")
-async def handle_waha_webhook(
-    request: Request,
-    x_api_key: Optional[str] = Header(None, alias="X-Api-Key")
-):
-    """
-    Main WhatsApp Gateway Router Webhook
-    
-    Flow:
-    1. Receive message from Waha
-    2. Extract phone number and message text
-    3. Check if message is a deep link (start_realty_{tenant_id})
-    4. If deep link: Lock user to tenant
-    5. If normal message: Look up locked tenant
-    6. Route to appropriate tenant's backend handler
-    """
+# --- حافظه ماندگار (Persistent Storage) ---
+def load_map():
+    """بارگذاری نقشه user → tenant از فایل"""
+    if not DB_FILE.exists():
+        return {}
     try:
-        # Parse payload
-        body = await request.json()
-        logger.info(f"📨 Received Waha webhook: {body.get('event', 'unknown')}")
-        
-        # Extract event type
-        event = body.get('event', '')
-        
-        # Only process message events
-        if not event.startswith('message'):
-            logger.debug(f"Ignoring non-message event: {event}")
-            return {"status": "ignored", "reason": "not a message event"}
-        
-        # Extract payload
-        payload = body.get('payload', {})
-        
-        # Extract phone number
-        phone_number = get_phone_number_from_payload(payload)
-        if not phone_number:
-            logger.error("❌ Could not extract phone number from payload")
-            return {"status": "error", "reason": "missing phone number"}
-        
-        # Extract message text
-        message_text = get_message_text_from_payload(payload)
-        if not message_text:
-            logger.debug("No text in message (could be image/voice/etc)")
-            message_text = ""  # Handle media messages
-        
-        # Step A: Check for deep link (new session)
-        tenant_id_from_link = extract_tenant_from_deep_link(message_text)
-        
-        if tenant_id_from_link:
-            # New session - lock user to tenant
-            is_new = user_tenant_map.lock_user_to_tenant(phone_number, tenant_id_from_link)
-            
-            if is_new:
-                logger.info(
-                    f"🎯 NEW SESSION: User {phone_number} → Tenant {tenant_id_from_link}"
-                )
-            else:
-                logger.info(
-                    f"🔄 EXISTING SESSION: User {phone_number} already locked to tenant"
-                )
-            
-            target_tenant_id = tenant_id_from_link
-        
-        else:
-            # Step B: Normal message - look up locked tenant
-            target_tenant_id = user_tenant_map.get_tenant_for_user(phone_number)
-            
-            if not target_tenant_id:
-                logger.warning(
-                    f"⚠️ User {phone_number} not locked to any tenant - ignoring message"
-                )
-                
-                # Optional: Send generic response
-                # TODO: Implement send_message to instruct user to use agent's link
-                
-                return {
-                    "status": "ignored",
-                    "reason": "user not associated with any tenant",
-                    "action": "please_use_agent_link"
+        with open(DB_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading map: {e}")
+        return {}
+
+
+def save_map(phone: str, tenant_id: int):
+    """ذخیره قفل کاربر به تنانت"""
+    data = load_map()
+    # حذف @c.us برای یکدست سازی
+    clean_phone = phone.replace('@c.us', '')
+    data[clean_phone] = str(tenant_id)
+    
+    try:
+        with open(DB_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        logger.info(f"🔒 LOCKED: User {clean_phone} → Tenant {tenant_id}")
+    except Exception as e:
+        logger.error(f"Error saving map: {e}")
+
+
+def get_tenant_for_user(phone: str) -> Optional[str]:
+    """پیدا کردن تنانت قفل شده برای یک کاربر"""
+    clean_phone = phone.replace('@c.us', '')
+    mapping = load_map()
+    return mapping.get(clean_phone)
+
+
+# --- ارسال پیام از طریق WAHA ---
+async def send_waha_message(phone: str, message: str):
+    """ارسال پیام واتساپ"""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{WAHA_API_URL}/sendText",
+                headers={
+                    "X-Api-Key": WAHA_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "session": "default",
+                    "chatId": phone if "@c.us" in phone else f"{phone}@c.us",
+                    "text": message
                 }
-            
-            logger.info(
-                f"📍 ROUTING: User {phone_number} → Tenant {target_tenant_id}"
             )
-        
-        # Step C: Forward to tenant's backend handler
-        # Import here to avoid circular dependency
-        from whatsapp_bot import handle_whatsapp_message
-        from database import async_session, Tenant
-        from sqlalchemy import select
-        
-        # Get tenant from database
-        async with async_session() as session:
-            result = await session.execute(
-                select(Tenant).where(Tenant.id == target_tenant_id)
-            )
-            tenant = result.scalar_one_or_none()
-            
-            if not tenant:
-                logger.error(f"❌ Tenant {target_tenant_id} not found in database")
-                return {
-                    "status": "error",
-                    "reason": f"tenant {target_tenant_id} not found"
-                }
-            
-            # Call the existing WhatsApp bot handler with tenant context
-            logger.info(f"🚀 Forwarding to whatsapp_bot.handle_whatsapp_message")
-            
-            # Modify payload to include tenant_id for handler
-            enriched_payload = {
-                **body,
-                "_gateway_tenant_id": target_tenant_id,
-                "_gateway_phone": phone_number,
-                "_is_deep_link_start": bool(tenant_id_from_link)
+            response.raise_for_status()
+            logger.info(f"📤 Sent message to {phone}")
+    except Exception as e:
+        logger.error(f"Error sending WAHA message: {e}")
+
+
+# --- فوروارد به بک‌اند ---
+async def forward_to_backend(data: dict, tenant_id: str):
+    """ارسال پیام به بک‌اند با هدر Tenant-ID"""
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "X-Tenant-ID": str(tenant_id),
+                "X-Router-Source": "whatsapp-gateway"
             }
             
-            # Forward to handler
-            response = await handle_whatsapp_message(
-                tenant=tenant,
-                payload=enriched_payload
+            response = await client.post(
+                BACKEND_API_URL,
+                json=data,
+                headers=headers
             )
             
+            if response.status_code == 200:
+                logger.info(f"✅ Forwarded to Tenant {tenant_id}")
+            else:
+                logger.error(f"Backend error {response.status_code}: {response.text}")
+                
+        except Exception as e:
+            logger.error(f"Failed to forward to backend: {e}")
+
+
+# --- وب‌هوک اصلی ---
+@app.post("/webhook/waha")
+async def waha_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    نقطه ورودی پیام‌های WAHA
+    
+    لاجیک:
+    1. اگر پیام شامل start_realty_{ID} بود → قفل کاربر به اون تنانت
+    2. اگر کاربر قبلاً قفل شده → روت کن به تنانت قفل شده
+    3. اگر کاربر ناشناس → پیام راهنما بفرست
+    """
+    try:
+        data = await request.json()
+        payload = data.get("payload", {})
+        event = data.get("event", "")
+        
+        # فقط پیام‌های دریافتی
+        if event != "message":
+            return {"status": "ignored", "reason": "not_message_event"}
+        
+        # استخراج شماره فرستنده
+        from_number = payload.get("from", "")
+        if not from_number or "@c.us" not in from_number:
+            return {"status": "ignored", "reason": "no_sender"}
+        
+        phone = from_number.split("@")[0]
+        body = payload.get("body", "").strip()
+        
+        logger.info(f"📨 Message from {phone}: {body[:50]}...")
+        
+        # 1️⃣ بررسی دیپ لینک (Deep Link Detection)
+        # الگو: start_realty_2 یا start_realty_105
+        match = re.search(r"start_realty_(\d+)", body, re.IGNORECASE)
+        
+        target_tenant_id = None
+        
+        if match:
+            # دیپ لینک جدید! → قفل کاربر
+            target_tenant_id = match.group(1)
+            save_map(phone, int(target_tenant_id))
+            logger.info(f"🔗 New Deep Link: Tenant {target_tenant_id}")
+        else:
+            # دیپ لینک نبود → چک کن قبلاً قفل شده؟
+            target_tenant_id = get_tenant_for_user(phone)
+        
+        # 2️⃣ روتینگ
+        if target_tenant_id:
+            # پیام را به بک‌اند بفرست (با Tenant-ID در هدر)
+            background_tasks.add_task(forward_to_backend, data, target_tenant_id)
             return {
                 "status": "routed",
                 "tenant_id": target_tenant_id,
-                "phone_number": phone_number,
-                "is_new_session": bool(tenant_id_from_link),
-                "handler_response": response
+                "user": phone
             }
-    
+        else:
+            # کاربر ناشناس (هنوز دیپ لینک نزده)
+            logger.warning(f"⛔ Unknown user {phone}. Sending help message.")
+            
+            # پیام راهنما (چند زبانه)
+            help_msg = (
+                "👋 مرحبا! لطفاً از لینک ارسالی توسط مشاور املاک خود استفاده کنید.\n\n"
+                "Hello! Please use the link provided by your real estate agent.\n\n"
+                "مرحبًا! يرجى استخدام الرابط الذي قدمه وكيل العقارات الخاص بك."
+            )
+            background_tasks.add_task(send_waha_message, from_number, help_msg)
+            
+            return {
+                "status": "unknown_user",
+                "user": phone,
+                "action": "sent_help_message"
+            }
+
     except Exception as e:
-        logger.error(f"❌ Gateway router error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception(f"Error processing webhook: {e}")
+        return {"status": "error", "detail": str(e)}
 
 
-@router.get("/stats")
-async def get_gateway_stats():
-    """Get gateway routing statistics"""
-    stats = user_tenant_map.get_stats()
+# --- API endpoints مدیریتی ---
+@app.get("/health")
+async def health_check():
+    """وضعیت سلامت روتر"""
+    mappings = load_map()
     return {
-        "status": "success",
-        "gateway_stats": stats
+        "status": "healthy",
+        "service": "whatsapp-gateway-router",
+        "total_locked_users": len(mappings),
+        "unique_tenants": len(set(mappings.values()))
     }
 
 
-@router.get("/user/{phone_number}/tenant")
-async def get_user_tenant(phone_number: str):
-    """Get the locked tenant for a specific user"""
-    tenant_id = user_tenant_map.get_tenant_for_user(phone_number)
+@app.get("/router/stats")
+async def get_stats():
+    """آمار روتینگ"""
+    mappings = load_map()
+    return {
+        "total_locked_users": len(mappings),
+        "unique_tenants": len(set(mappings.values())),
+        "mappings": mappings
+    }
+
+
+@app.get("/router/user/{phone}")
+async def get_user_tenant(phone: str):
+    """چک کردن قفل یک کاربر"""
+    clean_phone = phone.replace('+', '').replace('@c.us', '')
+    tenant_id = get_tenant_for_user(clean_phone)
     
-    if tenant_id:
+    return {
+        "phone": clean_phone,
+        "locked_to_tenant": tenant_id,
+        "status": "active_session" if tenant_id else "no_session"
+    }
+
+
+@app.post("/router/unlock/{phone}")
+async def unlock_user(phone: str):
+    """باز کردن قفل یک کاربر (endpoint مدیریتی)"""
+    clean_phone = phone.replace('+', '').replace('@c.us', '')
+    mappings = load_map()
+    
+    if clean_phone in mappings:
+        tenant_id = mappings[clean_phone]
+        del mappings[clean_phone]
+        
+        with open(DB_FILE, 'w', encoding='utf-8') as f:
+            json.dump(mappings, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"🔓 UNLOCKED: User {clean_phone} from Tenant {tenant_id}")
+        
         return {
-            "status": "found",
-            "phone_number": phone_number,
-            "tenant_id": tenant_id
+            "status": "unlocked",
+            "phone": clean_phone,
+            "was_locked_to": tenant_id
         }
     else:
         return {
             "status": "not_found",
-            "phone_number": phone_number,
-            "tenant_id": None
+            "phone": clean_phone
         }
 
 
-@router.delete("/user/{phone_number}/mapping")
-async def delete_user_mapping(phone_number: str):
-    """Delete a user's tenant mapping (admin only)"""
-    normalized_phone = re.sub(r'[^\d]', '', phone_number)
+
+@app.post("/router/generate-link")
+async def generate_deep_link(request: Request):
+    """
+    ساخت اتوماتیک دیپ لینک واتساپ با شماره مشتری
     
-    if normalized_phone in user_tenant_map.mappings:
-        tenant_id = user_tenant_map.mappings[normalized_phone]
-        del user_tenant_map.mappings[normalized_phone]
-        user_tenant_map._save_mappings(user_tenant_map.mappings)
+    Body:
+    {
+        "tenant_id": 2,
+        "customer_phone": "971501234567",
+        "gateway_number": "971557357753",
+        "message": "سلام" (optional)
+    }
+    
+    Returns:
+    {
+        "deep_link": "https://wa.me/971557357753?text=start_realty_2",
+        "qr_code_url": "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=...",
+        "short_link": "https://wa.me/971557357753?text=start_realty_2"
+    }
+    """
+    try:
+        data = await request.json()
+        tenant_id = data.get("tenant_id")
+        customer_phone = data.get("customer_phone", "").replace("+", "")
+        gateway_number = data.get("gateway_number", "971557357753").replace("+", "")
+        custom_message = data.get("message", "")
         
-        logger.info(f"🗑️ Deleted mapping: {normalized_phone} → Tenant {tenant_id}")
+        if not tenant_id:
+            return {
+                "status": "error",
+                "detail": "tenant_id is required"
+            }
+        
+        start_command = f"start_realty_{tenant_id}"
+        if custom_message:
+            message_text = f"{start_command}\n{custom_message}"
+        else:
+            message_text = start_command
+        
+        import urllib.parse
+        encoded_message = urllib.parse.quote(message_text)
+        
+        deep_link = f"https://wa.me/{gateway_number}?text={encoded_message}"
+        
+        qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(deep_link)}"
+        
+        logger.info(f"📲 GENERATED LINK: Tenant {tenant_id} → Customer {customer_phone}")
         
         return {
-            "status": "deleted",
-            "phone_number": phone_number,
-            "previous_tenant_id": tenant_id
+            "status": "success",
+            "tenant_id": tenant_id,
+            "customer_phone": customer_phone,
+            "gateway_number": gateway_number,
+            "deep_link": deep_link,
+            "qr_code_url": qr_code_url,
+            "short_link": deep_link,
+            "preview_text": message_text
         }
-    else:
+        
+    except Exception as e:
+        logger.exception(f"Error generating link: {e}")
         return {
-            "status": "not_found",
-            "phone_number": phone_number
+            "status": "error",
+            "detail": str(e)
         }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
+

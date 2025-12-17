@@ -1,0 +1,18 @@
+# Additional Requirements for Unified Lead Management System
+# Add these to your existing requirements.txt
+
+# Scheduling
+apscheduler>=3.10.4
+
+# Data Processing & Export
+pandas>=2.0.0
+openpyxl>=3.1.2
+xlsxwriter>=3.1.9
+
+# HTTP Client (for LinkedIn Scraper integration)
+httpx>=0.25.0
+
+# Already in main requirements.txt but verify:
+# sqlalchemy>=2.0.0
+# fastapi>=0.104.0
+# google-generativeai>=0.3.0

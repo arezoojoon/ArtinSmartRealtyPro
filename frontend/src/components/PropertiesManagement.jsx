@@ -21,9 +21,11 @@ import {
     Save,
     AlertCircle,
     FileText,
-    Upload
+    Upload,
+    Sparkles
 } from 'lucide-react';
 import PropertyImageUpload from './PropertyImageUpload';
+import PDFPropertyUpload from './PDFPropertyUpload';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -255,17 +257,17 @@ const PropertiesManagement = ({ tenantId }) => {
                 <div className="flex gap-3">
                     <button
                         onClick={() => setShowPDFUpload(true)}
-                        className="flex items-center gap-2 bg-navy-light text-white px-6 py-3 rounded-lg font-semibold hover:bg-opacity-80 transition-all border border-gold-500 border-opacity-30"
+                        className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition-all"
                     >
-                        <Upload className="w-5 h-5" />
-                        📄 Quick Upload
+                        <Sparkles className="w-5 h-5" />
+                        🚀 AI Smart Upload
                     </button>
                     <button
                         onClick={() => openModal()}
                         className="flex items-center gap-2 bg-gradient-to-r from-gold to-amber-600 text-navy px-6 py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-gold/50 transition-all"
                     >
                         <Plus className="w-5 h-5" />
-                        Add Property
+                        Add Manual
                     </button>
                 </div>
             </div>
@@ -825,131 +827,18 @@ const PropertiesManagement = ({ tenantId }) => {
                 </div>
             )}
 
-            {/* PDF Quick Upload Modal */}
+            {/* PDF Quick Upload Modal - AI-Powered Vision Analysis */}
             {showPDFUpload && (
-                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-                    <div className="glass-card max-w-xl w-full p-6">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-2xl font-bold text-white">📄 Quick Property Upload</h3>
-                            <button
-                                onClick={() => setShowPDFUpload(false)}
-                                className="text-gray-400 hover:text-white"
-                            >
-                                <X className="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <p className="text-gray-400 mb-6 text-center">
-                            برای ایجنت های تنبل 😎<br/>
-                            فقط PDF بذار، بقیه‌ش با ما!
-                        </p>
-
-                        <input
-                            type="file"
-                            accept=".pdf"
-                            onChange={async (e) => {
-                                const file = e.target.files[0];
-                                if (!file) return;
-
-                                const uploadFormData = new FormData();
-                                uploadFormData.append('file', file);
-
-                                try {
-                                    // Upload PDF and extract
-                                    const uploadResponse = await fetch(
-                                        `${API_BASE_URL}/api/tenants/${tenantId}/properties/upload-pdf?extract_text=true`,
-                                        {
-                                            method: 'POST',
-                                            body: uploadFormData,
-                                            headers: getAuthHeaders()
-                                        }
-                                    );
-
-                                    if (!uploadResponse.ok) {
-                                        const errorText = await uploadResponse.text();
-                                        console.error('PDF upload failed:', uploadResponse.status, errorText);
-                                        throw new Error(`Upload failed: ${uploadResponse.status} ${errorText}`);
-                                    }
-
-                                    const uploadData = await uploadResponse.json();
-                                    
-                                    // Auto-create property
-                                    const propertyData = {
-                                        name: uploadData.extracted_data?.name || file.name.replace('.pdf', ''),
-                                        property_type: 'apartment',  // Lowercase
-                                        transaction_type: 'buy',     // Lowercase
-                                        location: uploadData.extracted_data?.location || '',
-                                        price: uploadData.extracted_data?.price || null,
-                                        bedrooms: uploadData.extracted_data?.bedrooms || null,
-                                        area_sqft: uploadData.extracted_data?.area_sqft || null,
-                                        brochure_pdf: uploadData.file_url,
-                                        description: uploadData.extracted_data?.description || '',
-                                        is_available: true
-                                    };
-
-                                    const createResponse = await fetch(
-                                        `${API_BASE_URL}/api/tenants/${tenantId}/properties`,
-                                        {
-                                            method: 'POST',
-                                            headers: {
-                                                'Content-Type': 'application/json',
-                                                ...getAuthHeaders()
-                                            },
-                                            body: JSON.stringify(propertyData)
-                                        }
-                                    );
-
-                                    if (!createResponse.ok) throw new Error('Failed to create property');
-
-                                    await loadProperties();
-                                    setShowPDFUpload(false);
-                                    alert('✅ Property created from PDF successfully!');
-                                } catch (error) {
-                                    console.error('PDF upload error:', error);
-                                    alert('❌ Failed to create property from PDF');
-                                }
-                            }}
-                            className="hidden"
-                            id="quick-pdf-upload"
-                        />
-
-                        <label
-                            htmlFor="quick-pdf-upload"
-                            className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gold-500 border-opacity-30 rounded-xl cursor-pointer hover:border-opacity-60 transition-all bg-navy-light hover:bg-opacity-80"
-                        >
-                            <Upload className="w-12 h-12 text-gold-500 mb-4" />
-                            <p className="text-lg font-semibold text-white mb-2">
-                                Click to upload PDF brochure
-                            </p>
-                            <p className="text-sm text-gray-400">
-                                Max 10MB • We'll extract all property details automatically
-                            </p>
-                        </label>
-
-                        <div className="mt-6 pt-4 border-t border-white border-opacity-10">
-                            <div className="grid grid-cols-3 gap-4 text-center text-sm">
-                                <div>
-                                    <div className="w-8 h-8 bg-gold-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
-                                        <span className="text-gold-500 font-bold text-xs">1</span>
-                                    </div>
-                                    <p className="text-gray-400">Upload PDF</p>
-                                </div>
-                                <div>
-                                    <div className="w-8 h-8 bg-gold-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
-                                        <span className="text-gold-500 font-bold text-xs">2</span>
-                                    </div>
-                                    <p className="text-gray-400">AI Extracts</p>
-                                </div>
-                                <div>
-                                    <div className="w-8 h-8 bg-gold-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-2">
-                                        <span className="text-gold-500 font-bold text-xs">3</span>
-                                    </div>
-                                    <p className="text-gray-400">Property Created!</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <PDFPropertyUpload
+                    tenantId={tenantId}
+                    onPropertyCreated={() => {
+                        loadProperties();  // Refresh property list
+                    }}
+                    onClose={() => {
+                        setShowPDFUpload(false);
+                        loadProperties();  // Refresh in case properties were auto-saved
+                    }}
+                />
             )}
         </div>
     );

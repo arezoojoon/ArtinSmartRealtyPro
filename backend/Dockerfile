@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     curl \
     ffmpeg \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-ara \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -20,6 +23,9 @@ COPY . .
 
 # Create directory for PDF reports
 RUN mkdir -p /app/pdf_reports
+
+# Create directory for uploaded property files
+RUN mkdir -p /app/uploads/properties
 
 # Expose port
 EXPOSE 8000

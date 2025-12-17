@@ -4,16 +4,61 @@ Manage property giveaway campaigns with winner draw
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import random
+import secrets
 
 from database import async_session, Tenant, Lead, get_db
 
 router = APIRouter(prefix="/api/tenants", tags=["Lotteries"])
+security = HTTPBearer()
+
+
+# Import auth functions from main
+async def verify_tenant_access(
+    credentials: HTTPAuthorizationCredentials,
+    tenant_id: int,
+    db: AsyncSession
+) -> Tenant:
+    """Verify that the authenticated user has access to the given tenant."""
+    import jwt
+    from auth_config import JWT_SECRET, JWT_ALGORITHM
+    
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    auth_tenant_id = payload.get("tenant_id")
+    
+    # Super Admin can access any tenant
+    if auth_tenant_id == 0:
+        result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        return tenant
+    
+    # Regular tenant can only access their own data
+    if auth_tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    return tenant
 
 
 class LotteryParticipant(BaseModel):
@@ -68,9 +113,13 @@ LOTTERY_ID_COUNTER = 1
 @router.get("/{tenant_id}/lotteries", response_model=List[LotteryResponse])
 async def get_lotteries(
     tenant_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all lotteries for a tenant."""
+    """Get all lotteries for a tenant (requires authentication)."""
+    # Verify access
+    tenant = await verify_tenant_access(credentials, tenant_id, db)
+    
     tenant_lotteries = []
     
     for lottery in LOTTERIES_DB.values():
@@ -82,7 +131,7 @@ async def get_lotteries(
                 )
                 winner = winner_result.scalar_one_or_none()
                 if winner:
-                    winner_name = winner.name or f"Lead {winner.id}"
+                    winner_name = str(winner.name) if winner.name else f"Lead {winner.id}"
             
             tenant_lotteries.append(
                 LotteryResponse(
@@ -108,9 +157,13 @@ async def get_lotteries(
 async def create_lottery(
     tenant_id: int,
     lottery: Lottery,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new lottery campaign."""
+    """Create a new lottery campaign (requires authentication)."""
+    # Verify access
+    tenant = await verify_tenant_access(credentials, tenant_id, db)
+    
     global LOTTERY_ID_COUNTER
     
     # Verify tenant exists
@@ -163,9 +216,13 @@ async def update_lottery(
     tenant_id: int,
     lottery_id: int,
     lottery: Lottery,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update an existing lottery."""
+    """Update an existing lottery (requires authentication)."""
+    # Verify access
+    tenant = await verify_tenant_access(credentials, tenant_id, db)
+    
     if lottery_id not in LOTTERIES_DB:
         raise HTTPException(status_code=404, detail="Lottery not found")
     
@@ -214,9 +271,28 @@ async def update_lottery(
 @router.delete("/{tenant_id}/lotteries/{lottery_id}")
 async def delete_lottery(
     tenant_id: int,
-    lottery_id: int
+    lottery_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Delete a lottery."""
+    """Delete a lottery (requires authentication)."""
+    # Verify access (no db needed for delete)
+    import jwt
+    from auth_config import JWT_SECRET, JWT_ALGORITHM
+    
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    auth_tenant_id = payload.get("tenant_id")
+    if auth_tenant_id != 0 and auth_tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     if lottery_id not in LOTTERIES_DB:
         raise HTTPException(status_code=404, detail="Lottery not found")
     
@@ -233,9 +309,13 @@ async def delete_lottery(
 async def draw_winner(
     tenant_id: int,
     lottery_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Randomly draw a winner from lottery participants."""
+    """Randomly draw a winner from lottery participants (requires authentication)."""
+    # Verify access
+    tenant = await verify_tenant_access(credentials, tenant_id, db)
+    
     if lottery_id not in LOTTERIES_DB:
         raise HTTPException(status_code=404, detail="Lottery not found")
     
@@ -249,8 +329,8 @@ async def draw_winner(
     if lottery.get("winner_id"):
         raise HTTPException(status_code=400, detail="Winner already drawn")
     
-    # Random draw
-    winner_id = random.choice(lottery["participants"])
+    # Cryptographically secure random draw
+    winner_id = secrets.choice(lottery["participants"])
     
     # Fetch winner details
     winner_result = await db.execute(
@@ -268,8 +348,8 @@ async def draw_winner(
     return DrawWinnerResponse(
         lottery_id=lottery_id,
         winner_id=winner_id,
-        winner_name=winner.name or f"Lead {winner.id}",
-        winner_phone=winner.phone,
+        winner_name=str(winner.name) if winner.name else f"Lead {winner.id}",
+        winner_phone=str(winner.phone) if winner.phone else None,
         total_participants=len(lottery["participants"])
     )
 
@@ -278,9 +358,28 @@ async def draw_winner(
 async def update_lottery_status(
     tenant_id: int,
     lottery_id: int,
-    status: str
+    status: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Update lottery status (active/paused/completed)."""
+    """Update lottery status - active/paused/completed (requires authentication)."""
+    # Verify access
+    import jwt
+    from auth_config import JWT_SECRET, JWT_ALGORITHM
+    
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    auth_tenant_id = payload.get("tenant_id")
+    if auth_tenant_id != 0 and auth_tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     if lottery_id not in LOTTERIES_DB:
         raise HTTPException(status_code=404, detail="Lottery not found")
     

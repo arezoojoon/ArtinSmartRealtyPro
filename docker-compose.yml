@@ -7,6 +7,12 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: artinrealty
+      POSTGRES_HOST_AUTH_METHOD: md5
+      POSTGRES_INITDB_ARGS: "--auth-host=md5"
+    command: 
+      - "postgres"
+      - "-c"
+      - "password_encryption=md5"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -56,7 +62,10 @@ services:
       PASSWORD_SALT: ${PASSWORD_SALT:-artinsmartrealty_salt_v2}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@artinsmartrealty.com}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-SuperAdmin123!}
-      WAHA_API_KEY: ${WAHA_API_KEY:-}
+      WAHA_ENABLED: ${WAHA_ENABLED:-true}
+      WAHA_API_URL: ${WAHA_API_URL:-http://waha:3000/api}
+      WAHA_API_KEY: ${WAHA_API_KEY}
+      WAHA_SESSION: ${WAHA_SESSION:-default}
     ports:
       - "8000:8000"
     depends_on:
@@ -91,31 +100,6 @@ services:
       timeout: 5s
       retries: 3
 
-  # Waha WhatsApp API (Self-Hosted)
-  waha:
-    image: devlikeapro/waha:latest
-    container_name: artinrealty-waha
-    restart: unless-stopped
-    environment:
-      # Use WEBJS engine (stable and reliable)
-      - WHATSAPP_DEFAULT_ENGINE=WEBJS
-      # Auto-restart on failure
-      - WHATSAPP_RESTART_ON_FAIL=True
-      # Auto-refresh QR code every 30 seconds
-      - WHATSAPP_AUTOREFRESH_QR=True
-      # Enable webhook for message events
-      - WHATSAPP_HOOK_EVENTS=message,message.any
-      # Webhook URL points to backend
-      - WHATSAPP_HOOK_URL=http://backend:8000/api/webhook/waha
-      # Use persistent API key from .env file
-      - WAHA_API_KEY=${WAHA_API_KEY}
-    ports:
-      - "3002:3000"  # Expose on 3002 (Realty dedicated port)
-    volumes:
-      - waha_data:/app/.waha
-    networks:
-      - artinrealty-network
-
   # Nginx Reverse Proxy (Production)
   nginx:
     image: nginx:alpine
@@ -135,11 +119,67 @@ services:
     networks:
       - artinrealty-network
 
+  # Waha - Self-Hosted WhatsApp API
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: artinrealty-waha
+    restart: unless-stopped
+    environment:
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - WHATSAPP_RESTART_ON_FAIL=True
+      - WHATSAPP_AUTOREFRESH_QR=True
+      - WAHA_PRINT_QR=True
+      - WHATSAPP_HOOK_URL=http://artinrealty-router:8001/webhook/waha
+      - WHATSAPP_HOOK_EVENTS=message,message.any,session.status
+      - WAHA_API_KEY=${WAHA_API_KEY:-waha_artinsmartrealty_secure_key_2024}
+      - WAHA_DASHBOARD_USERNAME=admin
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD:-ArtinSmartRealty2024!}
+      - WHATSAPP_SWAGGER_USERNAME=admin
+      - WHATSAPP_SWAGGER_PASSWORD=${WAHA_DASHBOARD_PASSWORD:-ArtinSmartRealty2024!}
+    ports:
+      - "3001:3000"
+    volumes:
+      - waha_sessions:/app/.wwebjs_auth
+      - waha_cache:/app/.wwebjs_cache
+    networks:
+      - artinrealty-network
+
+  # WhatsApp Gateway Router - Multi-Tenant Deep Link Router
+  router:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artinrealty-router
+    command: uvicorn whatsapp_router:app --host 0.0.0.0 --port 8001
+    restart: unless-stopped
+    environment:
+      - BACKEND_API_URL=http://backend:8000/api/webhook/waha
+      - WAHA_API_URL=http://waha:3000/api
+      - WAHA_API_KEY=${WAHA_API_KEY:-waha_artinsmartrealty_secure_key_2024}
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend:/app
+      - router_data:/app/data
+    depends_on:
+      - backend
+      - waha
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+    networks:
+      - artinrealty-network
+
 volumes:
   postgres_data:
   redis_data:
   pdf_reports:
-  waha_data:  # Persistent storage for Waha sessions
+  waha_sessions:
+  waha_cache:
+  router_data:  # Persistent user-tenant mappings
 
 networks:
   artinrealty-network:
