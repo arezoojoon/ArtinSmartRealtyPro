@@ -56,6 +56,26 @@ from api import broadcast, catalogs, lotteries, admin, smart_upload
 from auth_config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, PASSWORD_SALT
 
 
+# ==================== SAFE BACKGROUND TASK WRAPPER ====================
+
+async def safe_background_task(task_name: str, task_func, *args, **kwargs):
+    """
+    Wrapper for background tasks with error handling and logging.
+    Prevents silent failures in background_tasks.add_task().
+    """
+    try:
+        logger.info(f"⚙️ Starting background task: {task_name}")
+        if asyncio.iscoroutinefunction(task_func):
+            await task_func(*args, **kwargs)
+        else:
+            task_func(*args, **kwargs)
+        logger.info(f"✅ Completed background task: {task_name}")
+    except Exception as e:
+        logger.error(f"❌ Background task '{task_name}' failed: {e}", exc_info=True)
+        # Could send alert to monitoring service here
+        # Example: await send_alert_to_sentry(task_name, e)
+
+
 # ==================== AUTH CONFIG ====================
 
 security = HTTPBearer(auto_error=False)
@@ -2029,9 +2049,16 @@ async def generate_roi_pdf_endpoint(
 # ==================== TELEGRAM WEBHOOK ====================
 
 @app.post("/webhook/telegram/{bot_token}")
-async def telegram_webhook(bot_token: str, update: dict, background_tasks: BackgroundTasks):
-    """Handle incoming Telegram webhook updates."""
-    background_tasks.add_task(handle_telegram_webhook, bot_token, update)
+@rate_limit(max_requests=100, window_seconds=60)  # 100 req/min per IP
+async def telegram_webhook(request: Request, bot_token: str, update: dict, background_tasks: BackgroundTasks):
+    """Handle incoming Telegram webhook updates with rate limiting."""
+    background_tasks.add_task(
+        safe_background_task,
+        "telegram_webhook",
+        handle_telegram_webhook,
+        bot_token,
+        update
+    )
     return {"status": "ok"}
 
 
@@ -2080,38 +2107,50 @@ async def whatsapp_webhook_verify(
 
 
 @app.post("/webhook/whatsapp")
-async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
+@rate_limit(max_requests=100, window_seconds=60)  # 100 req/min per IP
+async def whatsapp_webhook(request: Request, payload: dict, background_tasks: BackgroundTasks):
     """
-    Handle incoming WhatsApp webhook updates.
+    Handle incoming WhatsApp webhook updates with rate limiting.
     Routes to appropriate tenant handler based on phone_number_id.
     """
     async def process_webhook():
         await whatsapp_bot_manager.handle_webhook(payload)
     
-    background_tasks.add_task(process_webhook)
+    background_tasks.add_task(
+        safe_background_task,
+        "whatsapp_webhook",
+        process_webhook
+    )
     return {"status": "ok"}
 
 
 @app.post("/api/webhook/waha")
+@rate_limit(max_requests=100, window_seconds=60)  # 100 req/min per IP
 async def waha_webhook(
     request: Request,
     payload: dict,
     background_tasks: BackgroundTasks,
-    x_tenant_id: Optional[int] = Header(None, alias="X-Tenant-ID")
+    x_tenant_id: Optional[int] = Header(None, alias="X-Tenant-ID"),
+    x_vertical_mode: Optional[str] = Header(None, alias="X-Vertical-Mode")
 ):
     """
-    Handle incoming Waha (self-hosted WhatsApp) webhook updates.
+    Handle incoming Waha (self-hosted WhatsApp) webhook updates with rate limiting.
     This receives messages from the WhatsApp Router with tenant routing.
     
-    Router adds X-Tenant-ID header to indicate which tenant this message belongs to.
+    Router adds headers:
+    - X-Tenant-ID: Which tenant this message belongs to
+    - X-Vertical-Mode: Business vertical (realty/expo/support)
     """
     async def process_waha_webhook():
         try:
             logger.info(f"📨 Waha webhook received: {payload.get('event')}")
+            if x_vertical_mode:
+                logger.info(f"🎯 Vertical mode: {x_vertical_mode}")
             
             # Parse webhook using Waha provider
             from whatsapp_providers import WahaWhatsAppProvider
             from database import Tenant
+            from vertical_router import VerticalMode
             
             # Get tenant from router header or fallback to default
             async with AsyncSessionLocal() as db:
@@ -2135,6 +2174,17 @@ async def waha_webhook(
                     logger.info("Waha webhook ignored (not a user message)")
                     return
                 
+                # If router provided vertical mode, set it in Redis session for this user
+                if x_vertical_mode:
+                    from redis_manager import RedisManager
+                    redis_mgr = RedisManager()
+                    await redis_mgr.connect()
+                    if redis_mgr.redis_client:
+                        user_phone = message_data["from_phone"]
+                        mode_key = f"user:{user_phone}:mode"
+                        await redis_mgr.redis_client.set(mode_key, x_vertical_mode, ex=86400)  # 24h TTL
+                        logger.info(f"✅ Vertical mode '{x_vertical_mode}' set for {user_phone} from router")
+                
                 # Route to WhatsApp bot manager
                 # Convert to Meta-like format for compatibility
                 meta_format = {
@@ -2148,10 +2198,19 @@ async def waha_webhook(
                                 }],
                                 "contacts": [{
                                     "profile": {"name": message_data.get("profile_name", "User")}
-                                }]
+                                }],
+                                "metadata": {
+                                    "phone_number_id": tenant.whatsapp_phone_number_id or "default",
+                                    "display_phone_number": tenant.whatsapp_phone_number or "unknown"
+                                }
                             }
                         }]
-                    }]
+                    }],
+                    # Pass router context for the handler
+                    "_router_context": {
+                        "tenant_id": tenant.id,
+                        "vertical_mode": x_vertical_mode
+                    }
                 }
                 
                 await whatsapp_bot_manager.handle_webhook(meta_format)
@@ -2159,7 +2218,11 @@ async def waha_webhook(
         except Exception as e:
             logger.error(f"❌ Error processing Waha webhook: {e}", exc_info=True)
     
-    background_tasks.add_task(process_waha_webhook)
+    background_tasks.add_task(
+        safe_background_task,
+        "waha_webhook",
+        process_waha_webhook
+    )
     return {"status": "ok"}
 
 

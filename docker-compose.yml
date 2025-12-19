@@ -144,26 +144,27 @@ services:
     networks:
       - artinrealty-network
 
-  # WhatsApp Gateway Router - Multi-Tenant Deep Link Router
+  # WhatsApp Gateway Router V3 - Multi-Tenant + Multi-Vertical Deep Link Router
   router:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    container_name: artinrealty-router
-    command: uvicorn whatsapp_router:app --host 0.0.0.0 --port 8001
+      dockerfile: Dockerfile.router_v3
+    container_name: artinrealty-router-v3
     restart: unless-stopped
     environment:
       - BACKEND_API_URL=http://backend:8000/api/webhook/waha
       - WAHA_API_URL=http://waha:3000/api
       - WAHA_API_KEY=${WAHA_API_KEY:-waha_artinsmartrealty_secure_key_2024}
+      - REDIS_URL=redis://redis:6379/1
+      - SESSION_TTL=86400  # 24 hours
     ports:
       - "8001:8001"
     volumes:
-      - ./backend:/app
       - router_data:/app/data
     depends_on:
       - backend
       - waha
+      - redis
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
       interval: 30s

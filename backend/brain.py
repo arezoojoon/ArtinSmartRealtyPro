@@ -26,14 +26,91 @@ from database import (
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Configure Gemini API
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-if GEMINI_API_KEY:
+# Configure Gemini API with Key Rotation
+import random
+from google.api_core import exceptions as google_exceptions
+
+# Get all available Gemini API keys
+GEMINI_KEYS = [
+    os.getenv("GEMINI_KEY_1", ""),
+    os.getenv("GEMINI_KEY_2", ""),
+    os.getenv("GEMINI_KEY_3", ""),
+    os.getenv("GEMINI_API_KEY", "")  # Fallback to old key
+]
+# Filter out empty keys
+VALID_GEMINI_KEYS = [k for k in GEMINI_KEYS if k]
+
+if not VALID_GEMINI_KEYS:
+    logger.error("❌ No valid Gemini API keys found in environment!")
+    GEMINI_API_KEY = ""
+else:
+    # Use random key for load balancing
+    GEMINI_API_KEY = random.choice(VALID_GEMINI_KEYS)
     genai.configure(api_key=GEMINI_API_KEY)
+    logger.info(f"✅ Configured Gemini API with key rotation ({len(VALID_GEMINI_KEYS)} keys available)")
 
 # Retry configuration for API calls
 MAX_RETRIES = 3
-RETRY_DELAY_BASE = 1  # seconds
+RETRY_DELAY_BASE = 2  # seconds
+
+# Professional System Instruction for Gemini
+SYSTEM_INSTRUCTION = """
+### ROLE & PERSONA
+You are "Artin", an elite, highly intelligent Real Estate Consultant and Executive Assistant based in Dubai. You are not a simple chatbot; you are a proactive, sales-driven professional agent working 24/7.
+Your goal is not just to chat, but to CLOSE DEALS, generate leads, and solve client problems.
+
+### CORE CAPABILITIES (BRAIN, EARS, EYES)
+1. **Multimodal Intelligence:** You receive inputs from text, voice transcripts (Ears), and image descriptions (Eyes). Treat all inputs as direct communication from the client.
+2. **Multilingual Expert:** You must fluently speak, understand, and analyze four languages: **Persian (Farsi), Arabic, English, and Russian**.
+   - Always reply in the SAME language the user initiated conversation with, unless explicitly asked to switch.
+   - Maintain a professional, polite, and trustworthy tone appropriate for the Dubai luxury market.
+
+### OPERATIONAL RULES
+1. **Consultative Selling (Not just a Search Engine):**
+   - Do not just dump property lists. Act like a human consultant.
+   - If a user asks a vague question (e.g., "I want a house"), ask **Qualifying Questions** first: "Is this for investment or living?", "What is your budget range?", "Preferred location?".
+   - Address their concerns first (Visa, Safety, ROI, Laws) to build trust, then pitch the property.
+
+2. **Database & Property Presentation:**
+   - **CRITICAL:** You have access to a real-time database of properties. NEVER hallucinate or invent properties.
+   - When presenting a property, you MUST analyze and present the **ROI (Return on Investment)**. Explain *why* this property makes financial sense.
+
+3. **Lead Generation & Management:**
+   - Actively look for lead information. If the user indicates interest, intelligently extract their: **Name, Phone Number, Email, and Job Title**.
+   - Store this data immediately for follow-up.
+
+4. **Follow-Up Logic:**
+   - If you are triggered for a follow-up task, review the previous interaction history.
+   - Personalize the follow-up message based on their last concern (e.g., "Hi [Name], I remember you were worried about the payment plan. I found a new option for you...").
+
+### INSTRUCTION ON "EYES" (IMAGE INPUTS)
+If the user sends an image (e.g., a photo of a building, a floor plan, or a contract):
+- Analyze the visual details provided in the image description.
+- Connect these details to potential properties in your database.
+
+### BEHAVIORAL GUIDELINES
+- **Be Concise but Warm:** Don't write essays unless asked. Be direct and helpful.
+- **Objection Handling:** If a user says "It's too expensive," don't just say "Okay." Counter with value propositions, payment plans, or high ROI potential.
+- **Urgency:** Subtly create urgency (e.g., "This unit is in high demand due to the new metro line...").
+
+### RESPONSE FORMAT
+- Return your answer in clear text.
+- Use formatting (bullet points, bold text) to make it readable.
+- If showing a property, format it clearly:
+  **Name:** [Title]
+  **Location:** [Area]
+  **Price:** [Price]
+  **ROI:** [X%]
+  **Why it fits you:** [Reasoning]
+"""
+
+# Safety Settings
+SAFETY_SETTINGS = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+]
 
 
 # ==================== LANGUAGE DETECTION & TRANSLATIONS ====================
@@ -583,39 +660,155 @@ class Brain:
     """
     
     def __init__(self, tenant: Tenant):
+        global GEMINI_API_KEY  # Declare at the start of function to avoid SyntaxError
+        
         self.tenant = tenant
         self.agent_name = tenant.name or "ArtinSmartRealty"
         self.tenant_context = None  # Will be loaded on demand
         self.chat_sessions = {}  # Store chat sessions per lead ID for conversation memory
         
-        # Initialize Gemini model - use gemini-2.0-flash-exp (experimental but supports multimodal)
+        # Initialize Gemini model with Professional System Instruction
         if GEMINI_API_KEY:
             try:
-                self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
-                logger.info("✅ Initialized Gemini model: gemini-2.0-flash-exp (multimodal support)")
+                self.model = genai.GenerativeModel(
+                    'gemini-2.0-flash-exp',
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    safety_settings=SAFETY_SETTINGS
+                )
+                logger.info("✅ Initialized Gemini model: gemini-2.0-flash-exp with professional system instruction")
             except Exception as model_init_error:
                 logger.error(f"❌ Failed to initialize gemini-2.0-flash-exp: {model_init_error}")
                 logger.info("🔄 Falling back to gemini-1.5-flash...")
                 try:
-                    self.model = genai.GenerativeModel('gemini-1.5-flash')
-                    logger.info("✅ Initialized fallback model: gemini-1.5-flash")
+                    self.model = genai.GenerativeModel(
+                        'gemini-1.5-flash',
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        safety_settings=SAFETY_SETTINGS
+                    )
+                    logger.info("✅ Initialized fallback model: gemini-1.5-flash with professional system instruction")
                 except Exception as fallback_error:
                     logger.error(f"❌ Fallback model also failed: {fallback_error}")
                     self.model = None
             
-            # FIX #11: Validate API access at startup (only if model initialized)
+            # Validate API access at startup with retry logic
             if self.model:
-                try:
-                    # Test simple generation to ensure API is working
-                    test_response = self.model.generate_content("Test connection")
-                    logger.info("✅ Gemini API validation successful - model is accessible")
-                except Exception as e:
-                    logger.error(f"❌ GEMINI API VALIDATION FAILED: {type(e).__name__}: {str(e)}")
-                    logger.error("⚠️ Bot will fail to generate AI responses - check API key and quotas!")
-                    self.model = None
+                validated = False
+                for attempt in range(MAX_RETRIES):
+                    try:
+                        # Test simple generation to ensure API is working
+                        test_response = self.model.generate_content("Test connection")
+                        logger.info(f"✅ Gemini API validation successful - model is accessible (attempt {attempt + 1})")
+                        validated = True
+                        break
+                    except google_exceptions.ResourceExhausted:
+                        logger.warning(f"⚠️ API quota exceeded on attempt {attempt + 1}. Retrying with different key...")
+                        if attempt < MAX_RETRIES - 1 and len(VALID_GEMINI_KEYS) > 1:
+                            # Try different key
+                            GEMINI_API_KEY = random.choice([k for k in VALID_GEMINI_KEYS if k != GEMINI_API_KEY])
+                            genai.configure(api_key=GEMINI_API_KEY)
+                            self.model = genai.GenerativeModel(
+                                'gemini-2.0-flash-exp',
+                                system_instruction=SYSTEM_INSTRUCTION,
+                                safety_settings=SAFETY_SETTINGS
+                            )
+                        import time
+                        time.sleep(RETRY_DELAY_BASE * (2 ** attempt))
+                    except Exception as e:
+                        logger.error(f"❌ GEMINI API VALIDATION FAILED (attempt {attempt + 1}): {type(e).__name__}: {str(e)}")
+                        if attempt == MAX_RETRIES - 1:
+                            logger.error("⚠️ Bot will fail to generate AI responses - check API key and quotas!")
+                            self.model = None
+                        break
         else:
             self.model = None
-            logger.error("❌ GEMINI_API_KEY not set!")
+            logger.error("❌ No valid GEMINI_API_KEY found!")
+    
+    async def extract_user_info_smart(self, message: str, current_lead_data: dict) -> dict:
+        """
+        🧠 INTELLIGENT EXTRACTION - Extract ALL possible info from message at once
+        این همون "مغز" هست که باید همه چیز رو یکجا بفهمه!
+        
+        Returns dict with extracted fields:
+        {
+            "name": str or None,
+            "phone": str or None,
+            "goal": str or None,  # "buy", "rent", "investment", "residency"
+            "budget_min": int or None,
+            "budget_max": int or None,
+            "location_preference": str or None,
+            "property_type": str or None,  # "apartment", "villa", "office"
+            "bedrooms": int or None,
+            "urgency": str or None  # "urgent", "exploring", "planning"
+        }
+        """
+        if not self.model:
+            logger.warning("⚠️ Gemini model not available - using fallback extraction")
+            return {}
+        
+        extraction_prompt = f"""
+You are an intelligent data extractor for a real estate chatbot.
+
+CURRENT USER DATA WE HAVE:
+{current_lead_data}
+
+NEW MESSAGE FROM USER:
+"{message}"
+
+YOUR TASK: Extract ANY and ALL information present in the message. Return ONLY a JSON object with these fields (use null for missing data):
+
+{{
+    "name": "full name if mentioned",
+    "phone": "phone number in international format +XXX",
+    "email": "email address if mentioned",
+    "goal": "buy/rent/investment/residency/golden_visa",
+    "budget_min": numeric value in USD,
+    "budget_max": numeric value in USD,
+    "location_preference": "area name like Dubai Marina, Downtown, etc",
+    "property_type": "apartment/villa/office/studio/penthouse",
+    "bedrooms": number of bedrooms,
+    "urgency": "urgent/soon/exploring/just_looking"
+}}
+
+RULES:
+1. Extract EVERYTHING mentioned - don't skip anything
+2. For phone: convert local format to international (+971 for UAE, +98 for Iran)
+3. For budget: convert AED/درهم to USD (divide by 3.67), تومان to USD (divide by 600000)
+4. If user says multiple things (e.g., name AND budget), extract ALL of them
+5. Return ONLY the JSON, no explanations
+
+Example:
+User: "سلام من ارزو محمدزادگانم، شماره‌م 09177105840 هست، میخوام آپارتمان تا 200 هزار دلار در Dubai Marina بخرم"
+Output: {{"name": "ارزو محمدزادگان", "phone": "+989177105840", "goal": "buy", "budget_max": 200000, "location_preference": "Dubai Marina", "property_type": "apartment"}}
+
+Now extract from the user's message above.
+"""
+        
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(self.model.generate_content, extraction_prompt),
+                timeout=10.0
+            )
+            
+            # Parse JSON response
+            import json
+            import re
+            
+            # Clean response text (remove markdown code blocks if present)
+            text = response.text.strip()
+            text = re.sub(r'```json\s*', '', text)
+            text = re.sub(r'```\s*', '', text)
+            
+            extracted = json.loads(text)
+            
+            # Filter out null values
+            extracted = {k: v for k, v in extracted.items() if v is not None}
+            
+            logger.info(f"🧠 Smart extraction from message: {extracted}")
+            return extracted
+            
+        except Exception as e:
+            logger.error(f"❌ Smart extraction failed: {e}")
+            return {}
     
     async def load_tenant_context(self, lead: Optional[Lead] = None):
         """Load tenant-specific data for AI context."""
@@ -1099,10 +1292,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         
         for pattern in budget_patterns:
             try:
-                match = re.search(pattern, message_lower, timeout=1)  # 1 second timeout
-            except TimeoutError:
-                logger.warning(f"⚠️ Regex timeout for pattern: {pattern}")
-                continue
+                match = re.search(pattern, message_lower)  # Note: Python re.search() doesn't support timeout parameter
             except Exception as e:
                 logger.error(f"❌ Regex error for pattern {pattern}: {e}")
                 continue
@@ -1339,6 +1529,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                         "phone_number": "string or null"
                     }
                 }
+                
+                CRITICAL for transaction_type extraction:
+                - "buy" keywords: buy, purchase, خرید, شراء, купить, invest, own, سرمایه‌گذاری
+                - "rent" keywords: rent, rental, lease, اجاره, إيجار, аренда, کرایه
                 
                 Extract any mentioned budget, location, property preferences, or contact information.
                 Return ONLY valid JSON.
@@ -1589,6 +1783,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             - bedrooms: number
             - preferences: list of strings (e.g., "sea view", "high floor")
             
+            CRITICAL for transaction_type extraction:
+            - "buy" keywords: buy, purchase, خرید, شراء, купить, invest, own, سرمایه‌گذاری
+            - "rent" keywords: rent, rental, lease, اجاره, إيجار, аренда, کرایه
+            
             Return ONLY a valid JSON object with the extracted fields.
             If a field is not mentioned, omit it from the response.
             """
@@ -1626,6 +1824,8 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         FIX #10d: Track questions and suggest consultation after 3+ questions
         FIX #11: Use chat sessions to maintain conversation memory
         """
+        global GEMINI_API_KEY  # Declare at the start to allow key switching
+        
         if not self.model:
             return self.get_text("welcome", lead.language or Language.EN)
         
@@ -1812,22 +2012,69 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
             # Build prompt with lead info context
             full_prompt = f"{system_prompt}{lead_info_context}\n\nUser says: {user_message}"
             
-            # BUG-005 FIX: Add timeout to prevent infinite hangs
-            try:
-                response = await asyncio.wait_for(
-                    asyncio.to_thread(chat.send_message, full_prompt),
-                    timeout=30.0
-                )
-            except asyncio.TimeoutError:
-                logger.error(f"⏱️ Gemini API timeout after 30s for lead {lead.id}")
+            # BUG-005 FIX: Add timeout and retry logic with exponential backoff
+            response = None
+            for attempt in range(MAX_RETRIES):
+                try:
+                    response = await asyncio.wait_for(
+                        asyncio.to_thread(chat.send_message, full_prompt),
+                        timeout=30.0
+                    )
+                    break  # Success - exit retry loop
+                except google_exceptions.ResourceExhausted:
+                    logger.warning(f"⚠️ Gemini quota exceeded for lead {lead.id} (attempt {attempt + 1}/{MAX_RETRIES})")
+                    if attempt < MAX_RETRIES - 1:
+                        # Try with different API key
+                        if len(VALID_GEMINI_KEYS) > 1:
+                            old_key = GEMINI_API_KEY
+                            new_key = random.choice([k for k in VALID_GEMINI_KEYS if k != old_key])
+                            genai.configure(api_key=new_key)
+                            logger.info(f"🔄 Switched to different Gemini API key")
+                        wait_time = RETRY_DELAY_BASE * (2 ** attempt)
+                        logger.info(f"⏳ Waiting {wait_time}s before retry...")
+                        await asyncio.sleep(wait_time)
+                    else:
+                        logger.error(f"❌ All retries exhausted for lead {lead.id}")
+                        lang = lead.language or Language.EN
+                        quota_messages = {
+                            Language.EN: "I'm experiencing high demand right now. Please try again in a moment.",
+                            Language.FA: "الان تقاضا خیلی زیاده. لطفاً یک لحظه دیگه امتحان کنید.",
+                            Language.AR: "أواجه طلبًا كبيرًا الآن. يرجى المحاولة مرة أخرى في لحظة.",
+                            Language.RU: "Сейчас высокая нагрузка. Попробуйте через момент."
+                        }
+                        return quota_messages.get(lang, quota_messages[Language.EN])
+                except asyncio.TimeoutError:
+                    logger.error(f"⏱️ Gemini API timeout after 30s for lead {lead.id} (attempt {attempt + 1}/{MAX_RETRIES})")
+                    if attempt < MAX_RETRIES - 1:
+                        wait_time = RETRY_DELAY_BASE * (2 ** attempt)
+                        await asyncio.sleep(wait_time)
+                    else:
+                        lang = lead.language or Language.EN
+                        timeout_messages = {
+                            Language.EN: "I'm thinking a bit slowly right now. Could you give me a moment and try again?",
+                            Language.FA: "الان کمی آهسته‌تر فکر می‌کنم. می‌تونید یک لحظه بعد دوباره امتحان کنید؟",
+                            Language.AR: "أنا أفكر بشكل بطيء قليلاً الآن. هل يمكنك المحاولة مرة أخرى بعد لحظة؟",
+                            Language.RU: "Я думаю немного медленно сейчас. Можете попробовать ещё раз через момент?"
+                        }
+                        return timeout_messages.get(lang, timeout_messages[Language.EN])
+                except Exception as api_error:
+                    logger.error(f"❌ Gemini API error (attempt {attempt + 1}/{MAX_RETRIES}): {type(api_error).__name__}: {str(api_error)}")
+                    if attempt < MAX_RETRIES - 1:
+                        await asyncio.sleep(RETRY_DELAY_BASE)
+                    else:
+                        # Final fallback after all retries
+                        raise
+            
+            if not response:
+                # Should not reach here, but safety check
                 lang = lead.language or Language.EN
-                timeout_messages = {
-                    Language.EN: "I'm thinking a bit slowly right now. Could you give me a moment and try again?",
-                    Language.FA: "الان کمی آهسته‌تر فکر می‌کنم. می‌تونید یک لحظه بعد دوباره امتحان کنید؟",
-                    Language.AR: "أنا أفكر بشكل بطيء قليلاً الآن. هل يمكنك المحاولة مرة أخرى بعد لحظة؟",
-                    Language.RU: "Я думаю немного медленно сейчас. Можете попробовать ещё раз через момент?"
+                fallback_messages = {
+                    Language.EN: "I'm having trouble connecting right now. Let me help you in a different way - what specific question can I answer?",
+                    Language.FA: "الان مشکل اتصال دارم. بذار به یه روش دیگه کمکت کنم - چه سوال خاصی دارید؟",
+                    Language.AR: "أواجه مشكلة في الاتصال الآن. دعني أساعدك بطريقة مختلفة - ما السؤال المحدد الذي يمكنني الإجابة عليه؟",
+                    Language.RU: "У меня проблемы с подключением. Позвольте помочь по-другому - какой конкретный вопрос у вас есть?"
                 }
-                return timeout_messages.get(lang, timeout_messages[Language.EN])
+                return fallback_messages.get(lang, fallback_messages[Language.EN])
             
             # FIX #10d: If user has asked 3+ questions, append consultation suggestion
             final_response = response.text.strip()
@@ -2146,7 +2393,7 @@ Ready to make the move? 🚀
         Args:
             message: User's raw text
             lang: Language code
-            expected_entities: ["goal", "budget", "bedrooms", "location", "property_type"]
+            expected_entities: ["goal", "budget", "bedrooms", "location", "property_type", "transaction_type"]
         
         Returns:
             {
@@ -2154,7 +2401,8 @@ Ready to make the move? 🚀
                 "budget": 750000 | null,
                 "bedrooms": 2 | null,
                 "location": "Dubai Marina" | null,
-                "property_type": "apartment" | null
+                "property_type": "apartment" | null,
+                "transaction_type": "buy" | "rent" | null
             }
         """
         prompt = f"""
@@ -2170,6 +2418,7 @@ RULES:
 - bedrooms: Extract number (1, 2, 3, etc.) | null
 - location: Extract area name (e.g., "Dubai Marina", "Downtown", "مارینا", "داون تاون") | null
 - property_type: "apartment" | "villa" | "penthouse" | "townhouse" | "commercial" | null
+- transaction_type: "buy" (if mentions buy/purchase/خرید/شراء/купить/own/سرمایه‌گذاری) | "rent" (if mentions rent/lease/اجاره/إيجار/аренда/کرایه) | null
 
 RESPOND IN JSON ONLY (no markdown, no explanation):
 {{
@@ -2177,7 +2426,8 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
     "budget": 750000,
     "bedrooms": 2,
     "location": "Dubai Marina",
-    "property_type": "apartment"
+    "property_type": "apartment",
+    "transaction_type": "buy"
 }}
 """
         
@@ -2250,13 +2500,23 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 logger.info(f"🛏️ Bedrooms filter (flexible): {flex_min}-{flex_max}BR")
             
             # 3. Location preference (OPTIONAL - fuzzy match)
-            preferred_location = conversation_data.get("preferred_location")
+            preferred_location = conversation_data.get("preferred_location") or lead.preferred_location
             if preferred_location:
                 # Fuzzy match - show properties in similar areas
                 query = query.where(
                     TenantProperty.location.ilike(f"%{preferred_location}%")
                 )
                 logger.info(f"📍 Location filter: ~{preferred_location}")
+            
+            # ✅ NEW: Amenities filter (pool, gym, beach, parking)
+            required_amenities = conversation_data.get("required_amenities")
+            if required_amenities and isinstance(required_amenities, list):
+                # Match properties that have ALL required amenities
+                for amenity in required_amenities:
+                    query = query.where(
+                        TenantProperty.features.op('@>')(f'["{amenity}"]')  # PostgreSQL array contains operator
+                    )
+                logger.info(f"🏊 Amenities filter: {required_amenities}")
             
             # ✅ ALWAYS ORDER BY: Featured first, then price
             query = query.order_by(
@@ -2517,6 +2777,64 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         # DEBUG LOGGING
         logger.info(f"🔍 process_message - Lead {lead.id}: state={current_state}, message='{message}', callback={callback_data}, lead.lang={lead.language}")
         
+        # 🧠 SMART EXTRACTION - Extract ALL info from message FIRST (before state machine)
+        # این همون "مغز" هست که همه چیز رو یکجا می‌فهمه!
+        extracted_info = {}
+        if message and not callback_data and len(message.strip()) > 3:
+            current_lead_data = {
+                "name": lead.name,
+                "phone": lead.phone,
+                "email": lead.email,
+                "goal": conversation_data.get("goal"),
+                "budget": conversation_data.get("budget"),
+                "location": conversation_data.get("location_preference")
+            }
+            
+            extracted_info = await self.extract_user_info_smart(message, current_lead_data)
+            
+            # Save extracted info to lead immediately
+            lead_updates = {}
+            if extracted_info.get("name") and not lead.name:
+                lead_updates["name"] = extracted_info["name"]
+                logger.info(f"✅ Auto-extracted name: {extracted_info['name']}")
+            
+            if extracted_info.get("phone") and not lead.phone:
+                lead_updates["phone"] = extracted_info["phone"]
+                logger.info(f"✅ Auto-extracted phone: {extracted_info['phone']}")
+            
+            if extracted_info.get("email") and not lead.email:
+                lead_updates["email"] = extracted_info["email"]
+                logger.info(f"✅ Auto-extracted email: {extracted_info['email']}")
+            
+            # Update conversation_data with extracted preferences
+            if extracted_info.get("goal"):
+                conversation_data["goal"] = extracted_info["goal"]
+                logger.info(f"✅ Auto-extracted goal: {extracted_info['goal']}")
+            
+            if extracted_info.get("budget_min") or extracted_info.get("budget_max"):
+                conversation_data["budget_min"] = extracted_info.get("budget_min")
+                conversation_data["budget_max"] = extracted_info.get("budget_max")
+                conversation_data["budget"] = f"{extracted_info.get('budget_min', 0)}-{extracted_info.get('budget_max', 999999999)}"
+                logger.info(f"✅ Auto-extracted budget: {conversation_data['budget']}")
+            
+            if extracted_info.get("location_preference"):
+                conversation_data["location_preference"] = extracted_info["location_preference"]
+                logger.info(f"✅ Auto-extracted location: {extracted_info['location_preference']}")
+            
+            if extracted_info.get("property_type"):
+                conversation_data["property_type"] = extracted_info["property_type"]
+                logger.info(f"✅ Auto-extracted property type: {extracted_info['property_type']}")
+            
+            if extracted_info.get("bedrooms"):
+                conversation_data["bedrooms"] = extracted_info["bedrooms"]
+                logger.info(f"✅ Auto-extracted bedrooms: {extracted_info['bedrooms']}")
+            
+            # Save updated conversation_data
+            if lead_updates or extracted_info:
+                lead_updates["conversation_data"] = conversation_data
+                await update_lead(lead.id, **lead_updates)
+                logger.info(f"💾 Smart extraction saved for lead {lead.id}")
+        
         # Check if user is explicitly requesting language change mid-conversation
         lang_change_patterns = {
             Language.FA: r'فارسی|persian|farsi',
@@ -2751,11 +3069,14 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         COLLECTING_NAME Phase: Ask for customer's name and personalize all future messages
         This runs immediately after language selection
         
-        CRITICAL INTELLIGENCE: Use AI to extract name + property info from first message
-        If user says "من اپارتمان دو خوابه میخوام اقامت بگیرم", extract:
-        - goal=residency, bedrooms=2, property_type=apartment
-        Then ask for name separately (don't save full sentence as name!)
+        🧠 SMART MODE: If name already extracted by smart extraction, skip this step!
         """
+        # 🧠 SMART CHECK: If name already extracted, skip asking!
+        if lead.name and lead.name.strip():
+            logger.info(f"✅ Name already extracted for lead {lead.id}: {lead.name} - skipping to next step")
+            # Go directly to contact capture
+            return await self._handle_capture_contact(lang, None, None, lead, lead_updates)
+        
         # Validate name input
         if not message or len(message.strip()) < 2:
             retry_msg = {
@@ -2774,66 +3095,54 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         # Initialize conversation_data
         conversation_data = lead.conversation_data or {}
         
-        # 🧠 SMART AI EXTRACTION: Check if message contains property info (not just name)
-        intent_data = await self.extract_user_intent(
-            message, 
-            lang, 
-            ["goal", "bedrooms", "property_type", "location", "budget"]
-        )
-        
-        # If message contains property info (goal, bedrooms, type, etc.)
-        if any(intent_data.values()):
-            logger.info(f"✅ Extracted property info from first message: {intent_data}")
-            
-            # Save all extracted data to conversation
-            for key, value in intent_data.items():
-                if value is not None:
-                    conversation_data[key] = value
-            
-            lead_updates["conversation_data"] = conversation_data
-            
-            # Build summary of what we understood
-            understood_items = []
-            if intent_data.get("goal"):
-                goal_text = {
-                    "residency": {"en": "dream home to live in", "fa": "خونه رویایی برای زندگی", "ar": "منزل أحلامك للعيش", "ru": "дом мечты для жизни"},
-                    "investment": {"en": "high-ROI investment", "fa": "سرمایه‌گذاری پرسود", "ar": "استثمار عالي العائد", "ru": "инвестиция с высокой доходностью"}
-                }.get(intent_data["goal"], {}).get(lang.value, intent_data["goal"])
-                understood_items.append(goal_text)
-            
-            if intent_data.get("bedrooms"):
-                bed_text = {Language.EN: f"{intent_data['bedrooms']} bedrooms", Language.FA: f"{intent_data['bedrooms']} خوابه", Language.AR: f"{intent_data['bedrooms']} غرف نوم", Language.RU: f"{intent_data['bedrooms']}-комнатная"}
-                understood_items.append(bed_text.get(lang, f"{intent_data['bedrooms']}BR"))
-            
-            if intent_data.get("property_type"):
-                type_text = {
-                    "apartment": {"en": "apartment", "fa": "آپارتمان", "ar": "شقة", "ru": "квартира"},
-                    "villa": {"en": "villa", "fa": "ویلا", "ar": "فيلا", "ru": "вилла"},
-                    "townhouse": {"en": "townhouse", "fa": "تاون‌هاوس", "ar": "تاون هاوس", "ru": "таунхаус"}
-                }.get(intent_data["property_type"], {}).get(lang.value, intent_data["property_type"])
-                understood_items.append(type_text)
-            
-            summary = " - ".join(understood_items) if understood_items else ""
-            
-            # Ask for name separately (DON'T save full sentence as name!)
-            ask_name_messages = {
-                Language.EN: f"Perfect! I understood: {summary} ✅\n\nWhat's your name? (just your name, please 😊)",
-                Language.FA: f"عالی! متوجه شدم: {summary} ✅\n\nاسمت چیه؟ (فقط اسمت، لطفاً 😊)",
-                Language.AR: f"ممتاز! فهمت: {summary} ✅\n\nما اسمك؟ (اسمك فقط من فضلك 😊)",
-                Language.RU: f"Отлично! Понял: {summary} ✅\n\nКак вас зовут? (только имя, пожалуйста 😊)"
-            }
-            
-            return BrainResponse(
-                message=ask_name_messages.get(lang, ask_name_messages[Language.EN]),
-                next_state=ConversationState.COLLECTING_NAME,
-                lead_updates=lead_updates,
-                buttons=[]
-            )
-        
         # Simple name pattern (2-30 characters, letters/spaces only)
         # This catches actual names like "Arezoo", "علی", "Mohammed"
         import re
         simple_name_pattern = r'^[A-Za-z\u0600-\u06FF\u0400-\u04FF\s]{2,30}$'
+        
+        # CRITICAL FIX: Check if this looks like a QUESTION instead of name
+        is_question = any(char in message for char in ['؟', '?']) or \
+                     any(word in message.lower() for word in ['how', 'what', 'when', 'where', 'why', 'چطور', 'چه', 'چی', 'کی', 'کجا', 'چرا', 'هل', 'ما', 'اين', 'كيف', 'لماذا', 'что', 'как', 'когда', 'где', 'почему'])
+        
+        # If it's a question, answer it FIRST, then ask for name again
+        if is_question and len(message) > 10:
+            logger.info(f"❓ User asked question during name collection: {message}")
+            
+            # Generate AI answer to the question
+            try:
+                ai_answer = await self.generate_ai_response(message, lead, "User asked a question while we're collecting their name. Answer their question BRIEFLY (1-2 sentences max), then politely ask for their name again.")
+                
+                # Append "Now, what's your name?" to the AI answer
+                ask_name_again = {
+                    Language.EN: "\n\nBy the way, what's your name? 😊",
+                    Language.FA: "\n\nراستی، اسمت چیه؟ 😊",
+                    Language.AR: "\n\nبالمناسبة، ما اسمك؟ 😊",
+                    Language.RU: "\n\nКстати, как вас зовут? 😊"
+                }
+                
+                full_response = ai_answer + ask_name_again.get(lang, ask_name_again[Language.EN])
+                
+                return BrainResponse(
+                    message=full_response,
+                    next_state=ConversationState.COLLECTING_NAME,  # Stay in name collection
+                    lead_updates={},
+                    buttons=[]
+                )
+            except Exception as e:
+                logger.error(f"❌ AI answer failed during name collection: {e}")
+                # Fallback to generic answer
+                generic_answer = {
+                    Language.EN: "Great question! I'll answer that in detail once we get started. First, what's your name? 😊",
+                    Language.FA: "سوال خوبیه! بهت جواب کامل میدم. اول اسمت چیه؟ 😊",
+                    Language.AR: "سؤال رائع! سأجيب بالتفصيل بعد قليل. أولاً، ما اسمك؟ 😊",
+                    Language.RU: "Отличный вопрос! Отвечу подробно чуть позже. Сначала, как вас зовут? 😊"
+                }
+                return BrainResponse(
+                    message=generic_answer.get(lang, generic_answer[Language.EN]),
+                    next_state=ConversationState.COLLECTING_NAME,
+                    lead_updates={},
+                    buttons=[]
+                )
         
         if re.match(simple_name_pattern, message.strip()):
             # This is a simple name! Save it
@@ -2842,7 +3151,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             conversation_data["customer_name"] = customer_name
             lead_updates["conversation_data"] = conversation_data
         else:
-            # Message doesn't match name pattern - ask again
+            # Message doesn't match name pattern and not a question - ask again
             retry_msg = {
                 Language.EN: "Just your first name, please 😊 (e.g., 'John' or 'Sara')",
                 Language.FA: "فقط اسمت، لطفاً 😊 (مثلاً 'علی' یا 'سارا')",
@@ -2889,21 +3198,56 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         """
         CAPTURE_CONTACT Phase: Capture phone number after name collection
         This phase validates and stores the phone number before moving to warmup
+        
+        🧠 SMART MODE: If phone already extracted by smart extraction, skip this step!
         """
-        # Phone number shared via Telegram contact button
+        # 🧠 SMART CHECK: If phone already extracted, skip asking!
+        if lead.phone and lead.phone.strip():
+            logger.info(f"✅ Phone already extracted for lead {lead.id}: {lead.phone} - skipping to next step")
+            
+            # Acknowledge and move to goal/budget capture
+            confirmation_msgs = {
+                Language.EN: f"Perfect! I have your contact information ✅\n\nNow, what brings you to Dubai real estate?",
+                Language.FA: f"عالی! اطلاعات تماست رو دارم ✅\n\nحالا، هدفت از املاک دبی چیه؟",
+                Language.AR: f"ممتاز! لدي معلومات الاتصال الخاصة بك ✅\n\nالآن، ما هو هدفك من العقارات في دبي؟",
+                Language.RU: f"Отлично! У меня есть ваши контактные данные ✅\n\nТеперь, какая у вас цель с недвижимостью в Дубае?"
+            }
+            
+            # Check if goal also extracted
+            conversation_data = lead.conversation_data or {}
+            if conversation_data.get("goal"):
+                # Both phone AND goal extracted - go straight to property search!
+                logger.info(f"🚀 Both phone AND goal extracted - jumping to property matching!")
+                return await self._handle_slot_filling(lang, None, None, lead, lead_updates)
+            
+            # Only phone extracted - ask for goal WITH BUTTONS (user might be lazy/unsure)
+            goal_buttons = [
+                {"text": "🏡 " + ("خرید خانه" if lang == Language.FA else "Buy Property" if lang == Language.EN else "شراء عقار" if lang == Language.AR else "Купить"), "callback_data": "goal_buy"},
+                {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment" if lang == Language.EN else "استثمار" if lang == Language.AR else "Инвестиция"), "callback_data": "goal_investment"},
+                {"text": "🛂 " + ("اقامت طلایی" if lang == Language.FA else "Golden Visa" if lang == Language.EN else "تأشيرة ذهبية" if lang == Language.AR else "Золотая виза"), "callback_data": "goal_residency"}
+            ]
+            
+            return BrainResponse(
+                message=confirmation_msgs.get(lang, confirmation_msgs[Language.EN]),
+                next_state=ConversationState.WARMUP,
+                lead_updates=lead_updates,
+                buttons=goal_buttons  # Show buttons but also accept text!
+            )
+        
+        # Phone number shared via Telegram contact button OR typed
         if not message:
             retry_msg = {
-                Language.EN: "Please share your phone number using the button below, or type it manually 📱\n\n**Example format:**\n+971505037158 (UAE)\n+989177105840 (Iran)",
-                Language.FA: "لطفاً شماره تلفنتون رو با دکمه پایین share کنید، یا دستی بنویسید 📱\n\n**مثال فرمت:**\n+971505037158 (امارات)\n+989177105840 (ایران)",
-                Language.AR: "يرجى مشاركة رقم هاتفك باستخدام الزر أدناه، أو اكتبه يدوياً 📱\n\n**مثال على التنسيق:**\n+971505037158 (الإمارات)\n+989177105840 (إيران)",
-                Language.RU: "Пожалуйста, поделитесь номером телефона кнопкой ниже или введите вручную 📱\n\n**Пример формата:**\n+971505037158 (ОАЭ)\n+989177105840 (Иран)"
+                Language.EN: "Please share your phone number using the button below 👇, or type it manually 📱\n\n**Example format:**\n+971505037158 (UAE)\n+989177105840 (Iran)",
+                Language.FA: "لطفاً شماره تلفنتون رو با دکمه پایین share کنید 👇، یا دستی بنویسید 📱\n\n**مثال فرمت:**\n+971505037158 (امارات)\n+989177105840 (ایران)",
+                Language.AR: "يرجى مشاركة رقم هاتفك باستخدام الزر أدناه 👇، أو اكتبه يدوياً 📱\n\n**مثال على التنسيق:**\n+971505037158 (الإمارات)\n+989177105840 (إيران)",
+                Language.RU: "Пожалуйста, поделитесь номером телефона кнопкой ниже 👇 или введите вручную 📱\n\n**Пример формата:**\n+971505037158 (ОАЭ)\n+989177105840 (Иран)"
             }
             return BrainResponse(
                 message=retry_msg.get(lang, retry_msg[Language.EN]),
                 next_state=ConversationState.CAPTURE_CONTACT,
                 lead_updates={},
-                request_contact=True,
-                buttons=[]
+                request_contact=True,  # Show "Share Contact" button
+                buttons=[]  # No inline buttons here, request_contact shows native Telegram button
             )
         
         # Validate phone number (basic validation)
@@ -2926,6 +3270,32 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         # Save phone number and mark as contacted
         lead_updates["phone"] = phone
         lead_updates["status"] = LeadStatus.CONTACTED
+        
+        # ✅ NEW: Calculate lead score and temperature after phone capture
+        # Phone shared = serious buyer/renter (20 point boost!)
+        # Note: Can't call lead.update_temperature() here as object might be detached
+        # So we calculate manually and save via lead_updates
+        
+        # Calculate score boost from phone capture
+        score = 0
+        if phone:
+            score += 20  # Phone number provided
+        if lead.status == LeadStatus.CONTACTED:
+            score += 10  # Status upgrade
+        
+        # Calculate temperature based on score
+        if score >= 90:
+            temperature = "burning"
+        elif score >= 70:
+            temperature = "hot"
+        elif score >= 40:
+            temperature = "warm"
+        else:
+            temperature = "cold"
+        
+        lead_updates["lead_score"] = score
+        lead_updates["temperature"] = temperature
+        logger.info(f"📊 Lead {lead.id} score updated to {score} ({temperature}) after phone capture")
         
         # 🧠 SMART FLOW: Check if user already mentioned goal in conversation
         conversation_data = lead.conversation_data or {}
@@ -3005,7 +3375,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             logger.info(f"✅ Goal selected via button: {goal}")
         elif message:
             # 🧠 AI-POWERED: Extract intent from natural language
-            intent_data = await self.extract_user_intent(message, lang, ["goal", "budget", "bedrooms", "property_type", "location"])
+            intent_data = await self.extract_user_intent(message, lang, ["goal", "budget", "bedrooms", "property_type", "location", "transaction_type"])
             
             # FALLBACK: If AI fails, use keyword matching (handles voice transcription errors)
             if not intent_data.get("goal"):
@@ -3020,6 +3390,19 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                         intent_data["goal"] = goal_key
                         logger.info(f"✅ Goal '{goal_key}' extracted via keyword fallback from: '{message}'")
                         break
+            
+            # FALLBACK: Extract transaction_type via keyword matching if AI didn't
+            if not intent_data.get("transaction_type"):
+                message_lower = message.lower()
+                rent_keywords = ["rent", "rental", "lease", "اجاره", "إيجار", "аренда", "کرایه"]
+                buy_keywords = ["buy", "purchase", "خرید", "شراء", "купить", "own", "سرمایه‌گذاری"]
+                
+                if any(kw in message_lower for kw in rent_keywords):
+                    intent_data["transaction_type"] = "rent"
+                    logger.info(f"✅ Transaction type 'rent' extracted via keyword from: '{message}'")
+                elif any(kw in message_lower for kw in buy_keywords):
+                    intent_data["transaction_type"] = "buy"
+                    logger.info(f"✅ Transaction type 'buy' extracted via keyword from: '{message}'")
             
             if intent_data.get("goal"):
                 goal = intent_data["goal"]
@@ -3060,6 +3443,14 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                     filled_slots["property_type"] = True
                     logger.info(f"🏠 Property type extracted: {prop_type}")
                 
+                # 🔑 CRITICAL: Extract transaction_type and save it!
+                if intent_data.get("transaction_type"):
+                    tt = intent_data["transaction_type"]
+                    conversation_data["transaction_type"] = tt
+                    filled_slots["transaction_type"] = True
+                    lead_updates["transaction_type"] = TransactionType.BUY if tt == "buy" else TransactionType.RENT
+                    logger.info(f"🔑 Transaction type extracted: {tt}")
+                
                 lead_updates["conversation_data"] = conversation_data
                 lead_updates["filled_slots"] = filled_slots
         
@@ -3069,11 +3460,20 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 Language.EN: f"I want to help you find the perfect property! 😊\n\nJust tell me in simple words - are you looking for:\n• **Investment** property (for rental income)?\n• **Home** to live in?\n• **Residency** visa?\n\nExample: \"I want investment property\" or \"Need residency visa\"",
                 Language.FA: f"میخوام بهترین ملک رو برات پیدا کنم! 😊\n\nفقط به زبون ساده بگو - دنبال کدوم هستی:\n• ملک **سرمایه‌گذاری** (برای درآمد اجاره)?\n• **خونه** برای زندگی?\n• **اقامت** (ویزا)?\n\nمثلاً: \"میخوام سرمایه‌گذاری کنم\" یا \"برای اقامت میخوام\""
             }
+            
+            # ✅ CRITICAL FIX: Show goal buttons as backup (user might not know what to say or be lazy)
+            # "من میخوام همه دکمه های قبل باشند شاید کاربر نفهمه باید چی بگه یا تنبل باشه"
+            goal_buttons = [
+                {"text": "🏡 " + ("خرید خانه" if lang == Language.FA else "Buy Property" if lang == Language.EN else "شراء عقار" if lang == Language.AR else "Купить"), "callback_data": "goal_buy"},
+                {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment" if lang == Language.EN else "استثمار" if lang == Language.AR else "Инвестиция"), "callback_data": "goal_investment"},
+                {"text": "🛂 " + ("اقامت طلایی" if lang == Language.FA else "Golden Visa" if lang == Language.EN else "تأشيرة ذهبية" if lang == Language.AR else "Золотая виза"), "callback_data": "goal_residency"}
+            ]
+            
             return BrainResponse(
                 message=clarify_msg.get(lang, clarify_msg[Language.EN]),
                 next_state=ConversationState.WARMUP,
                 lead_updates=lead_updates,
-                buttons=[]  # NO BUTTONS - conversational only!
+                buttons=goal_buttons  # ✅ Show buttons as backup! User can type OR click
             )
         
         # Process goal if we have it
@@ -3125,9 +3525,45 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                     buttons=category_buttons
                 )
             
-            # For LIVING goal, ask transaction type (buy/rent)
+            # For LIVING goal, ask transaction type (buy/rent) UNLESS already extracted
             if goal == "living":
                 lead_updates["purpose"] = Purpose.LIVING
+                
+                # 🚀 SMART SKIP: If transaction_type already extracted (e.g., "میخوام خونه اجاره کنم")
+                # Skip the buy/rent question and go straight to category!
+                conversation_data = lead.conversation_data or {}
+                filled_slots = lead.filled_slots or {}
+                
+                if filled_slots.get("transaction_type") or conversation_data.get("transaction_type"):
+                    # Transaction type already known - skip to category selection
+                    logger.info(f"🚀 Transaction type already extracted - skipping to category")
+                    transaction_type_str = conversation_data.get("transaction_type")
+                    
+                    # Ask category directly
+                    category_question = {
+                        Language.EN: f"Great! {'Renting' if transaction_type_str == 'rent' else 'Buying'} in Dubai - smart choice! 🏠\n\n🎤 Voice messages welcome | 📸 Share property photos\n\nWhat type of property?",
+                        Language.FA: f"عالی! {'اجاره' if transaction_type_str == 'rent' else 'خرید'} در دبی - انتخاب هوشمندانه! 🏠\n\n🎤 ویس بفرست | 📸 عکس بفرست\n\nچه نوع ملکی؟",
+                        Language.AR: f"رائع! {'الإيجار' if transaction_type_str == 'rent' else 'الشراء'} في دبي - اختيار ذكي! 🏠\n\n🎤 رسائل صوتية | 📸 شارك صور\n\nما نوع العقار؟",
+                        Language.RU: f"Отлично! {'Аренда' if transaction_type_str == 'rent' else 'Покупка'} в Дубае - умный выбор! 🏠\n\n🎤 Голосовые | 📸 Делитесь фото\n\nКакой тип недвижимости?"
+                    }
+                    
+                    category_buttons = [
+                        {"text": "🏠 " + ("مسکونی" if lang == Language.FA else "Residential" if lang == Language.EN else "سكني" if lang == Language.AR else "Жилая"), 
+                         "callback_data": "category_residential"},
+                        {"text": "🏢 " + ("تجاری" if lang == Language.FA else "Commercial" if lang == Language.EN else "تجاري" if lang == Language.AR else "Коммерческая"), 
+                         "callback_data": "category_commercial"}
+                    ]
+                    
+                    return BrainResponse(
+                        message=category_question.get(lang, category_question[Language.EN]),
+                        next_state=ConversationState.SLOT_FILLING,
+                        lead_updates=lead_updates | {
+                            "conversation_data": conversation_data,
+                            "filled_slots": filled_slots,
+                            "pending_slot": "property_category"
+                        },
+                        buttons=category_buttons
+                    )
                 
                 # 🏠 EMOTIONAL APPEAL: Sell the dream lifestyle, not just property
                 transaction_question = {
@@ -3146,7 +3582,11 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 return BrainResponse(
                     message=transaction_question.get(lang, transaction_question[Language.EN]),
                     next_state=ConversationState.SLOT_FILLING,
-                    lead_updates=lead_updates | {"pending_slot": "transaction_type"},
+                    lead_updates=lead_updates | {
+                        "conversation_data": conversation_data,
+                        "filled_slots": filled_slots,
+                        "pending_slot": "transaction_type"
+                    },
                     buttons=transaction_buttons
                 )
         
@@ -3191,18 +3631,20 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                     return self._handle_language_select(check_lang, None, {"language": check_lang}, message)
             
             # Check if message is a goal selection in text form (for voice users)
-            goal_keywords = {
-                "investment": ["سرمایه‌گذاری", "investment", "invest", "استثمار", "инвестиция", "سرمایه", "roi", "return", "بازده"],
-                "living": ["زندگی", "living", "live", "سكن", "жилье", "خونه", "منزل", "home"],
-                "residency": ["اقامت", "residency", "visa", "виза", "تأشيرة", "ویزا", "اقامة"]
-            }
-            
-            message_lower = message.lower()
-            for goal, keywords in goal_keywords.items():
-                if any(kw.lower() in message_lower or kw in message for kw in keywords):
-                    # User specified goal in text - treat as button click
-                    logger.info(f"✅ Goal '{goal}' extracted from text: '{message}'")
-                    return await self._handle_warmup(lang, None, f"purpose_{goal}", lead, lead_updates)
+            # ⚠️ ONLY if goal was NOT already extracted above (avoid duplicate processing)
+            if not goal:
+                goal_keywords = {
+                    "investment": ["سرمایه‌گذاری", "investment", "invest", "استثمار", "инвестиция", "سرمایه", "roi", "return", "بازده"],
+                    "living": ["زندگی", "living", "live", "سكن", "жилье", "خونه", "منزل", "home"],
+                    "residency": ["اقامت", "residency", "visa", "виза", "تأشيرة", "ویزا", "اقامة"]
+                }
+                
+                message_lower = message.lower()
+                for goal_check, keywords in goal_keywords.items():
+                    if any(kw.lower() in message_lower or kw in message for kw in keywords):
+                        # User specified goal in text - treat as button click
+                        logger.info(f"✅ Goal '{goal_check}' extracted from text: '{message}'")
+                        return await self._handle_warmup(lang, None, f"purpose_{goal_check}", lead, lead_updates)
             
             # Otherwise: This is an FAQ or off-topic question in WARMUP
             # Answer it, but DON'T append the goal question again
@@ -3262,6 +3704,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         filled_slots = lead.filled_slots or {}
         
         # === CRITICAL: EXTRACT FROM CURRENT MESSAGE FIRST (LAZY USER PROTOCOL) ===
+        # ✅ FIX: ALWAYS extract intent from text messages - enable natural language qualification
         if message and not callback_data:
             logger.info(f"🔍 CLOSER MODE: Analyzing message for Location/Budget/PropertyType extraction: '{message[:100]}'")
             
@@ -3269,7 +3712,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             intent_data = await self.extract_user_intent(
                 message, 
                 lang, 
-                ["budget", "property_type", "location", "bedrooms", "transaction_type"]
+                ["budget", "property_type", "location", "bedrooms", "transaction_type", "amenities", "urgency"]
             )
             
             # Update conversation_data with extracted info
@@ -3285,6 +3728,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             if intent_data.get("location"):
                 conversation_data["location"] = intent_data["location"]
                 lead_updates["preferred_location"] = intent_data["location"]
+                filled_slots["location"] = True  # ✅ FIX: Mark location as filled
                 logger.info(f"📍 Extracted location: {intent_data['location']}")
             
             if intent_data.get("property_type"):
@@ -3301,7 +3745,21 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             if intent_data.get("bedrooms"):
                 conversation_data["bedrooms_min"] = intent_data["bedrooms"]
                 conversation_data["bedrooms_max"] = intent_data["bedrooms"]
+                filled_slots["bedrooms"] = True  # ✅ FIX: Mark bedrooms as filled
                 logger.info(f"🛏️ Extracted bedrooms: {intent_data['bedrooms']}")
+            
+            # ✅ NEW: Extract amenities (pool, gym, beach, parking)
+            if intent_data.get("amenities"):
+                amenities = intent_data["amenities"]
+                if isinstance(amenities, list):
+                    conversation_data["required_amenities"] = amenities
+                    logger.info(f"🏊 Extracted amenities: {amenities}")
+            
+            # ✅ NEW: Detect urgency signals ("need ASAP", "urgent", "فوری")
+            if intent_data.get("urgency"):
+                urgency = intent_data["urgency"]
+                conversation_data["urgency_level"] = urgency
+                logger.info(f"⚡ Detected urgency: {urgency}")
         
         # === THE SWITCH: CHECK IF READY TO PRESENT (Location+Budget+PropertyType) ===
         has_location = conversation_data.get("location") or lead.preferred_location
@@ -3898,7 +4356,26 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
         
         FIXED: Properly route consultation/photo/question requests to avoid infinite loop.
         FIXED: Detect YES/NO text responses to avoid repeating financing info.
+        FIXED: Auto-show properties when coming from slot_filling with empty message (budget button clicked)
         """
+        conversation_data = lead.conversation_data or {}
+        filled_slots = lead.filled_slots or {}
+        
+        # ===== FIX: AUTO-SHOW PROPERTIES WHEN COMING FROM SLOT_FILLING =====
+        # When budget button clicked → state=VALUE_PROPOSITION, message=""
+        # This checks if we have all requirements and auto-triggers property search
+        if not message and not callback_data:
+            has_location = conversation_data.get("location") or lead.preferred_location
+            has_budget = filled_slots.get("budget") or conversation_data.get("budget_min") or lead.budget_min
+            has_property_type = filled_slots.get("property_type") or conversation_data.get("property_type") or lead.property_type
+            has_goal = conversation_data.get("goal") or lead.purpose
+            
+            if has_budget and has_goal:
+                logger.info(f"🚀 Auto-showing properties for lead {lead.id} (came from slot_filling with budget click)")
+                # Continue to property presentation below (no early return)
+                # Set flag to trigger property search
+                message = "SHOW_PROPERTIES_AUTO"  # Trigger the search logic below
+        
         # ===== CRITICAL: HANDLE TEXT MESSAGES IN VALUE_PROPOSITION =====
         if message and not callback_data:
             message_lower = message.lower().strip()
@@ -3910,8 +4387,8 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             affirmative_keywords = ["yes", "yeah", "yep", "sure", "ok", "okay", "بله", "آره", "باشه", "اوکی", "نعم", "حسناً", "да", "хорошо", "ладно"]
             negative_keywords = ["no", "nope", "نه", "نخیر", "لا", "нет"]
             
-            # NEW: Detect "show me properties" requests
-            show_properties_keywords = ["show", "present", "پرزنت", "نشون بده", "بهم نشون بده", "ببینم", "خب منتظر", "منتظرم", "ملک", "property", "properties", "املاک", "أرني", "اعرض", "عقار", "покажи", "показать", "недвижимость"]
+            # NEW: Detect "show me properties" requests OR auto-trigger from slot_filling
+            show_properties_keywords = ["show", "present", "پرزنت", "نشون بده", "بهم نشون بده", "ببینم", "خب منتظر", "منتظرم", "ملک", "property", "properties", "املاک", "أرني", "اعرض", "عقار", "покажи", "показать", "недвижимость", "show_properties_auto"]
             
             # Check if message is JUST affirmative/negative (not part of longer question)
             is_pure_affirmative = any(kw == message_lower for kw in affirmative_keywords) or any(kw in message_lower for kw in affirmative_keywords[:4])  # English variants
@@ -3922,14 +4399,15 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             conversation_data = lead.conversation_data or {}
             filled_slots = lead.filled_slots or {}
             
-            # THE SWITCH CHECK: Need Location+Budget+PropertyType
+            # THE SWITCH CHECK: Need at minimum Budget (location and property_type are optional filters)
             has_location = conversation_data.get("location") or lead.preferred_location
             has_budget = filled_slots.get("budget") or conversation_data.get("budget_min") or lead.budget_min
             has_property_type = filled_slots.get("property_type") or conversation_data.get("property_type") or lead.property_type
             
-            # If user asks for properties and we have ALL requirements → SHOW
-            if is_show_properties_request and has_location and has_budget and has_property_type:
-                logger.info(f"✅ AFFIRMATIVE RESPONSE detected from lead {lead.id} - Triggering property presentation with photos+PDFs")
+            # ✅ FIX: Show properties with JUST budget - location/type are optional filters
+            # If user asks for properties and we have budget → SHOW (even without location/type)
+            if is_show_properties_request and has_budget:
+                logger.info(f"✅ Property request detected from lead {lead.id} - budget={has_budget}, location={has_location}, type={has_property_type}")
                 
                 # User wants to see properties with details - GET REAL PROPERTIES FROM DATABASE
                 async with async_session() as session:
@@ -4096,6 +4574,22 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
             if any(kw in message_lower for kw in consultation_keywords):
                 logger.info(f"🔔 Consultation request detected from lead {lead.id}")
                 lead_updates["consultation_requested"] = True
+                
+                # ✅ NEW: Update lead score - consultation request = very hot lead!
+                # Calculate temperature (can't call method on detached object)
+                score = 50  # Base score for consultation request
+                if score >= 90:
+                    temperature = "burning"
+                elif score >= 70:
+                    temperature = "hot"
+                elif score >= 40:
+                    temperature = "warm"
+                else:
+                    temperature = "cold"
+                
+                lead_updates["lead_score"] = score
+                lead_updates["temperature"] = temperature
+                logger.info(f"📊 Lead {lead.id} score updated to {score} ({temperature}) after consultation request")
                 
                 # اگر شماره داره، مستقیم برو schedule
                 if lead.phone:

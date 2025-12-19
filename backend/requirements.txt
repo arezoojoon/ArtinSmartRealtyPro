@@ -20,6 +20,12 @@ python-telegram-bot==21.0.1
 # AI / LLM
 google-generativeai==0.8.3  # Gemini Vision for smart property extraction (FREE!)
 
+# HTTP Client (for voice transcription, external APIs)
+aiohttp==3.9.1
+
+# Audio Processing (voice messages)
+pydub==0.25.1
+
 # PDF Generation & Processing
 reportlab==4.0.9
 Pillow==10.2.0
