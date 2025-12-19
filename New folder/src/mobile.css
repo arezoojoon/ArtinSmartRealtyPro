@@ -1,0 +1,219 @@
+/* 📱 Mobile Responsive Improvements */
+
+/* ============================================
+   MOBILE BREAKPOINTS
+   ============================================ */
+
+/* Mobile First approach */
+@media (max-width: 640px) {
+  /* Sidebar - Hide on mobile, show as drawer */
+  .sidebar {
+    position: fixed;
+    left: -100%;
+    transition: left 0.3s ease;
+    z-index: 100;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  /* Mobile Menu Button */
+  .mobile-menu-btn {
+    display: block;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 101;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    color: #0f172a;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Main content - Full width on mobile */
+  .main-content {
+    margin-left: 0 !important;
+    padding: 4rem 1rem 1rem 1rem !important;
+  }
+
+  /* Dashboard Grid - Stack vertically */
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  /* KPI Cards - Full width */
+  .kpi-card {
+    width: 100% !important;
+  }
+
+  /* Tables - Horizontal scroll */
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 600px;
+  }
+
+  /* Modals - Full screen on mobile */
+  .modal {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+
+  .modal-content {
+    max-height: calc(100vh - 60px) !important;
+    padding: 1rem !important;
+  }
+
+  /* Form Grid - Stack on mobile */
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Buttons - Full width on mobile */
+  .btn-mobile-full {
+    width: 100% !important;
+  }
+
+  /* Floating Hot Leads Panel - Adjust position */
+  .floating-panel {
+    bottom: 60px !important;
+    right: 1rem !important;
+    left: 1rem !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  /* Font sizes - Slightly smaller on mobile */
+  h1 {
+    font-size: 1.75rem !important;
+  }
+
+  h2 {
+    font-size: 1.5rem !important;
+  }
+
+  /* Touch-friendly targets (min 44x44px) */
+  button,
+  a.btn,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Input fields - Larger on mobile */
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px !important; /* Prevent zoom on iOS */
+  }
+}
+
+/* ============================================
+   TABLET (iPad, etc)
+   ============================================ */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .sidebar {
+    width: 200px !important;
+  }
+
+  .main-content {
+    margin-left: 200px !important;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ============================================
+   LANDSCAPE MOBILE
+   ============================================ */
+@media (max-width: 896px) and (orientation: landscape) {
+  .modal {
+    max-height: 90vh !important;
+  }
+
+  .main-content {
+    padding-top: 3rem !important;
+  }
+}
+
+/* ============================================
+   TOUCH DEVICES
+   ============================================ */
+@media (hover: none) and (pointer: coarse) {
+  /* Remove hover effects on touch devices */
+  .hover-effect:hover {
+    transform: none !important;
+  }
+
+  /* Larger tap targets */
+  .tap-target {
+    padding: 0.75rem !important;
+  }
+}
+
+/* ============================================
+   HIGH DPI SCREENS
+   ============================================ */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  /* Sharper images on retina */
+  img {
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
+
+/* ============================================
+   DARK MODE (iOS/Android)
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  /* Already handled in main CSS, but can add mobile-specific dark mode */
+}
+
+/* ============================================
+   REDUCED MOTION (Accessibility)
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================
+   SAFE AREA (iPhone Notch, etc)
+   ============================================ */
+@supports (padding: max(0px)) {
+  .safe-area-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  .safe-area-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-area-left {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+
+  .safe-area-right {
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
