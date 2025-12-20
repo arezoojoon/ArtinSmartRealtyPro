@@ -976,7 +976,7 @@ class TelegramBotHandler:
                             Lead.updated_at < fifteen_mins_ago,
                             Lead.updated_at > twenty_mins_ago,
                             Lead.conversation_data.isnot(None),  # Has engaged before
-                            Lead.conversation_data['fast_nudge_sent'].astext.is_(None)  # Fast nudge not sent
+                            ~Lead.conversation_data.contains({'fast_nudge_sent': True})  # Fast nudge not sent
                         ).order_by(Lead.updated_at.desc()).limit(10)
                     )
                     

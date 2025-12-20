@@ -150,6 +150,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.router_v3
     container_name: artinrealty-router-v3
+    command: uvicorn whatsapp_router_v3:app --host 0.0.0.0 --port 8001
     restart: unless-stopped
     environment:
       - BACKEND_API_URL=http://backend:8000/api/webhook/waha
