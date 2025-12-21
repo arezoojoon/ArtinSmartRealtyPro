@@ -76,8 +76,8 @@ const ActiveChatCard = ({ chat, isSelected, onClick }) => {
     <div
       onClick={onClick}
       className={`p-4 cursor-pointer transition-all border-l-4 ${isSelected
-          ? 'bg-gold-500/10 border-l-gold-500'
-          : 'bg-navy-800/30 border-l-transparent hover:bg-navy-700/50'
+        ? 'bg-gold-500/10 border-l-gold-500'
+        : 'bg-navy-800/30 border-l-transparent hover:bg-navy-700/50'
         }`}
     >
       <div className="flex items-start gap-3">
@@ -118,22 +118,38 @@ export default function LiveChatMonitor({ tenantId, token }) {
 
   // Connect to WebSocket for real-time updates
   useEffect(() => {
-    connectWebSocket();
     loadActiveChats();
+    // Only connect WebSocket if API_BASE_URL is available
+    if (API_BASE_URL) {
+      connectWebSocket();
+    }
 
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
     };
-  }, [tenantId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId, token]);
 
   const connectWebSocket = useCallback(() => {
     try {
+      // Check if socket.io is available
+      if (typeof io === 'undefined') {
+        console.warn('Socket.io not available, real-time updates disabled');
+        return;
+      }
+
       const wsUrl = API_BASE_URL.replace('http', 'ws') || 'ws://localhost:8000';
       socketRef.current = io(wsUrl, {
         auth: { token },
-        query: { tenant_id: tenantId }
+        query: { tenant_id: tenantId },
+        reconnectionAttempts: 3,
+        timeout: 5000,
+      });
+
+      socketRef.current.on('connect_error', (error) => {
+        console.warn('WebSocket connection error:', error.message);
       });
 
       socketRef.current.on('new_message', (data) => {
@@ -460,8 +476,8 @@ export default function LiveChatMonitor({ tenantId, token }) {
                 <button
                   onClick={() => setIsWhisperMode(!isWhisperMode)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${isWhisperMode
-                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                      : 'text-gray-400 hover:text-white hover:bg-navy-700'
+                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                    : 'text-gray-400 hover:text-white hover:bg-navy-700'
                     }`}
                 >
                   {isWhisperMode ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
@@ -498,8 +514,8 @@ export default function LiveChatMonitor({ tenantId, token }) {
                   type="submit"
                   disabled={!newMessage.trim() || sending || (!isTakenOver && !isWhisperMode)}
                   className={`btn-gold flex items-center gap-2 ${(!newMessage.trim() || sending || (!isTakenOver && !isWhisperMode))
-                      ? 'opacity-50 cursor-not-allowed'
-                      : ''
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
                     }`}
                 >
                   <Send className="w-4 h-4" />
