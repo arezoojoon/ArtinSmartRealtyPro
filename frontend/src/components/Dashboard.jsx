@@ -38,6 +38,7 @@ import FollowupManagement from './FollowupManagement';
 import LeadGeneration from './LeadGeneration';
 import LiveChatMonitor from './dashboard/LiveChatMonitor';
 import NewsFeed from './NewsFeed';
+import KnowledgeBase from './KnowledgeBase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -306,6 +307,8 @@ const Dashboard = ({ user, onLogout }) => {
                 return <FollowupManagement tenantId={user?.tenant_id} token={localStorage.getItem('token')} />;
             case 'news':
                 return <NewsFeed tenantId={user?.tenant_id} token={localStorage.getItem('token')} />;
+            case 'knowledge-base':
+                return <KnowledgeBase tenantId={user?.tenant_id} token={localStorage.getItem('token')} />;
             case 'calendar':
                 return (
                     <div className="p-6">

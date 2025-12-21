@@ -22,6 +22,7 @@ import {
   Target,
   RefreshCw,
   Newspaper,
+  Brain,
 } from 'lucide-react';
 
 const Sidebar = ({
@@ -42,6 +43,7 @@ const Sidebar = ({
       { id: 'followup', icon: RefreshCw, label: 'Follow-up', roles: ['super_admin', 'admin', 'agent'] },
       { id: 'calendar', icon: CalendarDays, label: 'Calendar/Scheduling', roles: ['super_admin', 'admin', 'agent'] },
       { id: 'properties', icon: Building2, label: 'Properties', roles: ['super_admin', 'admin'] },
+      { id: 'knowledge-base', icon: Brain, label: 'پایگاه دانش', roles: ['super_admin', 'admin'] },
       { id: 'news', icon: Newspaper, label: 'Market Insider', roles: ['super_admin', 'admin', 'agent'] },
       { id: 'analytics', icon: BarChart3, label: 'Analytics', roles: ['super_admin', 'admin'] },
       { id: 'live-chat', icon: MessageSquare, label: 'Live Chat', roles: ['super_admin', 'admin'] },
