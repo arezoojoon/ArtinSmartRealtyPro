@@ -1,60 +1,160 @@
-import { useState, useEffect } from 'react';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { getLeads, updateLeadStatus } from '../../api/client';
-import { Bell, Phone, Mail, DollarSign, TrendingUp } from 'lucide-react';
-
 /**
- * CRM Kanban Board - Heart of the System
- * Trello-style drag & drop lead management
+ * Artin Smart Realty - Enhanced Kanban Board
+ * CRM Pipeline with drag-and-drop, hotness scoring, and lead actions
  */
 
+import React, { useState, useEffect, useCallback } from 'react';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import {
+  Phone,
+  Mail,
+  DollarSign,
+  TrendingUp,
+  MoreVertical,
+  MessageSquare,
+  FileText,
+  Calendar,
+  User,
+  X,
+  Edit,
+  Trash2,
+  ExternalLink,
+} from 'lucide-react';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+// Pipeline columns configuration
 const COLUMNS = [
   { id: 'new', title: 'New Leads', color: 'bg-blue-500' },
   { id: 'qualified', title: 'Qualified', color: 'bg-yellow-500' },
-  { id: 'negotiation', title: 'Negotiation', color: 'bg-orange-500' },
-  { id: 'closed_won', title: 'Closed Won', color: 'bg-green-500' }
+  { id: 'viewing_scheduled', title: 'Viewing Scheduled', color: 'bg-orange-500' },
+  { id: 'negotiating', title: 'Negotiation', color: 'bg-purple-500' },
+  { id: 'closed_won', title: 'Closed Won', color: 'bg-green-500' },
 ];
 
+// Calculate hotness score based on lead data
 const getHotnessScore = (lead) => {
   let score = 0;
-  
-  // Budget factor
-  if (lead.budget_max >= 2000000) score += 40;
-  else if (lead.budget_max >= 1000000) score += 30;
-  else if (lead.budget_max >= 500000) score += 20;
+
+  // Budget factor (0-30 points)
+  if (lead.budget_max >= 5000000) score += 30;
+  else if (lead.budget_max >= 2000000) score += 25;
+  else if (lead.budget_max >= 1000000) score += 20;
+  else if (lead.budget_max >= 500000) score += 15;
   else score += 10;
-  
-  // Response time factor
-  const hoursSinceLastMessage = (Date.now() - new Date(lead.last_message_at)) / (1000 * 60 * 60);
-  if (hoursSinceLastMessage < 1) score += 30;
-  else if (hoursSinceLastMessage < 24) score += 20;
-  else if (hoursSinceLastMessage < 72) score += 10;
-  
-  // Phone shared factor
-  if (lead.phone_number) score += 30;
-  
+
+  // Engagement factor (0-30 points)
+  if (lead.messages_count > 20) score += 30;
+  else if (lead.messages_count > 10) score += 20;
+  else if (lead.messages_count > 5) score += 15;
+  else score += 5;
+
+  // Response time factor (0-20 points)
+  if (lead.last_message_at) {
+    const hoursSinceLastMessage = (Date.now() - new Date(lead.last_message_at)) / (1000 * 60 * 60);
+    if (hoursSinceLastMessage < 1) score += 20;
+    else if (hoursSinceLastMessage < 24) score += 15;
+    else if (hoursSinceLastMessage < 72) score += 10;
+    else score += 5;
+  }
+
+  // Contact info factor (0-20 points)
+  if (lead.phone_number || lead.phone) score += 10;
+  if (lead.email) score += 10;
+
   return Math.min(100, score);
 };
 
+// Hotness indicator component
 const HotnessIndicator = ({ score }) => {
-  const getColor = () => {
-    if (score >= 80) return 'text-red-500';
-    if (score >= 60) return 'text-orange-500';
-    if (score >= 40) return 'text-yellow-500';
-    return 'text-gray-400';
+  const getConfig = () => {
+    if (score >= 80) return { color: 'text-red-500', bg: 'bg-red-500/20', label: 'Hot' };
+    if (score >= 60) return { color: 'text-orange-500', bg: 'bg-orange-500/20', label: 'Warm' };
+    if (score >= 40) return { color: 'text-yellow-500', bg: 'bg-yellow-500/20', label: 'Cool' };
+    return { color: 'text-blue-500', bg: 'bg-blue-500/20', label: 'Cold' };
   };
-  
+
+  const config = getConfig();
+
   return (
-    <div className="flex items-center gap-1">
-      <TrendingUp className={`w-4 h-4 ${getColor()}`} />
-      <span className={`text-xs font-bold ${getColor()}`}>{score}°</span>
+    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full ${config.bg}`}>
+      <TrendingUp className={`w-3 h-3 ${config.color}`} />
+      <span className={`text-xs font-bold ${config.color}`}>{score}°</span>
     </div>
   );
 };
 
-const LeadCard = ({ lead, index }) => {
-  const hotnessScore = getHotnessScore(lead);
-  
+// Lead action menu component
+const LeadActionMenu = ({ lead, onClose, onAction }) => {
+  return (
+    <div
+      className="absolute right-0 top-full mt-1 w-48 glass-card p-2 z-50 animate-slide-up"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={() => { onAction('whatsapp', lead); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-navy-700 hover:text-white transition-all"
+      >
+        <MessageSquare className="w-4 h-4 text-green-400" />
+        <span className="text-sm">Send WhatsApp</span>
+      </button>
+      <button
+        onClick={() => { onAction('call', lead); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-navy-700 hover:text-white transition-all"
+      >
+        <Phone className="w-4 h-4 text-blue-400" />
+        <span className="text-sm">Call</span>
+      </button>
+      <button
+        onClick={() => { onAction('pdf', lead); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-navy-700 hover:text-white transition-all"
+      >
+        <FileText className="w-4 h-4 text-purple-400" />
+        <span className="text-sm">Send PDF</span>
+      </button>
+      <button
+        onClick={() => { onAction('schedule', lead); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-navy-700 hover:text-white transition-all"
+      >
+        <Calendar className="w-4 h-4 text-gold-400" />
+        <span className="text-sm">Schedule Viewing</span>
+      </button>
+      <hr className="my-2 border-white/5" />
+      <button
+        onClick={() => { onAction('view', lead); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-navy-700 hover:text-white transition-all"
+      >
+        <ExternalLink className="w-4 h-4" />
+        <span className="text-sm">View Details</span>
+      </button>
+      <button
+        onClick={() => { onAction('edit', lead); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-navy-700 hover:text-white transition-all"
+      >
+        <Edit className="w-4 h-4" />
+        <span className="text-sm">Edit Lead</span>
+      </button>
+    </div>
+  );
+};
+
+// Lead card component
+const LeadCard = ({ lead, index, onAction }) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const hotnessScore = lead.lead_score || getHotnessScore(lead);
+
+  const getTimeAgo = (timestamp) => {
+    if (!timestamp) return 'Just Now';
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diff = Math.floor((now - time) / 1000 / 60);
+
+    if (diff < 1) return 'Just Now';
+    if (diff < 60) return `${diff}m ago`;
+    if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
+    return `${Math.floor(diff / 1440)}d ago`;
+  };
+
   return (
     <Draggable draggableId={lead.id.toString()} index={index}>
       {(provided, snapshot) => (
@@ -62,62 +162,63 @@ const LeadCard = ({ lead, index }) => {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          className={`bg-white dark:bg-gray-800 rounded-lg p-4 mb-3 shadow-sm hover:shadow-md transition-shadow ${
-            snapshot.isDragging ? 'shadow-lg ring-2 ring-blue-400' : ''
-          }`}
+          className={`lead-card group relative ${snapshot.isDragging ? 'lead-card-dragging shadow-gold' : ''}`}
         >
           {/* Header */}
-          <div className="flex justify-between items-start mb-2">
-            <div className="flex-1">
-              <h4 className="font-semibold text-gray-900 dark:text-white">
-                {lead.name || `Lead #${lead.id}`}
-              </h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {lead.telegram_username || 'No username'}
+          <div className="flex items-start gap-3">
+            {/* Avatar */}
+            <div className="lead-avatar flex-shrink-0">
+              {lead.name?.charAt(0)?.toUpperCase() || '?'}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h4 className="lead-name truncate">{lead.name || `Lead #${lead.id}`}</h4>
+                <div className="relative">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+                    className={`p-1.5 rounded-lg transition-all ${showMenu ? 'bg-navy-600' : 'opacity-0 group-hover:opacity-100 hover:bg-navy-600'}`}
+                  >
+                    <MoreVertical className="w-4 h-4 text-gray-400" />
+                  </button>
+                  {showMenu && (
+                    <LeadActionMenu
+                      lead={lead}
+                      onClose={() => setShowMenu(false)}
+                      onAction={onAction}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <p className="lead-property truncate">
+                {lead.property_type || 'Property'} {lead.transaction_type === 'rent' ? 'Rental' : ''}
+                {lead.preferred_location && ` • ${lead.preferred_location}`}
+              </p>
+
+              <p className="lead-budget">
+                ${(lead.budget_min || 0).toLocaleString()} - ${(lead.budget_max || 0).toLocaleString()}
               </p>
             </div>
+          </div>
+
+          {/* Contact Info */}
+          {(lead.phone || lead.phone_number || lead.email) && (
+            <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
+              {(lead.phone || lead.phone_number) && (
+                <span className="flex items-center gap-1">
+                  <Phone className="w-3 h-3" />
+                  {lead.phone || lead.phone_number}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
             <HotnessIndicator score={hotnessScore} />
-          </div>
-          
-          {/* Info */}
-          <div className="space-y-1 mb-3">
-            {lead.budget_max && (
-              <div className="flex items-center gap-2 text-sm">
-                <DollarSign className="w-4 h-4 text-green-600" />
-                <span className="text-gray-700 dark:text-gray-300">
-                  {lead.budget_max.toLocaleString()} AED
-                </span>
-              </div>
-            )}
-            
-            {lead.phone_number && (
-              <div className="flex items-center gap-2 text-sm">
-                <Phone className="w-4 h-4 text-blue-600" />
-                <span className="text-gray-700 dark:text-gray-300">
-                  {lead.phone_number}
-                </span>
-              </div>
-            )}
-            
-            {lead.property_type && (
-              <div className="text-xs text-gray-600 dark:text-gray-400">
-                {lead.property_type} • {lead.transaction_type || 'Buy'}
-              </div>
-            )}
-          </div>
-          
-          {/* Tags */}
-          <div className="flex gap-2">
-            {lead.purpose === 'investment' && (
-              <span className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded">
-                💰 Investment
-              </span>
-            )}
-            {lead.language && (
-              <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">
-                {lead.language.toUpperCase()}
-              </span>
-            )}
+            <span className="lead-time">{getTimeAgo(lead.created_at)}</span>
           </div>
         </div>
       )}
@@ -125,34 +226,40 @@ const LeadCard = ({ lead, index }) => {
   );
 };
 
-const KanbanColumn = ({ column, leads }) => {
+// Kanban column component
+const KanbanColumn = ({ column, leads, onLeadAction }) => {
   return (
-    <div className="flex-1 min-w-[300px]">
+    <div className="pipeline-column">
       {/* Column Header */}
-      <div className={`${column.color} text-white rounded-t-lg px-4 py-3 flex justify-between items-center`}>
-        <h3 className="font-semibold">{column.title}</h3>
-        <span className="bg-white/20 px-2 py-1 rounded text-sm">
-          {leads.length}
-        </span>
+      <div className="pipeline-header">
+        <div className="pipeline-title">
+          <span className={`w-2.5 h-2.5 rounded-full ${column.color}`} />
+          <span>{column.title}</span>
+        </div>
+        <span className="pipeline-count">{leads.length}</span>
       </div>
-      
+
       {/* Droppable Area */}
       <Droppable droppableId={column.id}>
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`bg-gray-50 dark:bg-gray-900 p-3 rounded-b-lg min-h-[500px] ${
-              snapshot.isDraggingOver ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-            }`}
+            className={`min-h-[400px] max-h-[600px] overflow-y-auto space-y-3 p-1 rounded-xl transition-colors ${snapshot.isDraggingOver ? 'bg-gold-500/5 ring-2 ring-gold-500/20' : ''
+              }`}
           >
             {leads.map((lead, index) => (
-              <LeadCard key={lead.id} lead={lead} index={index} />
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                index={index}
+                onAction={onLeadAction}
+              />
             ))}
             {provided.placeholder}
-            
-            {leads.length === 0 && (
-              <div className="text-center text-gray-400 dark:text-gray-600 py-8">
+
+            {leads.length === 0 && !snapshot.isDraggingOver && (
+              <div className="text-center text-gray-500 text-sm py-12 border-2 border-dashed border-white/10 rounded-xl">
                 Drop leads here
               </div>
             )}
@@ -163,85 +270,240 @@ const KanbanColumn = ({ column, leads }) => {
   );
 };
 
-export default function KanbanBoard() {
+// Main KanbanBoard component
+export default function KanbanBoard({ tenantId, token }) {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+  const [selectedLead, setSelectedLead] = useState(null);
+
+  // Load leads
   useEffect(() => {
     loadLeads();
-  }, []);
-  
+  }, [tenantId]);
+
   const loadLeads = async () => {
     try {
-      const response = await getLeads();
-      setLeads(response.data);
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/v1/tenants/${tenantId}/leads`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setLeads(Array.isArray(data) ? data : (data.leads || []));
+      }
     } catch (error) {
       console.error('Failed to load leads:', error);
+      // Sample data for demo
+      setLeads([
+        { id: 1, name: 'Sarah Jenkins', property_type: 'Villa', preferred_location: 'Palm Jumeirah', budget_min: 2000000, budget_max: 5000000, status: 'new', lead_score: 85, created_at: new Date() },
+        { id: 2, name: 'Michael Chen', property_type: 'Penthouse', preferred_location: 'Downtown', budget_min: 3000000, budget_max: 3500000, status: 'qualified', lead_score: 72, created_at: new Date(Date.now() - 3600000) },
+        { id: 3, name: 'Emma Davis', property_type: 'Penthouse', preferred_location: 'Downtown', budget_min: 2000000, budget_max: 2500000, status: 'viewing_scheduled', lead_score: 68, phone: '+971501234567', created_at: new Date(Date.now() - 86400000) },
+        { id: 4, name: 'Alex Jonten', property_type: 'Villa', preferred_location: 'Palm Jumeirah', budget_min: 3000000, budget_max: 3500000, status: 'new', lead_score: 45, created_at: new Date() },
+        { id: 5, name: 'James Wilson', property_type: 'Apartment', preferred_location: 'Marina', budget_min: 1500000, budget_max: 2000000, status: 'closed_won', lead_score: 92, created_at: new Date(Date.now() - 172800000) },
+      ]);
     } finally {
       setLoading(false);
     }
   };
-  
-  const onDragEnd = async (result) => {
+
+  // Handle drag end
+  const onDragEnd = useCallback(async (result) => {
     const { source, destination, draggableId } = result;
-    
-    // Dropped outside
+
+    // Dropped outside or no change
     if (!destination) return;
-    
-    // No change
-    if (source.droppableId === destination.droppableId && source.index === destination.index) {
-      return;
-    }
-    
-    // Update lead status
-    try {
-      await updateLeadStatus(draggableId, destination.droppableId);
-      
-      // Update local state
-      setLeads(prevLeads => 
-        prevLeads.map(lead => 
-          lead.id.toString() === draggableId 
-            ? { ...lead, status: destination.droppableId }
-            : lead
-        )
-      );
-      
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+    const leadId = parseInt(draggableId);
+    const newStatus = destination.droppableId;
+
+    // Optimistically update UI
+    setLeads(prevLeads =>
+      prevLeads.map(lead =>
+        lead.id === leadId ? { ...lead, status: newStatus } : lead
+      )
+    );
+
+    // Play sound for won deals
+    if (newStatus === 'closed_won') {
+      try {
+        const audio = new Audio('/sounds/cha-ching.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(() => { });
+      } catch (e) { }
+
       // Show notification
-      const audio = new Audio('/sounds/cha-ching.mp3');
-      audio.play().catch(() => {});
-      
+      if (window.showNotification) {
+        const lead = leads.find(l => l.id === leadId);
+        window.showNotification({
+          type: 'deal_closed',
+          title: '💰 Deal Closed!',
+          message: `${lead?.name || 'Lead'} moved to Closed Won`,
+        });
+      }
+    }
+
+    // Update on server
+    try {
+      await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
     } catch (error) {
       console.error('Failed to update lead status:', error);
-      alert('Failed to update lead status');
+      // Revert on error
+      loadLeads();
     }
+  }, [leads, token]);
+
+  // Handle lead actions
+  const handleLeadAction = useCallback((action, lead) => {
+    switch (action) {
+      case 'whatsapp':
+        if (lead.phone || lead.phone_number) {
+          window.open(`https://wa.me/${(lead.phone || lead.phone_number).replace(/\D/g, '')}`, '_blank');
+        } else {
+          alert('No phone number available');
+        }
+        break;
+      case 'call':
+        if (lead.phone || lead.phone_number) {
+          window.open(`tel:${lead.phone || lead.phone_number}`, '_blank');
+        }
+        break;
+      case 'pdf':
+        // TODO: Implement PDF sending
+        alert(`Sending PDF to ${lead.name}...`);
+        break;
+      case 'schedule':
+        // TODO: Implement scheduling modal
+        alert(`Opening scheduler for ${lead.name}...`);
+        break;
+      case 'view':
+        setSelectedLead(lead);
+        break;
+      case 'edit':
+        setSelectedLead(lead);
+        break;
+      default:
+        console.log(`Action ${action} for lead:`, lead);
+    }
+  }, []);
+
+  // Group leads by status
+  const getLeadsByStatus = (status) => {
+    return leads.filter(lead => {
+      if (status === 'new') return lead.status === 'new' || !lead.status;
+      if (status === 'qualified') return lead.status === 'qualified' || lead.status === 'contacted';
+      return lead.status === status;
+    });
   };
-  
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="spinner" />
       </div>
     );
   }
-  
+
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">CRM Pipeline</h2>
-        <p className="text-gray-600 dark:text-gray-400">Drag & drop leads to update their status</p>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-white">CRM Pipeline</h2>
+          <p className="text-gray-400 text-sm mt-1">Drag & drop leads to update their status</p>
+        </div>
+        <div className="text-sm text-gray-400">
+          {leads.length} total leads
+        </div>
       </div>
-      
+
+      {/* Kanban Board */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-5 overflow-x-auto pb-4">
           {COLUMNS.map(column => (
             <KanbanColumn
               key={column.id}
               column={column}
-              leads={leads.filter(lead => lead.status === column.id)}
+              leads={getLeadsByStatus(column.id)}
+              onLeadAction={handleLeadAction}
             />
           ))}
         </div>
       </DragDropContext>
+
+      {/* Lead Detail Modal */}
+      {selectedLead && (
+        <div className="modal-overlay" onClick={() => setSelectedLead(null)}>
+          <div className="modal-content max-w-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="lead-avatar w-14 h-14 text-lg">
+                  {selectedLead.name?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">{selectedLead.name}</h3>
+                  <p className="text-gray-400">{selectedLead.email || 'No email'}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedLead(null)} className="text-gray-400 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-navy-800/50 rounded-xl p-4">
+                <p className="text-xs text-gray-400 mb-1">Property Interest</p>
+                <p className="text-white">{selectedLead.property_type || 'Not specified'}</p>
+              </div>
+              <div className="bg-navy-800/50 rounded-xl p-4">
+                <p className="text-xs text-gray-400 mb-1">Location</p>
+                <p className="text-white">{selectedLead.preferred_location || 'Not specified'}</p>
+              </div>
+              <div className="bg-navy-800/50 rounded-xl p-4">
+                <p className="text-xs text-gray-400 mb-1">Budget</p>
+                <p className="text-gold-400 font-medium">
+                  ${(selectedLead.budget_min || 0).toLocaleString()} - ${(selectedLead.budget_max || 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-navy-800/50 rounded-xl p-4">
+                <p className="text-xs text-gray-400 mb-1">Lead Score</p>
+                <HotnessIndicator score={selectedLead.lead_score || getHotnessScore(selectedLead)} />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => handleLeadAction('whatsapp', selectedLead)}
+                className="flex-1 btn-outline flex items-center justify-center gap-2"
+              >
+                <MessageSquare className="w-4 h-4" />
+                WhatsApp
+              </button>
+              <button
+                onClick={() => handleLeadAction('call', selectedLead)}
+                className="flex-1 btn-outline flex items-center justify-center gap-2"
+              >
+                <Phone className="w-4 h-4" />
+                Call
+              </button>
+              <button
+                onClick={() => handleLeadAction('schedule', selectedLead)}
+                className="flex-1 btn-gold flex items-center justify-center gap-2"
+              >
+                <Calendar className="w-4 h-4" />
+                Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
