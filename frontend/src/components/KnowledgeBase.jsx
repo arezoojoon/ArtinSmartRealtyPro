@@ -1,5 +1,5 @@
 /**
- * Knowledge Base Management - پایگاه دانش
+ * Knowledge Base Management
  * Agent can add/edit/delete Dubai real estate information
  * Bot brain reads this data to answer customer questions
  */
@@ -31,19 +31,19 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Categories with icons and labels
 const CATEGORIES = {
-    faq: { icon: HelpCircle, label: 'سوالات متداول', labelEn: 'FAQ' },
-    policy: { icon: FileText, label: 'قوانین و مقررات', labelEn: 'Laws & Policies' },
-    location_info: { icon: MapPin, label: 'اطلاعات منطقه', labelEn: 'Location Info' },
-    service: { icon: Building2, label: 'خدمات', labelEn: 'Services' },
-    general: { icon: BookOpen, label: 'عمومی', labelEn: 'General' }
+    faq: { icon: HelpCircle, label: 'FAQ' },
+    policy: { icon: FileText, label: 'Laws & Policies' },
+    location_info: { icon: MapPin, label: 'Location Info' },
+    service: { icon: Building2, label: 'Services' },
+    general: { icon: BookOpen, label: 'General' }
 };
 
-// Languages
+// Languages for bot responses (4 languages)
 const LANGUAGES = {
     en: { label: 'English', flag: '🇬🇧' },
-    fa: { label: 'فارسی', flag: '🇮🇷' },
-    ar: { label: 'العربية', flag: '🇸🇦' },
-    ru: { label: 'Русский', flag: '🇷🇺' }
+    fa: { label: 'Persian', flag: '🇮🇷' },
+    ar: { label: 'Arabic', flag: '🇸🇦' },
+    ru: { label: 'Russian', flag: '🇷🇺' }
 };
 
 const KnowledgeBase = ({ tenantId, token }) => {
@@ -61,7 +61,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
         category: 'general',
         title: '',
         content: '',
-        language: 'fa',
+        language: 'en',
         keywords: '',
         priority: 0
     });
@@ -84,36 +84,36 @@ const KnowledgeBase = ({ tenantId, token }) => {
             setError(null);
         } catch (err) {
             console.error('Error fetching knowledge:', err);
-            setError('خطا در دریافت اطلاعات');
+            setError('Failed to load data');
             // Use sample data for demo
             setEntries([
                 {
                     id: 1,
                     category: 'policy',
-                    title: 'گلدن ویزای امارات',
-                    content: 'با خرید ملک بالای 2 میلیون درهم، شما و خانواده‌تان می‌توانید اقامت 10 ساله امارات را دریافت کنید. این ویزا نیاز به اسپانسر ندارد و شامل همسر و فرزندان می‌شود.',
-                    language: 'fa',
-                    keywords: ['گلدن ویزا', 'اقامت', 'ویزای طلایی', 'golden visa'],
+                    title: 'UAE Golden Visa Requirements',
+                    content: 'With a property purchase of 2 million AED or more, you and your family can obtain a 10-year UAE residency. This visa does not require a sponsor and includes spouse and children.',
+                    language: 'en',
+                    keywords: ['golden visa', 'residency', 'UAE visa', '10 year visa'],
                     priority: 10,
                     is_active: true
                 },
                 {
                     id: 2,
                     category: 'faq',
-                    title: 'بازده سرمایه‌گذاری در دبی',
-                    content: 'بازده اجاره در دبی معمولاً بین 7 تا 10 درصد است که یکی از بالاترین‌ها در جهان محسوب می‌شود. درآمد اجاره بدون مالیات است.',
-                    language: 'fa',
-                    keywords: ['ROI', 'بازده', 'سرمایه‌گذاری', 'اجاره'],
+                    title: 'ROI in Dubai Real Estate',
+                    content: 'Rental yields in Dubai typically range from 7% to 10%, which is among the highest globally. Rental income is tax-free.',
+                    language: 'en',
+                    keywords: ['ROI', 'return on investment', 'rental yield', 'income'],
                     priority: 9,
                     is_active: true
                 },
                 {
                     id: 3,
                     category: 'location_info',
-                    title: 'Dubai Marina',
-                    content: 'دبی مارینا یکی از محبوب‌ترین مناطق برای سرمایه‌گذاری است. دسترسی عالی به مترو، ساحل، و مراکز خرید. قیمت‌ها از 800 هزار درهم شروع می‌شود.',
-                    language: 'fa',
-                    keywords: ['دبی مارینا', 'marina', 'ساحل'],
+                    title: 'Dubai Marina Overview',
+                    content: 'Dubai Marina is one of the most popular areas for investment. Excellent access to metro, beach, and shopping centers. Prices start from 800,000 AED.',
+                    language: 'en',
+                    keywords: ['Dubai Marina', 'marina', 'waterfront', 'investment'],
                     priority: 8,
                     is_active: true
                 }
@@ -149,7 +149,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
             category: 'general',
             title: '',
             content: '',
-            language: 'fa',
+            language: 'en',
             keywords: '',
             priority: 0
         });
@@ -202,7 +202,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
             setShowModal(false);
         } catch (err) {
             console.error('Error saving:', err);
-            alert('خطا در ذخیره‌سازی');
+            alert('Failed to save entry');
         } finally {
             setSaving(false);
         }
@@ -210,7 +210,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
 
     // Delete entry
     const handleDelete = async (id) => {
-        if (!confirm('آیا مطمئن هستید که می‌خواهید این مورد را حذف کنید؟')) return;
+        if (!confirm('Are you sure you want to delete this entry?')) return;
 
         try {
             await fetch(`${API_BASE_URL}/api/tenants/${tenantId}/knowledge/${id}`, {
@@ -222,7 +222,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
             await fetchEntries();
         } catch (err) {
             console.error('Error deleting:', err);
-            alert('خطا در حذف');
+            alert('Failed to delete entry');
         }
     };
 
@@ -235,10 +235,10 @@ const KnowledgeBase = ({ tenantId, token }) => {
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
                             <Brain className="w-5 h-5 text-white" />
                         </div>
-                        پایگاه دانش ربات
+                        Bot Knowledge Base
                     </h1>
                     <p className="text-gray-400 mt-1">
-                        اطلاعاتی که اینجا اضافه می‌کنید، ربات برای پاسخ به مشتریان استفاده می‌کند
+                        Information added here is used by the bot to answer customer questions
                     </p>
                 </div>
 
@@ -247,7 +247,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
                     className="btn-gradient flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium"
                 >
                     <Plus className="w-5 h-5" />
-                    افزودن اطلاعات جدید
+                    Add New Entry
                 </button>
             </div>
 
@@ -256,13 +256,13 @@ const KnowledgeBase = ({ tenantId, token }) => {
                 <div className="flex flex-col md:flex-row gap-4">
                     {/* Search */}
                     <div className="relative flex-1">
-                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="جستجو در عنوان، محتوا یا کلمات کلیدی..."
+                            placeholder="Search in title, content, or keywords..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-navy-800/50 border border-white/10 rounded-xl py-2.5 pr-10 pl-4 text-white placeholder-gray-500 focus:border-gold-500/50 focus:outline-none"
+                            className="w-full bg-navy-800/50 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-white placeholder-gray-500 focus:border-gold-500/50 focus:outline-none"
                         />
                     </div>
 
@@ -273,12 +273,12 @@ const KnowledgeBase = ({ tenantId, token }) => {
                             onChange={(e) => setSelectedCategory(e.target.value)}
                             className="appearance-none bg-navy-800/50 border border-white/10 rounded-xl py-2.5 px-4 pr-10 text-white focus:border-gold-500/50 focus:outline-none cursor-pointer"
                         >
-                            <option value="all">همه دسته‌ها</option>
+                            <option value="all">All Categories</option>
                             {Object.entries(CATEGORIES).map(([key, { label }]) => (
                                 <option key={key} value={key}>{label}</option>
                             ))}
                         </select>
-                        <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     </div>
 
                     {/* Language Filter */}
@@ -288,12 +288,12 @@ const KnowledgeBase = ({ tenantId, token }) => {
                             onChange={(e) => setSelectedLanguage(e.target.value)}
                             className="appearance-none bg-navy-800/50 border border-white/10 rounded-xl py-2.5 px-4 pr-10 text-white focus:border-gold-500/50 focus:outline-none cursor-pointer"
                         >
-                            <option value="all">همه زبان‌ها</option>
+                            <option value="all">All Languages</option>
                             {Object.entries(LANGUAGES).map(([key, { label, flag }]) => (
                                 <option key={key} value={key}>{flag} {label}</option>
                             ))}
                         </select>
-                        <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     </div>
                 </div>
             </div>
@@ -302,19 +302,19 @@ const KnowledgeBase = ({ tenantId, token }) => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="glass-card rounded-xl p-4 text-center">
                     <p className="text-3xl font-bold text-white">{entries.length}</p>
-                    <p className="text-gray-400 text-sm">کل موارد</p>
+                    <p className="text-gray-400 text-sm">Total Entries</p>
                 </div>
                 <div className="glass-card rounded-xl p-4 text-center">
                     <p className="text-3xl font-bold text-green-400">{entries.filter(e => e.is_active).length}</p>
-                    <p className="text-gray-400 text-sm">فعال</p>
+                    <p className="text-gray-400 text-sm">Active</p>
                 </div>
                 <div className="glass-card rounded-xl p-4 text-center">
                     <p className="text-3xl font-bold text-purple-400">{new Set(entries.map(e => e.category)).size}</p>
-                    <p className="text-gray-400 text-sm">دسته‌بندی</p>
+                    <p className="text-gray-400 text-sm">Categories</p>
                 </div>
                 <div className="glass-card rounded-xl p-4 text-center">
                     <p className="text-3xl font-bold text-gold-400">{new Set(entries.map(e => e.language)).size}</p>
-                    <p className="text-gray-400 text-sm">زبان</p>
+                    <p className="text-gray-400 text-sm">Languages</p>
                 </div>
             </div>
 
@@ -322,20 +322,20 @@ const KnowledgeBase = ({ tenantId, token }) => {
             {loading ? (
                 <div className="glass-card rounded-2xl p-12 text-center">
                     <div className="animate-spin w-12 h-12 border-4 border-gold-500 border-t-transparent rounded-full mx-auto"></div>
-                    <p className="text-gray-400 mt-4">در حال بارگذاری...</p>
+                    <p className="text-gray-400 mt-4">Loading...</p>
                 </div>
             ) : filteredEntries.length === 0 ? (
                 <div className="glass-card rounded-2xl p-12 text-center">
                     <BookOpen className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-white mb-2">هنوز اطلاعاتی اضافه نشده</h3>
+                    <h3 className="text-xl font-semibold text-white mb-2">No entries yet</h3>
                     <p className="text-gray-400 mb-6">
-                        اطلاعات مربوط به قوانین امارات، گلدن ویزا، ROI و... را اضافه کنید تا ربات بتواند به مشتریان پاسخ دهد
+                        Add information about UAE laws, Golden Visa, ROI, etc. so the bot can answer customer questions
                     </p>
                     <button
                         onClick={handleNewEntry}
                         className="btn-gradient px-6 py-2.5 rounded-xl font-medium"
                     >
-                        اولین مورد را اضافه کنید
+                        Add First Entry
                     </button>
                 </div>
             ) : (
@@ -420,7 +420,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
                     <div className="glass-card rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-bold text-white">
-                                {editingEntry ? 'ویرایش اطلاعات' : 'افزودن اطلاعات جدید'}
+                                {editingEntry ? 'Edit Entry' : 'Add New Entry'}
                             </h2>
                             <button
                                 onClick={() => setShowModal(false)}
@@ -435,7 +435,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-400 mb-2">
-                                        دسته‌بندی
+                                        Category
                                     </label>
                                     <select
                                         value={formData.category}
@@ -449,7 +449,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-400 mb-2">
-                                        زبان
+                                        Language (for bot response)
                                     </label>
                                     <select
                                         value={formData.language}
@@ -466,13 +466,13 @@ const KnowledgeBase = ({ tenantId, token }) => {
                             {/* Title */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-2">
-                                    عنوان / سوال
+                                    Title / Question
                                 </label>
                                 <input
                                     type="text"
                                     value={formData.title}
                                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    placeholder="مثال: گلدن ویزای امارات چیست؟"
+                                    placeholder="e.g. What is UAE Golden Visa?"
                                     className="w-full bg-navy-800/50 border border-white/10 rounded-xl py-2.5 px-4 text-white placeholder-gray-500 focus:border-gold-500/50 focus:outline-none"
                                 />
                             </div>
@@ -480,12 +480,12 @@ const KnowledgeBase = ({ tenantId, token }) => {
                             {/* Content */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-2">
-                                    محتوا / پاسخ
+                                    Content / Answer
                                 </label>
                                 <textarea
                                     value={formData.content}
                                     onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                                    placeholder="پاسخ کامل را اینجا بنویسید. ربات این متن را برای پاسخ به مشتریان استفاده می‌کند."
+                                    placeholder="Write the complete answer here. The bot will use this to respond to customers."
                                     rows={6}
                                     className="w-full bg-navy-800/50 border border-white/10 rounded-xl py-2.5 px-4 text-white placeholder-gray-500 focus:border-gold-500/50 focus:outline-none resize-none"
                                 />
@@ -494,24 +494,24 @@ const KnowledgeBase = ({ tenantId, token }) => {
                             {/* Keywords */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-2">
-                                    کلمات کلیدی (با کاما جدا کنید)
+                                    Keywords (comma separated)
                                 </label>
                                 <input
                                     type="text"
                                     value={formData.keywords}
                                     onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
-                                    placeholder="مثال: گلدن ویزا, اقامت, ویزای طلایی, golden visa"
+                                    placeholder="e.g. golden visa, residency, UAE visa, 10 year"
                                     className="w-full bg-navy-800/50 border border-white/10 rounded-xl py-2.5 px-4 text-white placeholder-gray-500 focus:border-gold-500/50 focus:outline-none"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
-                                    ربات از این کلمات برای پیدا کردن پاسخ مناسب استفاده می‌کند
+                                    The bot uses these keywords to find the right answer
                                 </p>
                             </div>
 
                             {/* Priority */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-2">
-                                    اولویت (0-10)
+                                    Priority (0-10)
                                 </label>
                                 <input
                                     type="number"
@@ -522,7 +522,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
                                     className="w-32 bg-navy-800/50 border border-white/10 rounded-xl py-2.5 px-4 text-white focus:border-gold-500/50 focus:outline-none"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
-                                    اولویت بالاتر = نمایش اول‌تر در نتایج
+                                    Higher priority = shown first in results
                                 </p>
                             </div>
                         </div>
@@ -533,7 +533,7 @@ const KnowledgeBase = ({ tenantId, token }) => {
                                 onClick={() => setShowModal(false)}
                                 className="px-4 py-2.5 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 transition-colors"
                             >
-                                انصراف
+                                Cancel
                             </button>
                             <button
                                 onClick={handleSave}
@@ -543,12 +543,12 @@ const KnowledgeBase = ({ tenantId, token }) => {
                                 {saving ? (
                                     <>
                                         <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                        در حال ذخیره...
+                                        Saving...
                                     </>
                                 ) : (
                                     <>
                                         <Save className="w-4 h-4" />
-                                        ذخیره
+                                        Save
                                     </>
                                 )}
                             </button>
