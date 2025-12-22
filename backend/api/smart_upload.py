@@ -147,14 +147,17 @@ async def smart_upload_property(
     # Extract property information
     try:
         if file_ext == '.pdf':
-            logger.info(f"📄 Extracting from PDF...")
+            logger.info(f"📄 Extracting from PDF: {file_path}")
             extracted_data = await extractor.extract_from_pdf(str(file_path))
+            logger.info(f"📊 PDF Extraction result: {extracted_data}")
         else:
             logger.info(f"🖼️ Extracting from image (AI={use_ai})...")
             extracted_data = await extractor.extract_from_image(str(file_path), use_ai=use_ai)
+            logger.info(f"📊 Image Extraction result: {extracted_data}")
         
         # Check for extraction errors
         if 'error' in extracted_data:
+            logger.error(f"❌ Extraction returned error: {extracted_data['error']}")
             return {
                 'success': False,
                 'error': extracted_data['error'],
@@ -164,13 +167,14 @@ async def smart_upload_property(
         
         # Validate extraction
         is_valid, missing_fields = extractor.validate_extraction(extracted_data)
+        logger.info(f"✔️ Validation: is_valid={is_valid}, missing={missing_fields}")
         
         # Calculate confidence score
         total_fields = 10
         filled_fields = sum(1 for v in extracted_data.values() if v and v != [] and v != '')
         confidence = (filled_fields / total_fields) * 100
         
-        logger.info(f"✅ Extraction complete: {confidence:.1f}% confidence")
+        logger.info(f"✅ Extraction complete: {filled_fields}/{total_fields} fields, {confidence:.1f}% confidence")
         
         # Auto-save if requested and valid
         property_id = None
