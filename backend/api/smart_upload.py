@@ -27,18 +27,9 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = Path("uploads/properties")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Initialize extractor with Gemini - try multiple env var names
-gemini_key = (
-    os.getenv('GEMINI_API_KEY') or 
-    os.getenv('GEMINI_KEY') or 
-    os.getenv('GEMINI_KEY_1') or
-    os.getenv('GOOGLE_API_KEY')
-)
-if gemini_key:
-    logger.info(f"✅ Gemini API key loaded successfully")
-else:
-    logger.warning("⚠️ No Gemini API key found - PDF extraction will use text-only mode")
-extractor = PropertyExtractor(gemini_api_key=gemini_key)
+# Initialize extractor - PropertyExtractor handles key rotation and retry logic internally
+extractor = PropertyExtractor()
+logger.info("🚀 PropertyExtractor initialized with AI support")
 
 
 async def verify_tenant_access(
