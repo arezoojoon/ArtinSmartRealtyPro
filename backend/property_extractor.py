@@ -52,6 +52,9 @@ class PropertyExtractor:
         """
         Extract property information from PDF brochure
         
+        Uses Gemini Vision AI for image-based PDFs (like Binghatti, Emaar brochures)
+        Falls back to text extraction for text-based PDFs
+        
         Returns:
             {
                 'name': str,
@@ -72,7 +75,7 @@ class PropertyExtractor:
             raise ImportError("PyPDF2 not installed")
         
         try:
-            # Read PDF text
+            # Step 1: Try to extract text from PDF
             with open(pdf_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 text = ""
@@ -81,41 +84,107 @@ class PropertyExtractor:
                     if page_text:
                         text += page_text + "\n"
             
-            logger.info(f"📄 Extracted {len(text)} characters from PDF")
+            logger.info(f"📄 PyPDF2 extracted {len(text)} characters from PDF")
             
-            # If text is too short, try to convert PDF to image and use Gemini Vision
-            if len(text.strip()) < 100 and self.gemini_model:
-                logger.info("📸 PDF has minimal text - attempting Vision AI extraction...")
+            # Step 2: If text is too short (image-based PDF), use Gemini directly
+            if len(text.strip()) < 200 and self.gemini_model:
+                logger.info("📸 PDF appears to be image-based - using Gemini Vision AI...")
                 try:
-                    # Try to convert first page to image
-                    import fitz  # PyMuPDF
-                    doc = fitz.open(pdf_path)
-                    page = doc.load_page(0)
-                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                    img_path = pdf_path.replace('.pdf', '_page1.png')
-                    pix.save(img_path)
-                    doc.close()
-                    
-                    # Use Gemini Vision on the image
-                    vision_result = await self._extract_with_gemini_vision(img_path)
-                    if 'error' not in vision_result:
-                        logger.info("✅ Successfully extracted using Vision AI!")
-                        return vision_result
-                except Exception as vision_err:
-                    logger.warning(f"⚠️ Vision AI fallback failed: {vision_err}")
+                    result = await self._extract_pdf_with_gemini(pdf_path)
+                    if result and 'error' not in result:
+                        logger.info("✅ Successfully extracted using Gemini Vision AI!")
+                        return result
+                    else:
+                        logger.warning(f"⚠️ Gemini extraction returned: {result}")
+                except Exception as gemini_err:
+                    logger.error(f"❌ Gemini PDF extraction failed: {gemini_err}")
             
-            # Parse property details from text
+            # Step 3: Parse whatever text we have
             property_data = self._parse_property_text(text)
-            property_data['raw_text'] = text[:1000]  # Store first 1000 chars
+            property_data['raw_text'] = text[:1000]
             
-            # Log what was extracted
             extracted_count = sum(1 for v in property_data.values() if v and v != [] and v != '')
-            logger.info(f"📊 Extracted {extracted_count} fields from PDF text")
+            logger.info(f"📊 Regex extracted {extracted_count} fields from PDF text")
             
             return property_data
             
         except Exception as e:
             logger.error(f"❌ PDF extraction failed: {e}")
+            return {'error': str(e)}
+    
+    async def _extract_pdf_with_gemini(self, pdf_path: str) -> Dict:
+        """
+        Use Gemini 1.5 to directly extract property info from PDF
+        Gemini 1.5 Flash/Pro supports PDF files natively!
+        """
+        if not self.gemini_model:
+            return {'error': 'Gemini model not initialized'}
+        
+        try:
+            # Upload PDF to Gemini
+            pdf_file = genai.upload_file(pdf_path, mime_type="application/pdf")
+            logger.info(f"📤 Uploaded PDF to Gemini: {pdf_file.name}")
+            
+            prompt = """
+            You are an expert Dubai real estate analyst. Extract ALL property information from this PDF brochure.
+            
+            Return a JSON object with these fields (use null if not found):
+            {
+                "name": "Property/Project Name (e.g., 'Flare by Binghatti', 'Marina Heights')",
+                "price": 1500000 (starting price in AED as number, NOT string),
+                "area_sqft": 1200 (area in square feet as number),
+                "bedrooms": 2 (number of bedrooms, 0 for studio),
+                "bathrooms": 2 (number of bathrooms),
+                "location": "Dubai Marina (exact area in Dubai)",
+                "description": "Brief 2-sentence description of the property",
+                "roi_percentage": 8.5 (expected ROI % as number),
+                "is_golden_visa_eligible": true/false (if price >= 2M AED, usually true),
+                "payment_plan": "60/40" or "80/20" or "100% on completion",
+                "completion_date": "Q4 2025" or "2026",
+                "property_type": "apartment/villa/townhouse/penthouse",
+                "transaction_type": "buy",
+                "is_off_plan": true/false,
+                "amenities": ["Pool", "Gym", "Parking", "Beach Access"]
+            }
+            
+            IMPORTANT EXTRACTION RULES:
+            - Price: Look for "Starting from", "AED", numbers with commas. If in millions, multiply (2.5M = 2500000)
+            - Area: Look for "sq.ft", "sqft", "square feet". Convert m² to sqft (multiply by 10.764)
+            - Location: Extract the Dubai area name
+            - Developer: Look for developer name (Binghatti, Emaar, Damac, etc)
+            - Golden Visa: If price >= 2,000,000 AED, set to true
+            
+            Return ONLY valid JSON, no markdown code blocks, no explanation.
+            """
+            
+            response = self.gemini_model.generate_content([prompt, pdf_file])
+            result_text = response.text.strip()
+            
+            # Clean up response
+            result_text = re.sub(r'^```json\s*', '', result_text)
+            result_text = re.sub(r'\s*```$', '', result_text)
+            result_text = re.sub(r'^```\s*', '', result_text)
+            
+            # Parse JSON
+            import json
+            property_data = json.loads(result_text)
+            
+            logger.info(f"✅ Gemini extracted: {property_data.get('name', 'Unknown')} - {property_data.get('price', 'N/A')} AED")
+            
+            # Clean up uploaded file
+            try:
+                genai.delete_file(pdf_file.name)
+            except:
+                pass
+            
+            return property_data
+            
+        except json.JSONDecodeError as je:
+            logger.error(f"❌ Failed to parse Gemini response as JSON: {je}")
+            logger.error(f"Response was: {result_text[:500]}")
+            return {'error': f'JSON parse error: {je}'}
+        except Exception as e:
+            logger.error(f"❌ Gemini PDF extraction error: {e}")
             return {'error': str(e)}
     
     async def extract_from_image(self, image_path: str, use_ai: bool = True) -> Dict:
