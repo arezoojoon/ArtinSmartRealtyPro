@@ -260,18 +260,26 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
   const handleCreateTenant = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/register`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/tenants`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify(newTenant)
       });
       if (response.ok) {
         setShowCreateTenant(false);
         setNewTenant({ email: '', name: '', company_name: '', password: '' });
         fetchTenants();
+        alert('Tenant created successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to create tenant'}`);
       }
     } catch (error) {
       console.error('Error creating tenant:', error);
+      alert('Failed to create tenant. Please try again.');
     }
   };
 
@@ -348,8 +356,8 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${activeTab === tab.id
-                  ? 'bg-gold-500/20 text-gold-400'
-                  : 'text-gray-400 hover:text-white'
+                ? 'bg-gold-500/20 text-gold-400'
+                : 'text-gray-400 hover:text-white'
                 }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -563,8 +571,8 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
                     <div
                       key={error.id}
                       className={`p-3 rounded-lg border-l-4 ${error.type === 'error' ? 'border-l-red-500 bg-red-500/5' :
-                          error.type === 'warning' ? 'border-l-yellow-500 bg-yellow-500/5' :
-                            'border-l-blue-500 bg-blue-500/5'
+                        error.type === 'warning' ? 'border-l-yellow-500 bg-yellow-500/5' :
+                          'border-l-blue-500 bg-blue-500/5'
                         }`}
                     >
                       <div className="flex items-start justify-between">
