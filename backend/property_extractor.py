@@ -77,13 +77,40 @@ class PropertyExtractor:
                 pdf_reader = PyPDF2.PdfReader(file)
                 text = ""
                 for page in pdf_reader.pages:
-                    text += page.extract_text() + "\n"
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
             
             logger.info(f"📄 Extracted {len(text)} characters from PDF")
+            
+            # If text is too short, try to convert PDF to image and use Gemini Vision
+            if len(text.strip()) < 100 and self.gemini_model:
+                logger.info("📸 PDF has minimal text - attempting Vision AI extraction...")
+                try:
+                    # Try to convert first page to image
+                    import fitz  # PyMuPDF
+                    doc = fitz.open(pdf_path)
+                    page = doc.load_page(0)
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                    img_path = pdf_path.replace('.pdf', '_page1.png')
+                    pix.save(img_path)
+                    doc.close()
+                    
+                    # Use Gemini Vision on the image
+                    vision_result = await self._extract_with_gemini_vision(img_path)
+                    if 'error' not in vision_result:
+                        logger.info("✅ Successfully extracted using Vision AI!")
+                        return vision_result
+                except Exception as vision_err:
+                    logger.warning(f"⚠️ Vision AI fallback failed: {vision_err}")
             
             # Parse property details from text
             property_data = self._parse_property_text(text)
             property_data['raw_text'] = text[:1000]  # Store first 1000 chars
+            
+            # Log what was extracted
+            extracted_count = sum(1 for v in property_data.values() if v and v != [] and v != '')
+            logger.info(f"📊 Extracted {extracted_count} fields from PDF text")
             
             return property_data
             
