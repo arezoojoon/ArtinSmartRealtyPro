@@ -78,7 +78,7 @@ async def notify_qualified_leads_of_new_property(
         # فیلتر: qualified/hot leads که preferences ذخیره شده دارن
         matching_leads_query = select(Lead).where(
             Lead.tenant_id == tenant_id,
-            Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.HOT]),
+            Lead.status == LeadStatus.QUALIFIED,
             Lead.budget_min.isnot(None),  # حتماً بودجه ذخیره شده باشه
             Lead.budget_max.isnot(None)
         )
@@ -221,7 +221,7 @@ async def get_matching_leads_count(tenant_id: int, property_id: int) -> int:
         
         matching_leads_query = select(Lead).where(
             Lead.tenant_id == tenant_id,
-            Lead.status.in_([LeadStatus.QUALIFIED, LeadStatus.HOT]),
+            Lead.status == LeadStatus.QUALIFIED,
             Lead.budget_min.isnot(None),
             Lead.budget_max.isnot(None),
             Lead.budget_min <= new_property.price,
