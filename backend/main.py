@@ -742,6 +742,9 @@ app.include_router(admin_subscription_router)
 from api.health import router as health_router
 app.include_router(health_router)
 
+# 🚀 Include Smart Upload API (PDF/Image property extraction)
+app.include_router(smart_upload.router)
+
 
 # ==================== LEGACY HEALTH CHECK (DEPRECATED) ====================
 
