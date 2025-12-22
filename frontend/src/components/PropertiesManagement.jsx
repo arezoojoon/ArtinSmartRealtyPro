@@ -101,7 +101,7 @@ const PropertiesManagement = ({ tenantId }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         console.log('Form submitted!', formData);  // Debug log
-        
+
         try {
             const payload = {
                 ...formData,
@@ -118,7 +118,7 @@ const PropertiesManagement = ({ tenantId }) => {
             const url = editingProperty
                 ? `${API_BASE_URL}/api/tenants/${tenantId}/properties/${editingProperty.id}`
                 : `${API_BASE_URL}/api/tenants/${tenantId}/properties`;
-            
+
             const method = editingProperty ? 'PUT' : 'POST';
 
             console.log('Sending request:', { method, url, payload });  // Debug log
@@ -399,7 +399,7 @@ const PropertiesManagement = ({ tenantId }) => {
 
             {/* Add/Edit Modal */}
             {showModal && (
-                <div 
+                <div
                     className="fixed inset-0 bg-black bg-opacity-75 flex items-start justify-center p-4 z-50 overflow-y-auto"
                     style={{ zIndex: 9999 }}
                     onClick={(e) => {
@@ -617,16 +617,16 @@ const PropertiesManagement = ({ tenantId }) => {
                             {/* Full Description (Rich Text with Emojis) */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                                    Full Description (با ایموجی)
+                                    Full Description (Optional)
                                 </label>
                                 <textarea
                                     name="full_description"
                                     value={formData.full_description}
                                     onChange={handleInputChange}
                                     rows="8"
-                                    placeholder="🏠 ویلا مدرن در شمال تهران&#10;📍 محدوده: سعادت آباد&#10;📏 متراژ: 250 متر&#10;🛏️ 3 خوابه + 3 سرویس&#10;✨ امکانات: پارکینگ، انباری، آسانسور..."
+                                    placeholder="🏠 Luxury Villa in Dubai Marina&#10;📍 Location: Palm Jumeirah&#10;📏 Area: 250 sqft&#10;🛏️ 3 Bedrooms + 3 Bathrooms&#10;✨ Features: Parking, Pool, Gym..."
                                     className="w-full bg-navy-light border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gold font-medium"
-                                    style={{ direction: 'rtl', textAlign: 'right' }}
+                                    style={{ direction: 'ltr', textAlign: 'left' }}
                                 />
                             </div>
 
@@ -640,14 +640,14 @@ const PropertiesManagement = ({ tenantId }) => {
                                     className="w-4 h-4 text-gold bg-navy-light border-gray-700 rounded focus:ring-gold focus:ring-2"
                                 />
                                 <label className="ml-2 text-sm font-medium text-gray-300">
-                                    🔥 فروش فوری (Urgent Sale)
+                                    🔥 Urgent Sale
                                 </label>
                             </div>
 
                             {/* Property Images */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                                    Property Images (حداکثر 5 عکس)
+                                    Property Images (Max 5 images)
                                 </label>
                                 {editingProperty?.id ? (
                                     <PropertyImageUpload
@@ -655,15 +655,15 @@ const PropertiesManagement = ({ tenantId }) => {
                                         tenantId={tenantId}
                                         images={formData.image_urls || []}
                                         onImagesChange={(newImages) => {
-                                            setFormData({ 
-                                                ...formData, 
-                                                image_urls: newImages 
+                                            setFormData({
+                                                ...formData,
+                                                image_urls: newImages
                                             });
                                         }}
                                     />
                                 ) : (
                                     <div className="bg-navy-light border border-gray-700 rounded-lg p-6 text-center text-gray-400">
-                                        <p>💾 ابتدا ملک را ذخیره کنید، سپس می‌توانید عکس آپلود کنید</p>
+                                        <p>💾 Save the property first, then you can upload images</p>
                                     </div>
                                 )}
                             </div>
@@ -700,7 +700,7 @@ const PropertiesManagement = ({ tenantId }) => {
                                                     if (!response.ok) throw new Error('Upload failed');
 
                                                     const data = await response.json();
-                                                    
+
                                                     // Auto-fill form with extracted data
                                                     if (data.extracted_data) {
                                                         const extracted = data.extracted_data;
@@ -742,7 +742,7 @@ const PropertiesManagement = ({ tenantId }) => {
                                         📄 Property Brochure PDF
                                     </label>
                                     <div className="bg-navy-light border border-gray-700 rounded-lg p-6 text-center text-gray-400">
-                                        <p>💾 ابتدا ملک را ذخیره کنید، سپس می‌توانید PDF آپلود کنید</p>
+                                        <p>💾 Save the property first, then you can upload the PDF</p>
                                     </div>
                                 </div>
                             )}
