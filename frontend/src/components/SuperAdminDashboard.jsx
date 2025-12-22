@@ -273,6 +273,13 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
         setNewTenant({ email: '', name: '', company_name: '', password: '' });
         fetchTenants();
         alert('Tenant created successfully!');
+      } else if (response.status === 401) {
+        // Token expired - redirect to login
+        const error = await response.json();
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/';
       } else {
         const error = await response.json();
         alert(`Error: ${error.detail || 'Failed to create tenant'}`);
