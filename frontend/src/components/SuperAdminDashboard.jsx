@@ -66,7 +66,7 @@ const SuperAdminDashboard = ({ user, onLogout, onImpersonate }) => {
   const fetchTenants = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/tenants`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/tenants`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
