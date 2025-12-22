@@ -684,10 +684,13 @@ const PropertiesManagement = ({ tenantId }) => {
 
                                                 const uploadFormData = new FormData();
                                                 uploadFormData.append('file', file);
+                                                uploadFormData.append('use_ai', 'true');
+                                                uploadFormData.append('auto_save', 'false');
 
                                                 try {
+                                                    // Use smart-upload endpoint for AI extraction
                                                     const response = await fetch(
-                                                        `${API_BASE_URL}/api/tenants/${tenantId}/properties/upload-pdf?extract_text=true`,
+                                                        `${API_BASE_URL}/api/tenants/${tenantId}/properties/smart-upload`,
                                                         {
                                                             method: 'POST',
                                                             body: uploadFormData,
@@ -700,22 +703,31 @@ const PropertiesManagement = ({ tenantId }) => {
                                                     if (!response.ok) throw new Error('Upload failed');
 
                                                     const data = await response.json();
+                                                    console.log('Smart Upload Response:', data);
 
                                                     // Auto-fill form with extracted data
-                                                    if (data.extracted_data) {
+                                                    if (data.success && data.extracted_data) {
                                                         const extracted = data.extracted_data;
                                                         setFormData(prev => ({
                                                             ...prev,
+                                                            name: extracted.name || prev.name,
                                                             price: extracted.price || prev.price,
                                                             bedrooms: extracted.bedrooms || prev.bedrooms,
+                                                            bathrooms: extracted.bathrooms || prev.bathrooms,
                                                             area_sqft: extracted.area_sqft || prev.area_sqft,
                                                             location: extracted.location || prev.location,
-                                                            brochure_pdf: data.file_url
+                                                            description: extracted.description || prev.description,
+                                                            property_type: extracted.property_type?.toUpperCase() || prev.property_type,
+                                                            expected_roi: extracted.roi_percentage || prev.expected_roi,
+                                                            golden_visa_eligible: extracted.is_golden_visa_eligible || prev.golden_visa_eligible,
+                                                            features: extracted.amenities || prev.features,
+                                                            brochure_pdf: data.file_path
                                                         }));
-                                                        alert('✅ PDF uploaded and data extracted successfully!');
+                                                        alert(`✅ PDF extracted with ${data.confidence}% confidence!\nReview the auto-filled data and save.`);
+                                                    } else if (data.error) {
+                                                        alert(`⚠️ Extraction issue: ${data.error}`);
                                                     } else {
-                                                        setFormData(prev => ({ ...prev, brochure_pdf: data.file_url }));
-                                                        alert('✅ PDF uploaded successfully!');
+                                                        alert('✅ PDF uploaded but no data extracted. Manual entry required.');
                                                     }
                                                 } catch (error) {
                                                     console.error('PDF upload error:', error);
