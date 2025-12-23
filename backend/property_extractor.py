@@ -204,7 +204,7 @@ class PropertyExtractor:
             logger.info(f"📄 PyPDF2 extracted {len(text)} characters from PDF")
             
             # Step 2: If text is too short (image-based PDF), use Gemini directly
-            if len(text.strip()) < 200 and self.gemini_model:
+            if len(text.strip()) < 200 and self.gemini_client:
                 logger.info("📸 PDF appears to be image-based - using Gemini Vision AI...")
                 try:
                     result = await self._extract_pdf_with_gemini(pdf_path)
@@ -236,8 +236,8 @@ class PropertyExtractor:
         
         Uses retry logic and key rotation for reliability.
         """
-        if not self.gemini_model and not self._rotate_key():
-            return {'error': 'No Gemini API key available'}
+        if not self.gemini_client:
+            return {'error': 'Gemini client not initialized'}
         
         pdf_file = None
         try:
@@ -278,7 +278,8 @@ class PropertyExtractor:
             """
             
             # Use retry logic with key rotation
-            result_text = await self._call_gemini_with_retry(prompt, pdf_file)
+            response = await self.gemini_client.generate_content_async([prompt, pdf_file], max_retries=3)
+            result_text = response.text if response else None
             
             if not result_text:
                 return {'error': 'Failed to get response from Gemini after retries'}
@@ -325,7 +326,7 @@ class PropertyExtractor:
         """
         try:
             # Method 1: Gemini Vision (Best quality, FREE!)
-            if use_ai and self.gemini_model:
+            if use_ai and self.gemini_client:
                 return await self._extract_with_gemini_vision(image_path)
             
             # Method 2: Tesseract OCR (Free, lower quality)
@@ -379,7 +380,7 @@ class PropertyExtractor:
         """
         
         try:
-            response = self.gemini_model.generate_content([prompt, image])
+            response = self.gemini_client.model.generate_content([prompt, image])
             result_text = response.text.strip()
             
             # Remove markdown code blocks if present
