@@ -644,8 +644,9 @@ class Brain:
     NEW: Uses tenant-specific data (properties, projects, knowledge) for personalized responses.
     """
     
+    def __init__(self, tenant=None):
         self.tenant = tenant
-        self.agent_name = tenant.name or "ArtinSmartRealty"
+        self.agent_name = tenant.name if tenant else "ArtinSmartRealty"
         self.tenant_context = None  # Will be loaded on demand
         self.chat_sessions = {}  # Store chat sessions per lead ID for conversation memory
         
