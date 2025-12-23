@@ -9,6 +9,7 @@ Agents just upload files - system does the rest!
 - Safety Settings for stability
 """
 
+
 import re
 import io
 import os
@@ -19,6 +20,9 @@ from typing import Dict, Optional, List
 from pathlib import Path
 import logging
 from dotenv import load_dotenv
+
+# Import shared Gemini utilities
+from utils.gemini_utils import GeminiClient, get_gemini_api_keys
 
 # Load environment variables
 load_dotenv()
@@ -43,7 +47,6 @@ except ImportError:
 # AI Vision (Gemini Vision for complex extraction)
 try:
     import google.generativeai as genai
-    from google.api_core import exceptions as google_exceptions
     HAS_GEMINI = True
 except ImportError:
     HAS_GEMINI = False
@@ -52,142 +55,115 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def get_gemini_api_keys() -> List[str]:
-    """Get all available Gemini API keys from environment"""
-    keys = [
-        os.getenv("GEMINI_KEY_1"),
-        os.getenv("GEMINI_KEY_2"),
-        os.getenv("GEMINI_KEY_3"),
-        os.getenv("GEMINI_API_KEY"),
-        os.getenv("GOOGLE_API_KEY"),
-    ]
-    # Filter out None and placeholder values
-    valid_keys = [k for k in keys if k and k != "your_gemini_api_key" and k.startswith("AIza")]
-    return valid_keys
-
-
-def get_random_api_key() -> Optional[str]:
-    """Get a random API key from available keys (Key Rotation)"""
-    keys = get_gemini_api_keys()
-    if not keys:
-        logger.warning("⚠️ No valid Gemini API keys found!")
-        return None
-    selected = random.choice(keys)
-    logger.debug(f"🔑 Using Gemini key ending in ...{selected[-6:]}")
-    return selected
-
-
-# Safety settings to prevent API key ban
-GEMINI_SAFETY_SETTINGS = [
-    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
-    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
-    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
-    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
-]
-
-
 class PropertyExtractor:
     """
     Extract property information from PDFs and images automatically
     
     Features:
-    - Key Rotation: Uses multiple API keys randomly
-    - Retry Logic: Automatic retry with exponential backoff on rate limits
-    - Safety Settings: Prevents API key from being banned
+    - Key Rotation: Managed by GeminiClient
+    - Retry Logic: Managed by GeminiClient
     """
     
     def __init__(self, gemini_api_key: Optional[str] = None):
-        self.api_keys = get_gemini_api_keys()
-        self.current_key = gemini_api_key or get_random_api_key()
-        self.gemini_model = None
+        # We ignore the passed key if it's the placeholder or invalid
+        # The GeminiClient handles key loading from env automatically
+        self.gemini_client = None
         
-        if HAS_GEMINI and self.current_key:
-            self._init_gemini_model(self.current_key)
-            logger.info(f"✅ Gemini initialized with {len(self.api_keys)} available keys")
+        if HAS_GEMINI:
+            self.gemini_client = GeminiClient()
+            logger.info("✅ PropertyExtractor initialized with robust GeminiClient")
         else:
-            logger.warning("⚠️ No Gemini API key available - AI extraction disabled")
+            logger.warning("⚠️ No google-generativeai installed - AI extraction disabled")
     
-    def _init_gemini_model(self, api_key: str):
-        """Initialize Gemini model with safety settings"""
+    async def _extract_pdf_with_gemini(self, pdf_path: str) -> Dict:
+        """
+        Use Gemini 1.5 to directly extract property info from PDF
+        Gemini 1.5 Flash/Pro supports PDF files natively!
+        """
+        if not self.gemini_client:
+            return {'error': 'Gemini client not initialized'}
+        
+        pdf_file = None
         try:
-            genai.configure(api_key=api_key)
-            self.gemini_model = genai.GenerativeModel(
-                model_name='gemini-1.5-flash',
-                safety_settings=GEMINI_SAFETY_SETTINGS
+            # Upload PDF using the client wrapper (handles auth)
+            pdf_file = self.gemini_client.upload_file(pdf_path, mime_type="application/pdf")
+            logger.info(f"📤 Uploaded PDF to Gemini: {pdf_file.name}")
+            
+            prompt = """
+            You are an expert Dubai real estate analyst. Extract ALL property information from this PDF brochure.
+            
+            Return a JSON object with these fields (use null if not found):
+            {
+                "name": "Property/Project Name (e.g., 'Flare by Binghatti', 'Marina Heights')",
+                "price": 1500000 (starting price in AED as number, NOT string),
+                "area_sqft": 1200 (area in square feet as number),
+                "bedrooms": 2 (number of bedrooms, 0 for studio),
+                "bathrooms": 2 (number of bathrooms),
+                "location": "Dubai Marina (exact area in Dubai)",
+                "description": "Brief 2-sentence description of the property",
+                "roi_percentage": 8.5 (expected ROI % as number),
+                "is_golden_visa_eligible": true/false (if price >= 2M AED, usually true),
+                "payment_plan": "60/40" or "80/20" or "100% on completion",
+                "completion_date": "Q4 2025" or "2026",
+                "property_type": "apartment/villa/townhouse/penthouse",
+                "transaction_type": "buy",
+                "is_off_plan": true/false,
+                "amenities": ["Pool", "Gym", "Parking", "Beach Access"]
+            }
+            
+            IMPORTANT EXTRACTION RULES:
+            - Price: Look for "Starting from", "AED", numbers with commas. If in millions, multiply (2.5M = 2500000)
+            - Area: Look for "sq.ft", "sqft", "square feet". Convert m² to sqft (multiply by 10.764)
+            - Location: Extract the Dubai area name
+            - Developer: Look for developer name (Binghatti, Emaar, Damac, etc)
+            - Golden Visa: If price >= 2,000,000 AED, set to true
+            
+            Return ONLY valid JSON, no markdown code blocks, no explanation.
+            """
+            
+            # Use client's generate_content_async which handles retries and rotation
+            response = await self.gemini_client.generate_content_async(
+                [prompt, pdf_file], 
+                max_retries=3
             )
-            self.current_key = api_key
+            
+            result_text = response.text.strip() if response else None
+            
+            if not result_text:
+                return {'error': 'Failed to get response from Gemini'}
+            
+            # Clean up response
+            result_text = re.sub(r'^```json\s*', '', result_text)
+            result_text = re.sub(r'\s*```$', '', result_text)
+            result_text = re.sub(r'^```\s*', '', result_text)
+            
+            # Parse JSON
+            import json
+            property_data = json.loads(result_text)
+            
+            logger.info(f"✅ Gemini extracted: {property_data.get('name', 'Unknown')} - {property_data.get('price', 'N/A')} AED")
+            
+            return property_data
+            
+        except json.JSONDecodeError as je:
+            logger.error(f"❌ Failed to parse Gemini response as JSON: {je}")
+            logger.error(f"Response was: {result_text[:500] if result_text else 'None'}")
+            return {'error': f'JSON parse error: {je}'}
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Gemini: {e}")
-            self.gemini_model = None
-    
-    def _rotate_key(self):
-        """Rotate to a different API key"""
-        if len(self.api_keys) <= 1:
-            return False
-        
-        other_keys = [k for k in self.api_keys if k != self.current_key]
-        if other_keys:
-            new_key = random.choice(other_keys)
-            logger.info(f"🔄 Rotating to different API key...")
-            self._init_gemini_model(new_key)
-            return True
-        return False
-    
-    async def _call_gemini_with_retry(self, prompt, content, max_retries: int = 3):
-        """
-        Call Gemini API with retry logic and key rotation
-        
-        Args:
-            prompt: The text prompt
-            content: PDF file or image to analyze
-            max_retries: Maximum number of retry attempts
-        
-        Returns:
-            Response text or None on failure
-        """
-        wait_time = 2  # Start with 2 seconds
-        
-        for attempt in range(max_retries):
-            try:
-                if not self.gemini_model:
-                    if not self._rotate_key():
-                        return None
-                
-                response = self.gemini_model.generate_content([prompt, content])
-                return response.text
-                
-            except Exception as e:
-                error_str = str(e).lower()
-                
-                # Rate limit or quota exceeded
-                if 'quota' in error_str or 'resource' in error_str or '429' in error_str:
-                    logger.warning(f"⚠️ Rate limit hit (attempt {attempt + 1}/{max_retries}). Waiting {wait_time}s...")
-                    time.sleep(wait_time)
-                    wait_time *= 2  # Exponential backoff
-                    
-                    # Try rotating to different key
-                    if self._rotate_key():
-                        logger.info("🔄 Switched to different API key")
-                    continue
-                
-                # Invalid API key
-                elif 'invalid' in error_str or 'api key' in error_str:
-                    logger.error(f"❌ Invalid API key, rotating...")
-                    if not self._rotate_key():
-                        logger.error("❌ No more valid API keys!")
-                        return None
-                    continue
-                
-                # Other errors
-                else:
-                    logger.error(f"❌ Gemini error: {e}")
-                    if attempt < max_retries - 1:
-                        time.sleep(wait_time)
-                        wait_time *= 2
-                    continue
-        
-        logger.error(f"❌ All {max_retries} retry attempts failed")
-        return None
+            logger.error(f"❌ Gemini PDF extraction error: {e}")
+            return {'error': str(e)}
+        finally:
+            # Clean up uploaded file
+            if pdf_file:
+                try:
+                    # We might need to use genai directly for deletion or add delete to wrapper
+                    genai.delete_file(pdf_file.name)
+                except:
+                    pass
+
+    # Removing the old _rotate_key and _call_gemini_with_retry methods as they are now in GeminiClient
+    # But for cleaner diff, I'm replacing the whole upper section and _extract_pdf_with_gemini
+
     
     async def extract_from_pdf(self, pdf_path: str) -> Dict:
         """

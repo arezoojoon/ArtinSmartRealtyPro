@@ -27,27 +27,12 @@ from database import (
 logger = logging.getLogger(__name__)
 
 # Configure Gemini API with Key Rotation
-import random
-from google.api_core import exceptions as google_exceptions
+# Configure Gemini API with Key Rotation
+from utils.gemini_utils import GeminiClient
 
-# Get all available Gemini API keys
-GEMINI_KEYS = [
-    os.getenv("GEMINI_KEY_1", ""),
-    os.getenv("GEMINI_KEY_2", ""),
-    os.getenv("GEMINI_KEY_3", ""),
-    os.getenv("GEMINI_API_KEY", "")  # Fallback to old key
-]
-# Filter out empty keys
-VALID_GEMINI_KEYS = [k for k in GEMINI_KEYS if k]
-
-if not VALID_GEMINI_KEYS:
-    logger.error("❌ No valid Gemini API keys found in environment!")
-    GEMINI_API_KEY = ""
-else:
-    # Use random key for load balancing
-    GEMINI_API_KEY = random.choice(VALID_GEMINI_KEYS)
-    genai.configure(api_key=GEMINI_API_KEY)
-    logger.info(f"✅ Configured Gemini API with key rotation ({len(VALID_GEMINI_KEYS)} keys available)")
+# Retry configuration for API calls
+MAX_RETRIES = 3
+RETRY_DELAY_BASE = 2  # seconds
 
 # Retry configuration for API calls
 MAX_RETRIES = 3
@@ -659,69 +644,14 @@ class Brain:
     NEW: Uses tenant-specific data (properties, projects, knowledge) for personalized responses.
     """
     
-    def __init__(self, tenant: Tenant):
-        global GEMINI_API_KEY  # Declare at the start of function to avoid SyntaxError
-        
         self.tenant = tenant
         self.agent_name = tenant.name or "ArtinSmartRealty"
         self.tenant_context = None  # Will be loaded on demand
         self.chat_sessions = {}  # Store chat sessions per lead ID for conversation memory
         
-        # Initialize Gemini model with Professional System Instruction
-        if GEMINI_API_KEY:
-            try:
-                self.model = genai.GenerativeModel(
-                    'gemini-2.0-flash-exp',
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    safety_settings=SAFETY_SETTINGS
-                )
-                logger.info("✅ Initialized Gemini model: gemini-2.0-flash-exp with professional system instruction")
-            except Exception as model_init_error:
-                logger.error(f"❌ Failed to initialize gemini-2.0-flash-exp: {model_init_error}")
-                logger.info("🔄 Falling back to gemini-1.5-flash...")
-                try:
-                    self.model = genai.GenerativeModel(
-                        'gemini-1.5-flash',
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        safety_settings=SAFETY_SETTINGS
-                    )
-                    logger.info("✅ Initialized fallback model: gemini-1.5-flash with professional system instruction")
-                except Exception as fallback_error:
-                    logger.error(f"❌ Fallback model also failed: {fallback_error}")
-                    self.model = None
-            
-            # Validate API access at startup with retry logic
-            if self.model:
-                validated = False
-                for attempt in range(MAX_RETRIES):
-                    try:
-                        # Test simple generation to ensure API is working
-                        test_response = self.model.generate_content("Test connection")
-                        logger.info(f"✅ Gemini API validation successful - model is accessible (attempt {attempt + 1})")
-                        validated = True
-                        break
-                    except google_exceptions.ResourceExhausted:
-                        logger.warning(f"⚠️ API quota exceeded on attempt {attempt + 1}. Retrying with different key...")
-                        if attempt < MAX_RETRIES - 1 and len(VALID_GEMINI_KEYS) > 1:
-                            # Try different key
-                            GEMINI_API_KEY = random.choice([k for k in VALID_GEMINI_KEYS if k != GEMINI_API_KEY])
-                            genai.configure(api_key=GEMINI_API_KEY)
-                            self.model = genai.GenerativeModel(
-                                'gemini-2.0-flash-exp',
-                                system_instruction=SYSTEM_INSTRUCTION,
-                                safety_settings=SAFETY_SETTINGS
-                            )
-                        import time
-                        time.sleep(RETRY_DELAY_BASE * (2 ** attempt))
-                    except Exception as e:
-                        logger.error(f"❌ GEMINI API VALIDATION FAILED (attempt {attempt + 1}): {type(e).__name__}: {str(e)}")
-                        if attempt == MAX_RETRIES - 1:
-                            logger.error("⚠️ Bot will fail to generate AI responses - check API key and quotas!")
-                            self.model = None
-                        break
-        else:
-            self.model = None
-            logger.error("❌ No valid GEMINI_API_KEY found!")
+        # Initialize Gemini Client (Handles rotation, retries, and safety)
+        self.gemini_client = GeminiClient(model_name='gemini-2.0-flash-exp')
+        logger.info("✅ Brain initialized with robust GeminiClient")
     
     async def extract_user_info_smart(self, message: str, current_lead_data: dict) -> dict:
         """
@@ -741,7 +671,7 @@ class Brain:
             "urgency": str or None  # "urgent", "exploring", "planning"
         }
         """
-        if not self.model:
+        if not self.gemini_client or not self.gemini_client.current_key:
             logger.warning("⚠️ Gemini model not available - using fallback extraction")
             return {}
         
@@ -784,10 +714,8 @@ Now extract from the user's message above.
 """
         
         try:
-            response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, extraction_prompt),
-                timeout=10.0
-            )
+            # Use GeminiClient's async method with built-in retry
+            response = await self.gemini_client.generate_content_async(extraction_prompt, max_retries=3)
             
             # Parse JSON response
             import json
@@ -1481,7 +1409,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 upload_path = temp_audio_path
             
             try:
-                # Upload audio file to Gemini with explicit MIME type (run in thread pool since it's blocking)
+                # Upload audio file to Gemini using robust client (handles keys)
                 import asyncio
                 loop = asyncio.get_event_loop()
                 
@@ -1489,9 +1417,10 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 mime_type = "audio/mpeg" if upload_path.endswith(".mp3") else f"audio/{file_extension}"
                 logger.info(f"📤 Uploading {upload_path} with MIME type: {mime_type}")
                 
+                # Use gemini_client.upload_file which handles key rotation
                 audio_file = await loop.run_in_executor(
                     None, 
-                    lambda: genai.upload_file(upload_path, mime_type=mime_type)
+                    lambda: self.gemini_client.upload_file(upload_path, mime_type=mime_type)
                 )
                 
                 # Wait for processing with timeout (non-blocking)
@@ -1539,14 +1468,11 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                 """
                 
                 # Generate transcript and extract entities with retry logic and timeout
-                async def call_gemini_voice():
-                    return self.model.generate_content([audio_file, prompt])
-                
+                # Generate transcript and extract entities with robust client
                 try:
-                    # BUG-005 FIX: Add 30s timeout
-                    response = await asyncio.wait_for(
-                        retry_with_backoff(call_gemini_voice),
-                        timeout=30.0
+                    response = await self.gemini_client.generate_content_async(
+                        [audio_file, prompt],
+                        max_retries=3
                     )
                 except asyncio.TimeoutError:
                     logger.error("⏱️ Gemini voice API timeout after 30s")
