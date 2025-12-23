@@ -94,6 +94,62 @@ class PropertyType(str, Enum):
     LAND = "land"
 
 
+def normalize_property_type(value: str) -> str:
+    """
+    Normalize property type to a valid enum value.
+    Maps common synonyms and invalid values to valid PropertyType values.
+    
+    Examples:
+        - "house" -> "villa"
+        - "flat" -> "apartment"
+        - "condo" -> "apartment"
+        - "office" -> "commercial"
+        - "warehouse" -> "commercial"
+    """
+    if not value:
+        return None
+    
+    value_lower = value.lower().strip()
+    
+    # Check if already valid
+    valid_values = {pt.value for pt in PropertyType}
+    if value_lower in valid_values:
+        return value_lower
+    
+    # Mapping of synonyms to valid values
+    synonyms = {
+        # Villa synonyms
+        "house": "villa",
+        "home": "villa",
+        "detached": "villa",
+        "single-family": "villa",
+        "bungalow": "villa",
+        "mansion": "villa",
+        # Apartment synonyms
+        "flat": "apartment",
+        "condo": "apartment",
+        "condominium": "apartment",
+        "unit": "apartment",
+        "loft": "apartment",
+        # Commercial synonyms
+        "office": "commercial",
+        "warehouse": "commercial",
+        "retail": "commercial",
+        "shop": "commercial",
+        "store": "commercial",
+        # Studio synonyms
+        "bachelor": "studio",
+        "efficiency": "studio",
+    }
+    
+    if value_lower in synonyms:
+        return synonyms[value_lower]
+    
+    # Default fallback to apartment (most common)
+    return "apartment"
+
+
+
 class PaymentMethod(str, Enum):
     CASH = "cash"
     INSTALLMENT = "installment"

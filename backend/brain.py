@@ -4355,7 +4355,11 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                     if conversation_data.get("property_type"):
                         prop_type = conversation_data["property_type"]
                         if prop_type != "any":
-                            query = query.where(TenantProperty.property_type == prop_type)
+                            # Normalize property type to valid enum value
+                            from database import normalize_property_type
+                            normalized_type = normalize_property_type(prop_type)
+                            if normalized_type:
+                                query = query.where(TenantProperty.property_type == normalized_type)
                     
                     # Execute query
                     result = await session.execute(query.limit(5))
