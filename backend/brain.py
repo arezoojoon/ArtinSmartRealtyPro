@@ -1370,7 +1370,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
         Process voice message using Gemini's multimodal capabilities.
         Returns transcript and extracted entities.
         """
-        if not self.model:
+        if not self.gemini_client or not self.gemini_client.model:
             return "Voice processing unavailable (Gemini API not configured)", {}
         
         try:
