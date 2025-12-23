@@ -203,25 +203,28 @@ class PropertyExtractor:
             
             logger.info(f"📄 PyPDF2 extracted {len(text)} characters from PDF")
             
-            # Step 2: If text is too short (image-based PDF), use Gemini directly
-            if len(text.strip()) < 200 and self.gemini_client:
-                logger.info("📸 PDF appears to be image-based - using Gemini Vision AI...")
+            # Step 2: ALWAYS try Gemini AI for best extraction quality
+            # Property brochures need AI analysis to understand context (prices, locations, etc.)
+            if self.gemini_client:
+                logger.info("🤖 Using Gemini AI for intelligent PDF extraction...")
                 try:
                     result = await self._extract_pdf_with_gemini(pdf_path)
                     if result and 'error' not in result:
-                        logger.info("✅ Successfully extracted using Gemini Vision AI!")
+                        logger.info("✅ Successfully extracted using Gemini AI!")
                         return result
                     else:
-                        logger.warning(f"⚠️ Gemini extraction returned: {result}")
+                        logger.warning(f"⚠️ Gemini extraction returned error, falling back to regex: {result}")
                 except Exception as gemini_err:
-                    logger.error(f"❌ Gemini PDF extraction failed: {gemini_err}")
+                    logger.error(f"❌ Gemini PDF extraction failed, falling back to regex: {gemini_err}")
+            else:
+                logger.warning("⚠️ Gemini client not available - using basic regex extraction")
             
-            # Step 3: Parse whatever text we have
+            # Step 3: Fallback - Parse text with regex (lower quality)
             property_data = self._parse_property_text(text)
             property_data['raw_text'] = text[:1000]
             
             extracted_count = sum(1 for v in property_data.values() if v and v != [] and v != '')
-            logger.info(f"📊 Regex extracted {extracted_count} fields from PDF text")
+            logger.info(f"📊 Regex fallback extracted {extracted_count} fields from PDF text")
             
             return property_data
             
