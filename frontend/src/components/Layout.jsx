@@ -1,5 +1,7 @@
 import Sidebar from './Sidebar';
 import Header from './Header';
+import MobileNav from './layout/MobileNav';
+import InstallPrompt from './pwa/InstallPrompt';
 import { useState } from 'react';
 
 export const Layout = ({ children, activeTab, setActiveTab, user, onLogout }) => {
@@ -29,12 +31,22 @@ export const Layout = ({ children, activeTab, setActiveTab, user, onLogout }) =>
         onMenuClick={() => setSidebarOpen(!sidebarOpen)}
       />
 
-      {/* Responsive main content */}
-      <main className="lg:ml-72 mt-16 lg:mt-20 p-4 sm:p-6 lg:p-8 relative z-10">
+      {/* Responsive main content with mobile bottom nav padding */}
+      <main className="lg:ml-72 mt-16 lg:mt-20 p-4 sm:p-6 lg:p-8 relative z-10 main-content-mobile">
         <div className="max-w-[1920px] mx-auto">
           {children}
         </div>
       </main>
+
+      {/* Mobile Bottom Navigation (hidden on desktop) */}
+      <MobileNav
+        activeView={activeTab}
+        onViewChange={setActiveTab}
+        notificationCount={0} // Can be connected to actual notification state
+      />
+
+      {/* PWA Install Prompt */}
+      <InstallPrompt />
     </div>
   );
 };
