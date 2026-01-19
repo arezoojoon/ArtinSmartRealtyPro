@@ -177,7 +177,9 @@ class TelegramBotHandler:
                 Language.EN: "📱 Share Phone Number",
                 Language.FA: "📱 اشتراک‌گذاری شماره تلفن",
                 Language.AR: "📱 شارك رقم الهاتف",
-                Language.RU: "📱 Поделиться номером"
+                Language.RU: "📱 Поделиться номером",
+                Language.UR: "📱 فون نمبر شیئر کریں",
+                Language.HI: "📱 फोन नंबर शेयर करें"
             }.get(lead.language, "📱 Share Phone Number")
             
             contact_button = KeyboardButton(button_text, request_contact=True)

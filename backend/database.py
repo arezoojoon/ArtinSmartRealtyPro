@@ -67,6 +67,8 @@ class Language(str, Enum):
     FA = "fa"
     AR = "ar"
     RU = "ru"
+    UR = "ur"  # Urdu
+    HI = "hi"  # Hindi
 
 
 class LeadStatus(str, Enum):
