@@ -284,6 +284,14 @@ TRANSLATIONS = {
         Language.AR: "❌ ليس الآن",
         Language.RU: "❌ Не сейчас"
     },
+    "btn_main_menu": {
+        Language.EN: "🔙 Main Menu",
+        Language.FA: "🔙 منو اصلی",
+        Language.AR: "🔙 القائمة الرئيسية",
+        Language.RU: "🔙 Главное меню",
+        Language.UR: "🔙 مین مینو",
+        Language.HI: "🔙 मुख्य मेनू"
+    },
     "btn_inflation": {
         Language.EN: "💱 Currency Protection",
         Language.FA: "💱 حفاظت از ارزش پول",
@@ -1394,8 +1402,11 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                             {"text": "🏰 Пентхаус", "callback_data": "prop_penthouse"},
                             {"text": "🏘️ Таунхаус", "callback_data": "prop_townhouse"}
                         ]
-                    }
+                ]
                     buttons = property_buttons.get(lang, property_buttons[Language.EN])
+        
+        # Always add Main Menu button at the end
+        buttons.append({"text": self.get_text("btn_main_menu", lang), "callback_data": "main_menu"})
         
         return buttons
     
@@ -2871,6 +2882,41 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 ]
             )
         
+        # === HANDLE MAIN MENU CALLBACK ===
+        elif callback_data == "main_menu":
+            logger.info(f"🔄 User {lead.id} requested Main Menu via button")
+            
+            # Reset conversation data but keep name/phone/language
+            # We want to restart the flow from WARMUP (Goal Selection) or START depending on preference
+            # Usually WARMUP is better if we already know who they are
+            
+            # Reset conversation specific data
+            lead_updates["conversation_data"] = {}
+            lead_updates["filled_slots"] = {}
+            
+            # If we know the name, go to WARMUP (Skip language/name collection)
+            if lead.name:
+                warmup_message = {
+                    Language.EN: f"Welcome back, {lead.name}! 🎯\n\nHow can I help you today?",
+                    Language.FA: f"خوش برگشتید، {lead.name}! 🎯\n\nامروز چطور میتونم کمکتون کنم؟",
+                    Language.AR: f"مرحباً بعودتك، {lead.name}! 🎯\n\nكيف يمكنني مساعدتك اليوم؟",
+                    Language.RU: f"С возвращением, {lead.name}! 🎯\n\nЧем могу помочь сегодня?"
+                }
+                
+                return BrainResponse(
+                    message=warmup_message.get(lang, warmup_message[Language.EN]),
+                    next_state=ConversationState.WARMUP,
+                    lead_updates=lead_updates,
+                    buttons=[
+                        {"text": "💰 " + ("سرمایه‌گذاری" if lang == Language.FA else "Investment"), "callback_data": "goal_investment"},
+                        {"text": "🏠 " + ("زندگی" if lang == Language.FA else "Living"), "callback_data": "goal_living"},
+                        {"text": "🛂 " + ("اقامت" if lang == Language.FA else "Residency"), "callback_data": "goal_residency"}
+                    ]
+                )
+            else:
+                # If no name, go back to START (Language Select)
+                return self._handle_start(lang)
+
         # DEBUG LOGGING
         if requested_lang:
             logger.info(f"🔍 Detected language change request: {requested_lang}")
@@ -3531,7 +3577,8 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                         {"text": "🏠 " + ("مسکونی" if lang == Language.FA else "Residential" if lang == Language.EN else "سكني" if lang == Language.AR else "Жилая"), 
                          "callback_data": "category_residential"},
                         {"text": "🏢 " + ("تجاری" if lang == Language.FA else "Commercial" if lang == Language.EN else "تجاري" if lang == Language.AR else "Коммерческая"), 
-                         "callback_data": "category_commercial"}
+                         "callback_data": "category_commercial"},
+                        {"text": self.get_text("btn_main_menu", lang), "callback_data": "main_menu"}
                     ]
                     
                     return BrainResponse(
@@ -3556,7 +3603,8 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                 # Show Buy/Rent buttons
                 transaction_buttons = [
                     {"text": "🏠 " + ("خرید" if lang == Language.FA else "Buy" if lang == Language.EN else "شراء" if lang == Language.AR else "Купить"), "callback_data": "transaction_buy"},
-                    {"text": "🔑 " + ("اجاره" if lang == Language.FA else "Rent" if lang == Language.EN else "إيجار" if lang == Language.AR else "Аренда"), "callback_data": "transaction_rent"}
+                    {"text": "🔑 " + ("اجاره" if lang == Language.FA else "Rent" if lang == Language.EN else "إيجار" if lang == Language.AR else "Аренда"), "callback_data": "transaction_rent"},
+                    {"text": self.get_text("btn_main_menu", lang), "callback_data": "main_menu"}
                 ]
                 
                 return BrainResponse(
@@ -3899,7 +3947,8 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                             {"text": "🏠 " + ("مسکونی" if lang == Language.FA else "Residential" if lang == Language.EN else "سكني" if lang == Language.AR else "Жилая"), 
                              "callback_data": "category_residential"},
                             {"text": "🏢 " + ("تجاری" if lang == Language.FA else "Commercial" if lang == Language.EN else "تجاري" if lang == Language.AR else "Коммерческая"), 
-                             "callback_data": "category_commercial"}
+                             "callback_data": "category_commercial"},
+                            {"text": self.get_text("btn_main_menu", lang), "callback_data": "main_menu"}
                         ]
                     )
                 
@@ -3921,6 +3970,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                          "callback_data": "prop_penthouse"},
                         {"text": "🏘️ " + ("تاون‌هاوس" if lang == Language.FA else "Townhouse" if lang == Language.EN else "تاون هاوس" if lang == Language.AR else "Таунхаус"), 
                          "callback_data": "prop_townhouse"},
+                        {"text": self.get_text("btn_main_menu", lang), "callback_data": "main_menu"}
                     ]
                 else:  # commercial
                     property_buttons = [
@@ -3932,6 +3982,7 @@ RESPOND IN JSON ONLY (no markdown, no explanation):
                          "callback_data": "prop_commercial"},
                         {"text": "🏞️ " + ("زمین" if lang == Language.FA else "Land" if lang == Language.EN else "أرض" if lang == Language.AR else "Земля"), 
                          "callback_data": "prop_land"},
+                        {"text": self.get_text("btn_main_menu", lang), "callback_data": "main_menu"}
                     ]
                 
                 return BrainResponse(
