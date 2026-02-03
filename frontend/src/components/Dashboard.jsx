@@ -223,47 +223,64 @@ const Dashboard = ({ user, onLogout }) => {
                 setLoading(true);
                 const tenantId = user?.tenant_id || localStorage.getItem('tenantId');
 
-                // Fetch leads
+                // Fetch leads from the main leads API
                 const leadsResponse = await api.get(`/api/v1/tenants/${tenantId}/leads`);
                 const leadsData = Array.isArray(leadsResponse) ? leadsResponse : (leadsResponse.leads || []);
                 setLeads(leadsData);
 
-                // Calculate stats
-                const totalLeads = leadsData.length;
-                const activeDeals = leadsData.filter(l =>
-                    ['qualified', 'viewing_scheduled', 'negotiating'].includes(l.status)
-                ).length;
-                const closedWon = leadsData.filter(l => l.status === 'closed_won').length;
-                const conversionRate = totalLeads > 0 ? ((closedWon / totalLeads) * 100).toFixed(1) : 0;
+                // Try to fetch unified stats for more accurate data
+                try {
+                    const statsResponse = await api.get(`/api/unified/stats?tenant_id=${tenantId}`);
+                    const totalLeads = statsResponse.total_leads || leadsData.length;
+                    const activeDeals = (statsResponse.by_status?.qualified || 0) +
+                        (statsResponse.by_status?.viewing_scheduled || 0) +
+                        (statsResponse.by_status?.negotiating || 0);
+                    const closedWon = statsResponse.by_status?.closed_won || 0;
+                    const conversionRate = totalLeads > 0 ? ((closedWon / totalLeads) * 100).toFixed(1) : 0;
 
-                // Calculate monthly revenue (estimate based on closed deals)
-                const monthlyRevenue = closedWon * 50000; // Placeholder calculation
+                    // Calculate revenue from lead budget_max values for closed deals
+                    const closedLeads = leadsData.filter(l => l.status === 'closed_won');
+                    const monthlyRevenue = closedLeads.reduce((sum, l) => sum + (l.budget_max || 0), 0);
 
-                setStats({
-                    totalLeads,
-                    activeDeals,
-                    conversionRate,
-                    monthlyRevenue,
-                    revenueTarget: 500000,
-                });
+                    setStats({
+                        totalLeads,
+                        activeDeals,
+                        conversionRate,
+                        monthlyRevenue,
+                        revenueTarget: 500000,
+                    });
+                } catch (statsError) {
+                    // Fallback: calculate from leads data
+                    const totalLeads = leadsData.length;
+                    const activeDeals = leadsData.filter(l =>
+                        ['qualified', 'viewing_scheduled', 'negotiating'].includes(l.status)
+                    ).length;
+                    const closedWon = leadsData.filter(l => l.status === 'closed_won').length;
+                    const conversionRate = totalLeads > 0 ? ((closedWon / totalLeads) * 100).toFixed(1) : 0;
+                    const closedLeads = leadsData.filter(l => l.status === 'closed_won');
+                    const monthlyRevenue = closedLeads.reduce((sum, l) => sum + (l.budget_max || 0), 0);
+
+                    setStats({
+                        totalLeads,
+                        activeDeals,
+                        conversionRate,
+                        monthlyRevenue,
+                        revenueTarget: 500000,
+                    });
+                }
 
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
-                // Use sample data for demo
-                setLeads([
-                    { id: 1, name: 'Sarah Jenkins', property_type: 'Villa', preferred_location: 'Palm Jumeirah', budget_min: 2000000, budget_max: 5000000, status: 'new', lead_score: 85, created_at: new Date() },
-                    { id: 2, name: 'Michael Chen', property_type: 'Penthouse', preferred_location: 'Downtown', budget_min: 3000000, budget_max: 3500000, status: 'qualified', lead_score: 72, created_at: new Date(Date.now() - 3600000) },
-                    { id: 3, name: 'Emma Davis', property_type: 'Penthouse', preferred_location: 'Downtown', budget_min: 2000000, budget_max: 2500000, status: 'viewing_scheduled', lead_score: 68, created_at: new Date(Date.now() - 86400000) },
-                    { id: 4, name: 'Alex Jonten', property_type: 'Villa', preferred_location: 'Palm Jumeirah', budget_min: 3000000, budget_max: 3500000, status: 'new', lead_score: 45, created_at: new Date() },
-                ]);
-
+                // Set empty state instead of mock data
+                setLeads([]);
                 setStats({
-                    totalLeads: 1245,
-                    activeDeals: 86,
-                    conversionRate: 3.8,
-                    monthlyRevenue: 450000,
+                    totalLeads: 0,
+                    activeDeals: 0,
+                    conversionRate: 0,
+                    monthlyRevenue: 0,
                     revenueTarget: 500000,
                 });
+                showNotification?.('Failed to load dashboard data', 'error');
             } finally {
                 setLoading(false);
             }
