@@ -1402,7 +1402,7 @@ DUBAI REAL ESTATE KNOWLEDGE BASE (Always use this for factual answers):
                             {"text": "🏰 Пентхаус", "callback_data": "prop_penthouse"},
                             {"text": "🏘️ Таунхаус", "callback_data": "prop_townhouse"}
                         ]
-                ]
+                    }
                     buttons = property_buttons.get(lang, property_buttons[Language.EN])
         
         # Always add Main Menu button at the end
