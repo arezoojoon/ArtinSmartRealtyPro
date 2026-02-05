@@ -264,6 +264,7 @@ class TenantResponse(BaseModel):
     whatsapp_access_token: Optional[str]
     whatsapp_business_account_id: Optional[str]
     whatsapp_verify_token: Optional[str]
+    contact_phone: Optional[str]  # WhatsApp shared number
     is_active: bool
     created_at: datetime
 
