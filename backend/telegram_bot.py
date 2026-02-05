@@ -41,6 +41,7 @@ from context_recovery import save_context_to_redis, handle_user_message_with_rec
 from inline_keyboards import edit_message_with_checkmark
 from lead_scoring import increment_engagement, update_lead_score
 from property_presenter import present_all_properties
+from realty_telegram_bot import RealtyTelegramBot
 
 # Configure logging
 logging.basicConfig(
@@ -63,6 +64,7 @@ class TelegramBotHandler:
     def __init__(self, tenant: Tenant):
         self.tenant = tenant
         self.brain = Brain(tenant)
+        self.realty_bot = RealtyTelegramBot(tenant)
         self.application: Optional[Application] = None
     
     async def start_bot(self):
@@ -355,31 +357,12 @@ class TelegramBotHandler:
         # ===================================================
     
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /start command."""
-        lead = await self._get_or_create_lead(update)
+        """Handle /start command - Delegate to Realty Bot"""
+        # We still create the lead in DB for tracking
+        await self._get_or_create_lead(update)
         
-        logger.info(f"🔄 /start command - Lead {lead.id}: Before reset - state={lead.conversation_state}, lang={lead.language}")
-        
-        # Reset conversation state AND conversation data for fresh start
-        await update_lead(
-            lead.id, 
-            conversation_state=ConversationState.START,
-            conversation_data={},  # Clear all previous conversation data
-            filled_slots={},  # Clear all filled slots
-            pending_slot=None  # Clear pending slot
-        )
-        # CRITICAL: Update lead object in memory too!
-        lead.conversation_state = ConversationState.START.value  # Store string value, not enum
-        lead.language = None  # Reset language to show language selection
-        lead.conversation_data = {}
-        lead.filled_slots = {}
-        lead.pending_slot = None
-        
-        logger.info(f"🔄 /start command - Lead {lead.id}: After reset - state={lead.conversation_state}, cleared conversation_data")
-        
-        # Process through Brain
-        response = await self.brain.process_message(lead, "/start")
-        await self._send_response(update, context, response, lead)
+        # Delegate conversation to Realty Bot
+        await self.realty_bot.handle_update(update, context)
     
     async def handle_set_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -428,300 +411,19 @@ class TelegramBotHandler:
             )
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle inline keyboard callbacks with race condition protection."""
-        query = update.callback_query
-        
-        # Ignore disabled buttons (anti-loop protection)
-        if query.data in ["selected", "disabled"]:
-            await query.answer("Already selected ✅")
-            return
-        
-        await query.answer()  # Acknowledge the callback
-        
-        lead = await self._get_or_create_lead(update)
-        telegram_id = str(update.effective_chat.id)
-        callback_data = query.data
-        
-        # CRITICAL FIX #8: Refresh lead object - use fresh instance directly
-        async with async_session() as session:
-            result = await session.execute(select(Lead).where(Lead.id == lead.id))
-            fresh_lead = result.scalars().first()
-            if fresh_lead:
-                logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
-                lead = fresh_lead  # Replace object reference
-        
-        # FIX #6: Ghost Protocol - Update last interaction timestamp
-        if redis_manager.redis_client:
-            await redis_manager.redis_client.set(f"user:{lead.id}:last_interaction", datetime.now().isoformat())
-            logger.info(f"⏰ Updated last_interaction for user {lead.id} (callback)")
-        
-        # CRITICAL: Acquire lock to prevent race conditions
-        if telegram_id not in user_locks:
-            user_locks[telegram_id] = Lock()
-        
-        async with user_locks[telegram_id]:
-            logger.info(f"🔒 Lock acquired for callback user {telegram_id}")
-        
-        # Add checkmark to selected button (anti-loop)
-        selected_button_text = None
-        if query.message and query.message.reply_markup:
-            for row in query.message.reply_markup.inline_keyboard:
-                for button in row:
-                    if button.callback_data == callback_data:
-                        selected_button_text = button.text
-                        break
-        
-        # Handle slot booking
-        if callback_data.startswith("slot_"):
-            slot_id = int(callback_data.split("_")[1])
-            success = await book_slot(slot_id, lead.id)
+        """Handle inline keyboard callbacks - Delegate to Realty Bot"""
+        # Acknowledge callback to stop spinner
+        if update.callback_query:
+            await update.callback_query.answer()
             
-            if success:
-                # Get slot details to calculate actual appointment time
-                async with async_session() as session:
-                    result = await session.execute(
-                        select(AgentAvailability).where(AgentAvailability.id == slot_id)
-                    )
-                    slot = result.scalar_one_or_none()
-                    
-                    if slot:
-                        # Calculate next occurrence of this day
-                        now = datetime.utcnow()
-                        today = now.date()
-                        days_ahead = {
-                            'monday': 0, 'tuesday': 1, 'wednesday': 2,
-                            'thursday': 3, 'friday': 4, 'saturday': 5, 'sunday': 6
-                        }
-                        target_day = days_ahead.get(slot.day_of_week.value, 0)
-                        current_day = today.weekday()
-                        days_until = (target_day - current_day + 7) % 7
-                        
-                        # If same day, check if time has passed
-                        if days_until == 0:
-                            if now.time() >= slot.start_time:
-                                days_until = 7  # Schedule for next week
-                        
-                        appointment_date = datetime.combine(
-                            today + timedelta(days=days_until),
-                            slot.start_time
-                        )
-                        
-                        # Create appointment with calculated date
-                        await create_appointment(
-                            lead_id=lead.id,
-                            appointment_type=AppointmentType.OFFICE,
-                            scheduled_date=appointment_date
-                        )
-                        
-                        # Update lead status and state
-                        await update_lead(
-                            lead.id,
-                            status=LeadStatus.VIEWING_SCHEDULED,
-                            conversation_state=ConversationState.COMPLETED
-                        )
-                        
-                        # Send confirmation message
-                        lang = lead.language or Language.EN
-                        day_name = slot.day_of_week.value.capitalize()
-                        time_str = slot.start_time.strftime('%H:%M')
-                        date_str = appointment_date.strftime('%Y-%m-%d')
-                        
-                        confirmation_msgs = {
-                            Language.EN: f"✅ **Consultation Booked Successfully!**\n\n📅 Date: {day_name}, {date_str}\n🕐 Time: {time_str}\n\n{self.tenant.name} will contact you at the scheduled time.\n\nSee you soon! 🏠",
-                            Language.FA: f"✅ **مشاوره با موفقیت رزرو شد!**\n\n📅 تاریخ: {day_name}، {date_str}\n🕐 ساعت: {time_str}\n\n{self.tenant.name} در زمان مقرر با شما تماس خواهد گرفت.\n\nتا دیدار بعدی! 🏠",
-                            Language.AR: f"✅ **تم حجز الاستشارة بنجاح!**\n\n📅 التاريخ: {day_name}، {date_str}\n🕐 الوقت: {time_str}\n\n{self.tenant.name} سيتصل بك في الوقت المحدد.\n\nإلى اللقاء! 🏠",
-                            Language.RU: f"✅ **Консультация успешно забронирована!**\n\n📅 Дата: {day_name}, {date_str}\n🕐 Время: {time_str}\n\n{self.tenant.name} свяжется с вами в назначенное время.\n\nДо скорой встречи! 🏠"
-                        }
-                        
-                        await query.edit_message_text(
-                            confirmation_msgs.get(lang, confirmation_msgs[Language.EN]),
-                            parse_mode='Markdown'
-                        )
-                        
-                        # Save context
-                        await save_context_to_redis(lead)
-                        logger.info(f"✅ Consultation booked for lead {lead.id} on {date_str} at {time_str}")
-                        return
-        
-        # Handle schedule consultation request - Show available time slots
-        elif callback_data == "schedule_consultation":
-            # Update lead state to indicate scheduling in progress
-            await update_lead(lead.id, conversation_state=ConversationState.HANDOFF_SCHEDULE)
-            
-            # Get available slots from database
-            available_slots = await get_available_slots(self.tenant.id)
-            
-            if not available_slots:
-                # No slots available
-                no_slots_msg = {
-                    Language.EN: "⏰ Currently, we don't have available time slots. Please contact us directly or try again later.",
-                    Language.FA: "⏰ در حال حاضر وقت خالی نداریم. لطفاً مستقیماً با ما تماس بگیرید یا بعداً تلاش کنید.",
-                    Language.AR: "⏰ حالياً، ليس لدينا فترات زمنية متاحة. يرجى الاتصال بنا مباشرة أو المحاولة لاحقاً.",
-                    Language.RU: "⏰ В настоящее время у нас нет доступных временных слотов. Пожалуйста, свяжитесь с нами напрямую или попробуйте позже."
-                }
-                lang = lead.language or Language.FA
-                await query.edit_message_text(no_slots_msg.get(lang, no_slots_msg[Language.EN]))
-                return
-            
-            # Build calendar message with available slots
-            lang = lead.language or Language.FA
-            calendar_header = {
-                Language.EN: "📅 **Available Consultation Times**\n\nPlease select a time that works best for you:",
-                Language.FA: "📅 **وقت‌های خالی مشاوره**\n\nلطفاً زمانی که برایتان مناسب است انتخاب کنید:",
-                Language.AR: "📅 **أوقات الاستشارة المتاحة**\n\nيرجى اختيار الوقت الذي يناسبك:",
-                Language.RU: "📅 **Доступное время консультации**\n\nПожалуйста, выберите удобное для вас время:"
-            }
-            
-            # Group slots by day
-            from collections import defaultdict
-            slots_by_day = defaultdict(list)
-            for slot in available_slots:
-                day_name = slot.day_of_week.value.capitalize()
-                time_range = f"{slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}"
-                slots_by_day[day_name].append({
-                    'id': slot.id,
-                    'time': time_range,
-                    'start': slot.start_time
-                })
-            
-            # Build inline keyboard with slots
-            keyboard = []
-            day_translations = {
-                'Monday': {'en': '📅 Mon', 'fa': '📅 دوشنبه', 'ar': '📅 الاثنين', 'ru': '📅 Пн'},
-                'Tuesday': {'en': '📅 Tue', 'fa': '📅 سه‌شنبه', 'ar': '📅 الثلاثاء', 'ru': '📅 Вт'},
-                'Wednesday': {'en': '📅 Wed', 'fa': '📅 چهارشنبه', 'ar': '📅 الأربعاء', 'ru': '📅 Ср'},
-                'Thursday': {'en': '📅 Thu', 'fa': '📅 پنج‌شنبه', 'ar': '📅 الخميس', 'ru': '📅 Чт'},
-                'Friday': {'en': '📅 Fri', 'fa': '📅 جمعه', 'ar': '📅 الجمعة', 'ru': '📅 Пт'},
-                'Saturday': {'en': '📅 Sat', 'fa': '📅 شنبه', 'ar': '📅 السبت', 'ru': '📅 Сб'},
-                'Sunday': {'en': '📅 Sun', 'fa': '📅 یکشنبه', 'ar': '📅 الأحد', 'ru': '📅 Вс'}
-            }
-            
-            # Handle both Language enum and string
-            lang_key = lang if isinstance(lang, str) else lang.value
-            
-            for day_name in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']:
-                if day_name in slots_by_day:
-                    # Sort slots by start time
-                    sorted_slots = sorted(slots_by_day[day_name], key=lambda x: x['start'])
-                    
-                    # Add day header button (disabled)
-                    day_label = day_translations.get(day_name, {}).get(lang_key, day_name)
-                    keyboard.append([InlineKeyboardButton(day_label, callback_data="disabled")])
-                    
-                    # Add time slot buttons (2 per row)
-                    row = []
-                    for slot in sorted_slots:
-                        btn = InlineKeyboardButton(
-                            f"🕐 {slot['time']}", 
-                            callback_data=f"slot_{slot['id']}"
-                        )
-                        row.append(btn)
-                        if len(row) == 2:
-                            keyboard.append(row)
-                            row = []
-                    if row:  # Add remaining buttons
-                        keyboard.append(row)
-            
-            # Send calendar with slots
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(
-                calendar_header.get(lang, calendar_header[Language.EN]),
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
-            # Save context to Redis
-            await save_context_to_redis(lead)
-            logger.info(f"📅 Showing {len(available_slots)} consultation slots to lead {lead.id}")
-            return
-        
-        # Process through Brain
-        response = await self.brain.process_message(lead, "", callback_data)
-        
-        # Add checkmark to selected button after Brain processing
-        if selected_button_text:
-            await edit_message_with_checkmark(update, context, selected_button_text)
-            logger.info(f"✅ Checkmark added to button: {selected_button_text}")
-        
-        # Save context to Redis
-        await save_context_to_redis(lead)
-        logger.info(f"💾 Saved callback context to Redis for lead {lead.id}")
-        
-        await self._send_response(update, context, response, lead)
-        logger.info(f"🔓 Lock released for callback user {telegram_id}")
+        await self.realty_bot.handle_update(update, context)
     
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle text messages with race condition protection."""
-        lead = await self._get_or_create_lead(update)
-        message_text = update.message.text
-        telegram_id = str(update.effective_chat.id)
+        """Handle text messages - Delegate to Realty Bot"""
+        # We still create the lead in DB for tracking
+        await self._get_or_create_lead(update)
         
-        #  CRITICAL FIX #9: Refresh lead and COPY attributes to preserve data after session closes
-        # We must copy the fresh state to the original lead object before session closes
-        async with async_session() as session:
-            result = await session.execute(select(Lead).where(Lead.id == lead.id))
-            fresh_lead = result.scalars().first()
-            if fresh_lead:
-                logger.info(f"🔄 Refreshed lead {lead.id}, state={fresh_lead.conversation_state}")
-                # Copy the ACTUAL conversation_state value (string) to the lead object
-                # This ensures the value persists after session closes
-                lead.conversation_state = fresh_lead.conversation_state
-                lead.language = fresh_lead.language
-                lead.conversation_data = fresh_lead.conversation_data
-                logger.info(f"✅ Copied state to lead object: {lead.conversation_state}")
-        
-        # CRITICAL: Ghost Protocol - Update last interaction timestamp on EVERY message
-        if redis_manager.redis_client:
-            timestamp = datetime.now().isoformat()
-            await redis_manager.redis_client.set(f"user:{lead.id}:last_interaction", timestamp)
-            logger.info(f"⏰ Updated last_interaction for user {lead.id} at {timestamp}")
-        else:
-            logger.warning(f"⚠️ Redis not available - cannot update last_interaction for user {lead.id}")
-        
-        # CRITICAL: Acquire lock to prevent race conditions (2 messages in 1 second)
-        if telegram_id not in user_locks:
-            user_locks[telegram_id] = Lock()
-        
-        async with user_locks[telegram_id]:
-            logger.info(f"🔒 Lock acquired for user {telegram_id}")
-            
-            # Track message engagement
-            async with async_session() as session:
-                result = await session.execute(select(Lead).where(Lead.id == lead.id))
-                db_lead = result.scalars().first()
-                if db_lead:
-                    increment_engagement(db_lead, "message")
-                    await session.commit()
-                    logger.info(f"📊 Updated lead score: {db_lead.lead_score} ({db_lead.temperature})")
-            
-            # Load context from Redis (with recovery if timeout occurred)
-            redis_context = await redis_manager.get_context(telegram_id, self.tenant.id)
-            if redis_context:
-                logger.info(f"📦 Loaded Redis context for lead {lead.id}: state={redis_context.get('state')}")
-            
-            # Process through Brain (pass None as callback_data for text messages)
-            response = await self.brain.process_message(lead, message_text, callback_data=None)
-            
-            # Save context to Redis after processing
-            await save_context_to_redis(lead)
-            logger.info(f"💾 Saved context to Redis for lead {lead.id}")
-            
-            await self._send_response(update, context, response, lead)
-            
-            # 🏆 PROFESSIONAL PROPERTY PRESENTATION: Check if Brain has properties to show
-            if hasattr(self.brain, 'current_properties') and self.brain.current_properties:
-                logger.info(f"🏠 Brain has {len(self.brain.current_properties)} properties to present - using property_presenter")
-                await present_all_properties(
-                    bot_interface=self,
-                    lead=lead,
-                    tenant=self.tenant,
-                    properties=self.brain.current_properties,
-                    platform="telegram"
-                )
-                # Clear properties after presentation to avoid repetition
-                self.brain.current_properties = None
-                logger.info(f"✅ Professional property presentation complete for lead {lead.id}")
-            
-            logger.info(f"🔓 Lock released for user {telegram_id}")
+        await self.realty_bot.handle_update(update, context)
     
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle voice messages with slot filling protection."""
