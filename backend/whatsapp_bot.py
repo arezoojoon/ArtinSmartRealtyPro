@@ -42,6 +42,7 @@ from whatsapp_providers import get_whatsapp_provider, WhatsAppProvider
 from vertical_router import get_vertical_router, VerticalMode, VerticalRouter
 from redis_manager import RedisManager
 from property_presenter import present_all_properties
+from realty_sales_bot import RealtySalesBot
 
 # Configure logging
 logging.basicConfig(
@@ -64,6 +65,7 @@ class WhatsAppBotHandler:
         self.provider = get_whatsapp_provider(tenant)
         self.redis_manager = redis_manager
         self.router: Optional[VerticalRouter] = None
+        self.realty_bot: Optional[RealtySalesBot] = None
         
         # Initialize router if Redis available
         if redis_manager:
@@ -423,30 +425,12 @@ class WhatsAppBotHandler:
                     return True
                 
                 elif mode == VerticalMode.REALTY:
-                    # Real Estate vertical - use existing brain
-                    if is_new_session:
-                        # Welcome message for new realty session
-                        welcome_text = self._get_vertical_welcome(mode, lead.language or Language.EN)
-                        response = await self.brain.process_message(lead, welcome_text, callback_data=None)
-                    else:
-                        # Continue existing conversation
-                        response = await self.brain.process_message(lead, text, callback_data=None)
+                    # Real Estate vertical - use RealtySalesBot
+                    if not self.realty_bot:
+                        self.realty_bot = RealtySalesBot(self.tenant.id)
                     
-                    await self._send_response(from_phone, response, lead)
-                    
-                    # 🏆 PROFESSIONAL PROPERTY PRESENTATION for REALTY vertical
-                    if hasattr(self.brain, 'current_properties') and self.brain.current_properties:
-                        logger.info(f"🏠 Realty vertical: {len(self.brain.current_properties)} properties - using property_presenter")
-                        await present_all_properties(
-                            bot_interface=self,
-                            lead=lead,
-                            tenant=self.tenant,
-                            properties=self.brain.current_properties,
-                            platform="whatsapp"
-                        )
-                        self.brain.current_properties = None
-                        logger.info(f"✅ Professional property presentation complete for REALTY vertical lead {lead.id}")
-                    
+                    # Delegate to new bot
+                    await self.realty_bot.process_text(from_phone, text, profile_name)
                     return True
                 
                 elif mode == VerticalMode.EXPO:

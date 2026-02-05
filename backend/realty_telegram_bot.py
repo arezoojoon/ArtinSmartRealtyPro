@@ -352,6 +352,9 @@ class RealtyTelegramBot:
         for i, opt in enumerate(opts):
              buttons.append({"text": opt, "callback_data": f"rent_budget_{i}"})
         
+        # Add Back Button
+        buttons.append({"text": get_button_text("btn_back_to_menu", lang), "callback_data": "MAIN_MENU"})
+        
         await self.send_message(update, context, msg, buttons)
 
     async def _handle_rent_budget(self, session: RealtySession, data: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -431,6 +434,7 @@ class RealtyTelegramBot:
             {"text": get_button_text("btn_residential", lang), "callback_data": "invest_residential"},
             {"text": get_button_text("btn_commercial", lang), "callback_data": "invest_commercial"},
             {"text": get_button_text("btn_land", lang), "callback_data": "invest_land"},
+            {"text": get_button_text("btn_back_to_menu", lang), "callback_data": "MAIN_MENU"},
         ]
         await self.send_message(update, context, msg, buttons)
         
@@ -452,6 +456,10 @@ class RealtyTelegramBot:
         buttons = []
         for i, opt in enumerate(opts):
              buttons.append({"text": opt, "callback_data": f"invest_budget_{i}"})
+        
+        # Add Back Button
+        buttons.append({"text": get_button_text("btn_back_to_menu", lang), "callback_data": "MAIN_MENU"})
+        
         await self.send_message(update, context, msg, buttons)
 
     async def _handle_invest_budget(self, session: RealtySession, data: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -527,6 +535,7 @@ class RealtyTelegramBot:
         buttons = [
             {"text": get_button_text("btn_residential", lang), "callback_data": "resid_residential"},
             {"text": get_button_text("btn_commercial", lang), "callback_data": "resid_commercial"},
+            {"text": get_button_text("btn_back_to_menu", lang), "callback_data": "MAIN_MENU"},
         ]
         await self.send_message(update, context, msg, buttons)
         
@@ -586,6 +595,7 @@ class RealtyTelegramBot:
             {"text": "Today 14:00", "callback_data": "slot_1"},
             {"text": "Tomorrow 10:00", "callback_data": "slot_2"},
             {"text": "Request Call", "callback_data": "slot_call"},
+            {"text": get_button_text("btn_back_to_menu", lang), "callback_data": "MAIN_MENU"},
         ]
         await self.send_message(update, context, msg, buttons)
 

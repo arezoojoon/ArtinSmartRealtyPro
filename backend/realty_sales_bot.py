@@ -251,62 +251,41 @@ class RealtySalesBot:
             phone = from_number.split("@")[0]
         else:
             phone = from_number
+            
+        body = payload.get("body", "")
+        push_name = payload.get("pushName", "User")
         
-        body = payload.get("body", "").strip()
-        profile_name = payload.get("_data", {}).get("notifyName", "")
-        has_media = payload.get("hasMedia", False)
-        media_type = payload.get("type", "chat")
+        return await self.process_text(phone, body, push_name)
+
+    async def process_text(self, phone: str, text: str, name: str = "User") -> Dict[str, Any]:
+        """
+        Process incoming text message (internal API).
+        Can be called directly by other bots/routers.
+        """
+        await self.init_redis()
+        await self.load_tenant()
         
-        logger.info(f"📨 Message from {phone} ({profile_name}): {body[:50]}...")
+        logger.info(f"📨 processing text from {phone}: {text}")
         
-        # Get existing session
-        session = await self.get_session(phone)
+        # 1. Get/Create Session
+        session_key = self._session_key(phone)
+        session = await self._get_session(session_key, phone, name)
         
-        # ===== ENTRY CONTROL =====
-        if session is None:
-            # No session - check for deep link
-            if is_valid_realty_deep_link(body):
-                # Valid deep link - create session
-                session = await self.create_session(phone, profile_name)
-                await self.send_language_selection(phone, profile_name)
-                return {
-                    "status": "new_session",
-                    "action": "language_selection_sent",
-                    "phone": phone
-                }
-            else:
-                # Direct message without deep link - ignore or send neutral response
-                logger.info(f"👤 DIRECT MESSAGE (no deep link): {phone}")
-                # Optionally send static response (uncomment if needed)
-                # await self.send_message(
-                #     phone, 
-                #     get_translation("direct_message_response", "EN")
-                # )
-                return {
-                    "status": "ignored",
-                    "reason": "no_deep_link",
-                    "phone": phone
-                }
-        
-        # ===== EXISTING SESSION - PROCESS MESSAGE =====
-        session.messages_count += 1
-        
-        # Check for "Back to Main Menu"
-        if FlowController.is_back_to_menu(body):
+        # 2. Check for Global Back
+        if FlowController.is_back_to_menu(text):
             session.reset_flow_data()
             session.current_state = RealtyState.INTENT_SELECT
-            await self.save_session(session)
-            await self.send_intent_selection(session)
-            return {
-                "status": "back_to_menu",
-                "phone": phone
-            }
+            await self._save_session(session)
+            await self._send_intent_selection(phone, session)
+            return {"status": "reset"}
+
+        # 3. Handle specific state inputs
+        # (Delegate to _handle_state similar to Telegram bot)
+        await self._handle_state(session, text, phone)
         
-        # Handle based on current state
-        result = await self._handle_state(session, body, has_media, media_type, payload)
-        await self.save_session(session)
-        
-        return result
+        await self._save_session(session)
+        return {"status": "success"}
+
     
     async def _handle_state(
         self, 
