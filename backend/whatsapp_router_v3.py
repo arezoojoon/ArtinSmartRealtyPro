@@ -56,6 +56,24 @@ app = FastAPI(title="WhatsApp Gateway Router V3", version="3.0.0")
 # Redis connection
 redis_client: Optional[aioredis.Redis] = None
 
+# Lazy import for realty sales bot (avoid circular imports)
+_realty_sales_bot = None
+
+def get_realty_bot():
+    """Lazy loader for realty sales bot"""
+    global _realty_sales_bot
+    if _realty_sales_bot is None:
+        try:
+            from realty_sales_bot import get_realty_sales_bot
+            _realty_sales_bot = get_realty_sales_bot()
+            logger.info("🏠 Realty Sales Bot loaded")
+        except ImportError as e:
+            logger.warning(f"⚠️ Realty Sales Bot not available: {e}")
+            _realty_sales_bot = None
+    return _realty_sales_bot
+
+
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -154,10 +172,30 @@ def parse_deep_link(message: str) -> Optional[Dict[str, str]]:
     - start_realty_123
     - start_expo_456
     - start_support_789
+    - START_REAL_ESTATE (standalone realty sales bot)
+    - DUBAI_PROPERTY (alternate realty sales keyword)
     
     Returns: {"vertical": "realty", "tenant_id": "123"} or None
     """
-    # Multi-vertical pattern
+    message_upper = message.upper().strip()
+    
+    # === NEW: Standalone Realty Sales Bot patterns ===
+    # These don't require a tenant ID - they route to the realty sales bot
+    realty_sales_patterns = [
+        r"START[_\s-]?REAL[_\s-]?ESTATE",
+        r"DUBAI[_\s-]?PROPERTY",
+        r"REALTY[_\s-]?BOT",
+        r"START[_\s-]?REALTY[_\s-]?SALES",
+    ]
+    
+    for pattern in realty_sales_patterns:
+        if re.search(pattern, message_upper, re.IGNORECASE):
+            return {
+                "vertical": "realty_sales",
+                "tenant_id": "1"  # Default tenant for standalone sales bot
+            }
+    
+    # === Multi-vertical pattern with tenant ID ===
     pattern = r"start[_\s-]?(realty|expo|support)[_\s-]?(\d+)"
     match = re.search(pattern, message, re.IGNORECASE)
     
@@ -169,6 +207,8 @@ def parse_deep_link(message: str) -> Optional[Dict[str, str]]:
             "tenant_id": tenant_id
         }
     return None
+
+
 
 
 # --- WAHA Message Sender ---
@@ -198,7 +238,26 @@ async def send_waha_message(phone: str, message: str):
 
 # --- Backend Forwarder ---
 async def forward_to_backend(data: dict, tenant_id: int, vertical: str):
-    """Forward message to backend with tenant/vertical headers"""
+    """
+    Forward message to backend with tenant/vertical headers.
+    For realty_sales vertical, route directly to RealtySalesBot.
+    """
+    # === Special handling for realty_sales vertical ===
+    if vertical == "realty_sales":
+        bot = get_realty_bot()
+        if bot:
+            try:
+                payload = data.get("payload", {})
+                result = await bot.handle_message(payload)
+                logger.info(f"🏠 Realty Sales Bot handled: {result}")
+                return True
+            except Exception as e:
+                logger.error(f"❌ Realty Sales Bot error: {e}")
+                # Fall back to generic backend
+        else:
+            logger.warning("⚠️ Realty Sales Bot not available, forwarding to backend")
+    
+    # === Generic backend forwarding ===
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             headers = {
@@ -224,6 +283,8 @@ async def forward_to_backend(data: dict, tenant_id: int, vertical: str):
         except Exception as e:
             logger.error(f"Failed to forward to backend: {e}")
             return False
+
+
 
 
 # --- Main Webhook ---
